@@ -187,10 +187,13 @@ export const longProbe = ${'1 + '.repeat(40)}1
 
   it('continues staged lint when generated files are ignored', { timeout: 90_000 }, async () => {
     const suffix = randomUUID()
-    const generated = join(repositoryRoot, 'packages/fs/fs-observation-policy/lib', `vp-lint-contract-${suffix}.ts`)
+    const generatedRoot = join(repositoryRoot, 'packages/fs/fs-observation-policy', `vp-lint-contract-${suffix}`)
+    const generated = join(generatedRoot, 'lib', 'generated.ts')
     const source = join(repositoryRoot, 'scripts', `vp-lint-contract-${suffix}.ts`)
 
     try {
+      expect(existsSync(join(generatedRoot, 'lib'))).toBe(false)
+      await mkdir(join(generatedRoot, 'lib'), { recursive: true })
       await writeFile(generated, 'export const generated = 1\n')
       const generatedOnly = runRepositoryLint([
         '--staged',
@@ -221,7 +224,7 @@ export const longProbe = ${'1 + '.repeat(40)}1
       expect(mixedOutput).not.toContain('typescript(')
       expect(mixedOutput).not.toContain('Got tsconfig')
     } finally {
-      await Promise.all([rm(generated, { force: true }), rm(source, { force: true })])
+      await Promise.all([rm(generatedRoot, { recursive: true, force: true }), rm(source, { force: true })])
     }
   })
 
