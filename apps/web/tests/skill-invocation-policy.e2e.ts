@@ -18,7 +18,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import { connectFreshWorkspace, markFixtureProjectRoot, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/skill-invocation-policy', import.meta.url))
 const MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu.expected.md')
@@ -55,6 +55,7 @@ const SKILLS: readonly SeedSkill[] = [
 ]
 
 async function seedSkills(workspaceCwd: string): Promise<void> {
+  markFixtureProjectRoot(join(workspaceCwd, 'workspace'))
   for (const skill of SKILLS) {
     const root = join(workspaceCwd, 'workspace', '.agents', 'skills')
     const directory = skill.name === 'policy-shared' ? join(workspaceCwd, 'linked-skills', skill.name) : join(root, skill.name)

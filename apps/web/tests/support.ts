@@ -31,6 +31,13 @@ export function requireBuilt(name: string): unknown {
   return installationRequire(name)
 }
 
+/** Create the `.git` marker that makes project-scoped discovery stop at a fixture root.
+ * @param root - the synthetic project directory.
+ */
+export function markFixtureProjectRoot(root: string): void {
+  mkdirSync(join(root, '.git'), { recursive: true })
+}
+
 /**
  * Chinese browser locale used by Web scenarios whose Host fixture explicitly
  * saves `locale.preference: zh`.

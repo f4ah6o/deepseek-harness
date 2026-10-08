@@ -22,7 +22,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, markFixtureProjectRoot, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/skill-user-invoke', import.meta.url))
 const UI_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
@@ -35,7 +35,9 @@ const ARGS_TEXT = `@"${FILE_NAME}" and confirm the fixture wiring`
 const REPLY = 'USER_INVOKE_REPLY acknowledged; following the injected skill.'
 
 async function seedUserOnlySkill(workspaceCwd: string): Promise<void> {
-  const directory = join(workspaceCwd, 'workspace', '.agents', 'skills', SKILL_NAME)
+  const workspace = join(workspaceCwd, 'workspace')
+  markFixtureProjectRoot(workspace)
+  const directory = join(workspace, '.agents', 'skills', SKILL_NAME)
   await mkdir(directory, { recursive: true })
   await writeFile(
     join(directory, 'SKILL.md'),

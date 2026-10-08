@@ -8,7 +8,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ClientModuleLoaderTarget } from '@deepseek-ai/dsh-client-modules/client'
 import { formatSessionReferenceMention } from '@deepseek-ai/dsh-session-reference'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage } from './support.ts'
+import { markFixtureProjectRoot, newEnglishPage } from './support.ts'
 
 const SCREENSHOTS = fileURLToPath(new URL('../../../.artifacts/screenshots', import.meta.url))
 const FILE_NAME = 'notes 雪.md'
@@ -482,6 +482,7 @@ it('rematches the current draft after a delayed real skills catalog without repl
   let captured: { status: number; body: string; request: string | null } | undefined
   let catalogRequests = 0
   const { scaffold, page, console, firstId } = await launchDraftFixture(async (_page, scaffold) => {
+    markFixtureProjectRoot(scaffold.workspaceCwd)
     for (const name of ['draft-late-original', 'draft-late-current']) {
       const directory = join(scaffold.workspaceCwd, '.agents', 'skills', name)
       await mkdir(directory, { recursive: true })

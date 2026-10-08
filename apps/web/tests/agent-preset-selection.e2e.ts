@@ -33,7 +33,14 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import {
+  openSettings,
+  connectFreshWorkspace,
+  markFixtureProjectRoot,
+  newEnglishPage,
+  saveFailureShot,
+  writeComposerDraft,
+} from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/agent-preset-selection', import.meta.url))
 const HERO_EXPECTED = join(SNAPSHOT_DIR, 'hero.expected.md')
@@ -70,7 +77,9 @@ async function seedRefusingPreset(root: string): Promise<void> {
  * @param workspaceCwd - the scaffold's temp project parent.
  */
 async function seedWorkspaceSkill(workspaceCwd: string): Promise<void> {
-  const directory = join(workspaceCwd, 'workspace', '.agents', 'skills', SKILL_NAME)
+  const workspace = join(workspaceCwd, 'workspace')
+  markFixtureProjectRoot(workspace)
+  const directory = join(workspace, '.agents', 'skills', SKILL_NAME)
   await mkdir(directory, { recursive: true })
   await writeFile(
     join(directory, 'SKILL.md'),
