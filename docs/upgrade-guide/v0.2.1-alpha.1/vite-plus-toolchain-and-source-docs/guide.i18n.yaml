@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/vite-plus-toolchain-and-source-docs/guide.md
+/:
+  en: 1d0c6e4b12afb8e3
+  zh: 0a5ff83f059c9a4d
+/vite-plus-and-documentation-source-changes:
+  en: fdf37d17eed21d0f
+  zh: ddc144b6ea15fc3e
+/vite-plus-and-documentation-source-changes/change:
+  en: e8258e1865c699f7
+  zh: da33708281448c8e
+/vite-plus-and-documentation-source-changes/migration:
+  en: 08bbb8e392f852a3
+  zh: df771ea81c37ccc4
