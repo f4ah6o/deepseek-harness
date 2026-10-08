@@ -1,7 +1,7 @@
 /** Built dsh web + the `pnpm run dev:web --no-serve` watchers → browser HMR, with no page reload. */
 
 import { existsSync, globSync, statSync } from 'node:fs'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
@@ -91,6 +91,7 @@ async function stopTree(child: SubprocessHandle): Promise<void> {
 
 it('hot-reloads a real client-plugin source edit without refreshing the page', async () => {
   const world = await mkdtemp(join(tmpdir(), 'dsh-web-hmr-world-'))
+  const harnessHome = join(world, '.dsh')
   const sourcePath = join(REPO_ROOT, 'packages/client/ui-conversation/src/client/locales.ts')
   const binPath = join(REPO_ROOT, 'apps/cli/lib/bin.js')
   if (!existsSync(binPath)) throw new Error('HMR browser test needs the built dsh bin; run pnpm run build first')
@@ -111,6 +112,8 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   const failures: unknown[] = []
   try {
+    await mkdir(harnessHome, { recursive: true })
+    await writeFile(join(harnessHome, 'cordis.patch.yml'), '- id: locale\n  config:\n    preference: en\n')
     subprocessFiber = await subprocessCtx.plugin(LocalSubprocessRuntime)
     // Watchers only: the built `dsh web` below is the server under test, and the
     // built tree is this lane's precondition rather than something to rebuild.
@@ -121,7 +124,7 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
     host = subprocessCtx.subprocess.spawn(
       spawnSpec([process.execPath, binPath, 'web', '--no-open', '--port', '0'], world, {
         DEEPSEEK_API_KEY: 'keyless-hmr-no-call',
-        DSH_HOME: join(world, '.dsh'),
+        DSH_HOME: harnessHome,
       }),
     )
     const baseUrl = await waitForOutput(host, /dsh web: (http:\/\/[^\s]+)/, 'built dsh web')

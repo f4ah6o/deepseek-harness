@@ -9,6 +9,7 @@ import {
   discoverPluginDirs,
   parseDevWebArguments,
   StageSupervisor,
+  withRootPackDependencyDefaults,
   watchClientPlugins,
 } from './dev-web.ts'
 import type { StageHandle } from './dev-web.ts'
@@ -119,6 +120,23 @@ describe('parseDevWebArguments', () => {
   it('rejects dsh web arguments when no server is started', () => {
     expect(() => parseDevWebArguments(['--no-serve', '--no-open'])).toThrow('--no-serve leaves no dsh web process for --no-open')
   })
+})
+
+it('inherits root pack dependency defaults without replacing package Client settings', () => {
+  const neverBundle = (): boolean => false
+  const alwaysBundle = (): boolean => true
+  const normalized = withRootPackDependencyDefaults({
+    format: 'cjs',
+    platform: 'browser',
+    deps: { neverBundle, alwaysBundle },
+  })
+
+  expect(normalized.deps?.resolveDepSubpath).toBe(true)
+  expect(normalized.deps?.neverBundle).toBe(neverBundle)
+  expect(normalized.deps?.alwaysBundle).toBe(alwaysBundle)
+  expect(normalized.format).toBe('cjs')
+  expect(normalized.platform).toBe('browser')
+  expect(withRootPackDependencyDefaults({ deps: { resolveDepSubpath: false } }).deps?.resolveDepSubpath).toBe(false)
 })
 
 it('samples one local environment at startup without validating watcher outputs', async () => {

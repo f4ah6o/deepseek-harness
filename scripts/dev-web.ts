@@ -45,6 +45,7 @@ import { execa } from 'execa'
 import { build } from 'vite-plus/pack'
 import type { InlineConfig, TsdownHandle } from 'vite-plus/pack'
 import { loadVitePackConfigs } from './resolve-vite-pack-config.ts'
+import { rootPackConfig } from './root-pack-config.ts'
 import {
   CLIENT_BUILD_PROFILE_SELECTOR,
   clientBuildProcessEnvironment,
@@ -90,6 +91,21 @@ export interface DevWebArguments {
 
 /** Polling interval selected by a bare `--poll`. */
 const DEFAULT_POLL_INTERVAL = 500
+
+/** Root dependency defaults shared by package builds started through Vite+ Pack directly. */
+const ROOT_PACK_DEPENDENCY_DEFAULTS = rootPackConfig({ env: { DSH_BUILD_FACE: 'client' } }).deps ?? {}
+
+/**
+ * Add root dependency defaults to one materialized package pack config.
+ * @param config - package pack config loaded from its Vite config.
+ * @returns the config with root dependency defaults and package settings preserved.
+ */
+export function withRootPackDependencyDefaults(config: InlineConfig): InlineConfig {
+  return {
+    ...config,
+    deps: { ...ROOT_PACK_DEPENDENCY_DEFAULTS, ...config.deps },
+  }
+}
 
 /**
  * Parse the script's command line. `--skip-build`, `--no-serve`, and `--poll[=ms]`
@@ -203,7 +219,7 @@ export async function watchClientPlugins(
           initializedBuilds += 1
           if (initializedBuilds >= buildCount) resolveInitialBuilds?.()
         }
-        const watchConfig: InlineConfig = {
+        const watchConfig = withRootPackDependencyDefaults({
           ...config,
           cwd: packageRoot,
           config: false,
@@ -211,7 +227,7 @@ export async function watchClientPlugins(
           env: { DSH_BUILD_FACE: 'client' },
           onSuccess,
           ...(pollInterval !== undefined ? { inputOptions: { watch: { watcher: { usePolling: true, pollInterval } } } } : {}),
-        }
+        })
         handles.push(await build(watchConfig))
       }
     }
