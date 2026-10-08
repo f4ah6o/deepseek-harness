@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import type {} from '../src/client/index.ts'
 import type { RemoteResult, WorkspaceGitStatus } from '@deepseek-ai/dsh-api-remotes/client'
+import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GitBranchChip } from '../src/client/GitBranchChip.tsx'
 import { en } from '../src/client/locales.ts'
@@ -107,5 +108,60 @@ describe('GitBranchChip', () => {
       await Promise.resolve()
     })
     expect(screen.getByLabelText('Detached Git HEAD: sample@abc1234')).toBeTruthy()
+  })
+
+  it('pauses while the document is hidden and refreshes when visibility returns', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    const getStatus = vi.fn(async () => success({ state: { kind: 'branch', repository: 'sample', branch: 'main' }, refreshMs: 5_000 }))
+    const view = render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
+    try {
+      expect(getStatus).not.toHaveBeenCalled()
+
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+      fireEvent(document, new Event('visibilitychange'))
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(getStatus).toHaveBeenCalledOnce()
+      expect(screen.getByLabelText('Git branch: sample:main')).toBeTruthy()
+    } finally {
+      view.unmount()
+      if (descriptor === undefined) Reflect.deleteProperty(document, 'visibilityState')
+      else Object.defineProperty(document, 'visibilityState', descriptor)
+    }
+  })
+
+  it('keeps the last branch label across Remote failures and retries on focus', async () => {
+    const getStatus = vi
+      .fn<() => Promise<RemoteResult<WorkspaceGitStatus>>>()
+      .mockResolvedValueOnce(success({ state: { kind: 'branch', repository: 'sample', branch: 'main' }, refreshMs: 5_000 }))
+      .mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'unavailable', {}) })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(success({ state: { kind: 'branch', repository: 'sample', branch: 'updated' }, refreshMs: 5_000 }))
+    render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByLabelText('Git branch: sample:main')).toBeTruthy()
+
+    fireEvent.focus(window)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByLabelText('Git branch: sample:main')).toBeTruthy()
+
+    fireEvent.focus(window)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByLabelText('Git branch: sample:main')).toBeTruthy()
+
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByLabelText('Git branch: sample:updated')).toBeTruthy()
+    expect(getStatus).toHaveBeenCalledTimes(4)
   })
 })

@@ -9,6 +9,7 @@ import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { apply as applyClientEntry } from '../src/client/index.ts'
 import WorkspaceGit from '../src/index.ts'
 
 const roots: string[] = []
@@ -59,7 +60,41 @@ function waitingForAbort(spec: SubprocessSpawnSpec): SubprocessHandle {
   }
 }
 
+/** Completed process result used to model a child that settles during deadline cancellation. */
+function completedGit(spec: SubprocessSpawnSpec, text: string, exitCode = 0, delayMs = 0): SubprocessHandle {
+  const signal = spec.signal
+  if (delayMs > 0 && signal !== undefined) {
+    // Let the simulated child settle after its deadline so the caller's
+    // post-command checkpoint, rather than the abort throw, owns the result.
+    signal.throwIfAborted = () => {}
+  }
+  return {
+    stdin: undefined,
+    stdout: undefined,
+    stderr: undefined,
+    control: undefined,
+    collected: {
+      stdout: {
+        readFrom: () => ({ text, nextOffset: Buffer.byteLength(text), lossy: false }),
+      },
+    },
+    done: new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ exitCode, signal: null })
+      }, delayMs)
+    }),
+    terminate: () => {},
+    waitForExit: async () => true,
+  }
+}
+
 describe('workspaceGit.status', () => {
+  it('keeps the Host-owned Remote namespace passive in the Client type face', () => {
+    expect(() => {
+      applyClientEntry()
+    }).not.toThrow()
+  })
+
   it('uses the selected Session cwd and returns only a sanitized GitHub owner/repository', async () => {
     const cwd = await repository('source')
     git(cwd, 'remote', 'add', 'origin', 'https://alice:top-secret@github.com/shiguredo/zakuro-rs.git')
@@ -91,6 +126,119 @@ describe('workspaceGit.status', () => {
       await typert.dispose()
     }
   })
+
+  it('finds repository metadata when the Session cwd is nested below the Git root', async () => {
+    const root = await repository('nested-root')
+    git(root, 'remote', 'add', 'origin', 'git@github.com:shiguredo/nested-repo.git')
+    const cwd = join(root, 'packages', 'app')
+    await mkdir(cwd, { recursive: true })
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10_000, refreshMs: 5_000 })
+    const id = SessionId('nested-session')
+    ctx.sessions.create(id, { meta: { cwd } })
+
+    try {
+      await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
+        state: { kind: 'branch', repository: 'shiguredo/nested-repo', branch: 'develop' },
+        refreshMs: 5_000,
+      })
+    } finally {
+      await service.dispose()
+      await subprocess.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
+  it('reads branch metadata from a linked Git worktree', async () => {
+    const source = await repository('worktree-source')
+    git(source, 'remote', 'add', 'origin', 'https://github.com/shiguredo/worktree-repo.git')
+    const worktree = join(source, '..', 'linked-worktree')
+    git(source, 'worktree', 'add', '-b', 'linked-branch', worktree)
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10_000, refreshMs: 5_000 })
+    const id = SessionId('worktree-session')
+    ctx.sessions.create(id, { meta: { cwd: worktree } })
+
+    try {
+      await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
+        state: { kind: 'branch', repository: 'shiguredo/worktree-repo', branch: 'linked-branch' },
+        refreshMs: 5_000,
+      })
+    } finally {
+      await service.dispose()
+      await subprocess.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
+  it('uses the configured workspace root when the Session has no cwd', async () => {
+    const cwd = await repository('workspace-root-fallback')
+    git(cwd, 'remote', 'add', 'origin', 'https://github.com/shiguredo/workspace-root.git')
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: cwd } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10_000, refreshMs: 5_000 })
+    const id = SessionId('workspace-root-session')
+    ctx.sessions.create(id, { meta: {} })
+
+    try {
+      await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
+        state: { kind: 'branch', repository: 'shiguredo/workspace-root', branch: 'develop' },
+        refreshMs: 5_000,
+      })
+    } finally {
+      await service.dispose()
+      await subprocess.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
+  it('falls back to the Git root when origin is absent or is not a valid GitHub owner/repository', async () => {
+    const cwd = await repository('origin-fallback')
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10_000, refreshMs: 5_000 })
+    const id = SessionId('origin-fallback-session')
+    ctx.sessions.create(id, { meta: { cwd } })
+
+    try {
+      const absent = await ctx.workspaceGit.status(id, new AbortController().signal)
+      expect(absent.state).toEqual({ kind: 'branch', repository: 'origin-fallback', branch: 'develop' })
+
+      const invalidOrigins = [
+        'https://github.com/owner_name/repo.git',
+        'https://github.com/owner/repo%3A.git',
+        'https://github.com/owner/repo/extra.git',
+      ]
+      for (const origin of invalidOrigins) {
+        git(cwd, 'remote', 'add', 'origin', origin)
+        const status = await ctx.workspaceGit.status(id, new AbortController().signal)
+        expect(status.state).toEqual({ kind: 'branch', repository: 'origin-fallback', branch: 'develop' })
+        git(cwd, 'remote', 'remove', 'origin')
+      }
+    } finally {
+      await service.dispose()
+      await subprocess.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  }, 15_000)
 
   it('ignores inherited indexed Git config and repository selectors', async () => {
     const selectedCwd = await repository('selected-repository')
@@ -215,6 +363,10 @@ describe('workspaceGit.status', () => {
     const spawn = vi.spyOn(ctx.subprocess, 'spawn')
 
     try {
+      await expect(ctx.workspaceGit.status(SessionId('missing-session'), new AbortController().signal)).resolves.toEqual({
+        state: { kind: 'none' },
+        refreshMs: 5_000,
+      })
       await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
         state: { kind: 'none' },
         refreshMs: 5_000,
@@ -256,6 +408,65 @@ describe('workspaceGit.status', () => {
       await typert.dispose()
     }
   })
+
+  it.each(['session directory', 'repository root', 'branch', 'origin', 'detached revision'] as const)(
+    'returns no status when %s completes after the request deadline',
+    async (stage) => {
+      const cwd = tmpdir()
+      const ctx = new Context()
+      ctx.provide('sandboxPolicy', { workspaceRoot: cwd } as never)
+      const sessions = await ctx.plugin(SessionStore)
+      const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+      const typert = await ctx.plugin(TypertRegistry)
+      const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 5, refreshMs: 5_000 })
+      const id = SessionId(`deadline-${stage.replaceAll(' ', '-')}`)
+      const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation((spec) => {
+        const args = spec.argv.slice(3)
+        if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') {
+          return completedGit(spec, cwd, 0, stage === 'repository root' ? 25 : 0)
+        }
+        if (args[0] === 'symbolic-ref') {
+          return completedGit(
+            spec,
+            stage === 'detached revision' ? '' : 'develop',
+            stage === 'detached revision' ? 1 : 0,
+            stage === 'branch' ? 25 : 0,
+          )
+        }
+        if (args[0] === 'remote') return completedGit(spec, 'https://github.com/owner/repo.git', 0, stage === 'origin' ? 25 : 0)
+        if (args[0] === 'rev-parse' && args[1] === '--short')
+          return completedGit(spec, 'abc1234', 0, stage === 'detached revision' ? 25 : 0)
+        throw new Error(`Unexpected Git command: ${args.join(' ')}`)
+      })
+      if (stage === 'session directory') {
+        ctx.provide('sessionPersistence', {
+          stat: async (_sessionId: SessionId, options: { signal?: AbortSignal }) => {
+            const signal = options.signal
+            if (signal === undefined) throw new Error('workspace Git must cancel persistence reads')
+            await new Promise((resolve) => setTimeout(resolve, 25))
+            signal.throwIfAborted = () => {}
+            return { header: { id, createdAt: 1, cwd }, revision: 'test' }
+          },
+        } as never)
+      } else {
+        ctx.sessions.create(id, { meta: { cwd } })
+      }
+
+      try {
+        await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
+          state: { kind: 'none' },
+          refreshMs: 5_000,
+        })
+        if (stage === 'session directory') expect(spawn).not.toHaveBeenCalled()
+        else expect(spawn).toHaveBeenCalled()
+      } finally {
+        await service.dispose()
+        await subprocess.dispose()
+        await sessions.dispose()
+        await typert.dispose()
+      }
+    },
+  )
 
   it('aborts and drains an in-flight Git command when the Host service is disposed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-workspace-git-dispose-'))
