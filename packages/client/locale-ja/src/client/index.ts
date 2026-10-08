@@ -20,12 +20,12 @@ export const inject = ['locale']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const disposers: (() => void)[] = []
-    let removeLanguage: (() => void) | undefined
+    let removeLanguage: () => void
     try {
       for (const { ns, dict } of DICTIONARIES) disposers.push(ctx.locale.register(ns, 'ja', dict))
       removeLanguage = ctx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en', default: true })
     } catch (error) {
-      removeLanguage?.()
+      // The language disposer transfers to this fiber only when addLanguage returns.
       for (const dispose of disposers.reverse()) dispose()
       throw error
     }
