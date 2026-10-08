@@ -9,6 +9,7 @@
 import { getDshRuntimeVersion, loadLayeredEnv, StartupError } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { parseDshArgs } from './args.ts'
+import { isMainModule } from './is-main-module.ts'
 import { reportStartupFailure } from './startup-diagnostics.ts'
 import type { RunProfileOptions } from './profile-boot.ts'
 
@@ -54,12 +55,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
     case 'dump-config': {
       const { runDumpConfig } = await import('./dump-config.ts')
-      runDumpConfig(
-        invocation.profile,
-        invocation.defaultOnly,
-        invocation.patches,
-        invocation.fromDefaultProfile,
-      )
+      runDumpConfig(invocation.profile, invocation.defaultOnly, invocation.patches, invocation.fromDefaultProfile)
       break
     }
     case 'dump-config-schema': {
@@ -73,6 +69,6 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   }
 }
 
-if (import.meta.main) {
+if (isMainModule(import.meta.url, import.meta.main, process.argv[1])) {
   await runCli()
 }
