@@ -161,8 +161,8 @@ export const longProbe = ${'1 + '.repeat(40)}1
     expect(existsSync(join(repositoryRoot, '.oxlintrc.staged.json'))).toBe(false)
 
     const lefthook = readFileSync(join(repositoryRoot, 'lefthook.yml'), 'utf8')
-    expect(lefthook).toContain('vp fmt --write {staged_files}')
-    expect(lefthook).toContain('scripts/run-vp-lint.ts --staged --fix')
+    expect(lefthook).toContain('vp fmt --write --no-error-on-unmatched-pattern {staged_files}')
+    expect(lefthook).toContain('scripts/run-vp-lint.ts --staged --fix --no-error-on-unmatched-pattern {staged_files}')
     expect(lefthook).toContain("'**/fixtures/**'")
   })
 
@@ -182,6 +182,46 @@ export const longProbe = ${'1 + '.repeat(40)}1
       expect(output).not.toContain('Got tsconfig')
     } finally {
       await rm(path, { force: true })
+    }
+  })
+
+  it('continues staged lint when generated files are ignored', { timeout: 90_000 }, async () => {
+    const suffix = randomUUID()
+    const generated = join(repositoryRoot, 'packages/fs/fs-observation-policy/lib', `vp-lint-contract-${suffix}.ts`)
+    const source = join(repositoryRoot, 'scripts', `vp-lint-contract-${suffix}.ts`)
+
+    try {
+      await writeFile(generated, 'export const generated = 1\n')
+      const generatedOnly = runRepositoryLint([
+        '--staged',
+        '--format',
+        'unix',
+        '--no-error-on-unmatched-pattern',
+        relative(repositoryRoot, generated),
+      ])
+      const generatedOutput = normalizedOutput(generatedOnly)
+
+      expect(generatedOnly.error).toBeUndefined()
+      expect(generatedOnly.status, generatedOutput).toBe(0)
+
+      await writeFile(source, 'export const value={answer:1};\n')
+      const mixed = runRepositoryLint([
+        '--staged',
+        '--format',
+        'unix',
+        '--no-error-on-unmatched-pattern',
+        relative(repositoryRoot, generated),
+        relative(repositoryRoot, source),
+      ])
+      const mixedOutput = normalizedOutput(mixed)
+
+      expect(mixed.error).toBeUndefined()
+      expect(mixed.status, mixedOutput).toBe(1)
+      expect(mixedOutput).toContain('@stylistic')
+      expect(mixedOutput).not.toContain('typescript(')
+      expect(mixedOutput).not.toContain('Got tsconfig')
+    } finally {
+      await Promise.all([rm(generated, { force: true }), rm(source, { force: true })])
     }
   })
 
