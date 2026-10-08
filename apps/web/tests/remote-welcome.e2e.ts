@@ -23,7 +23,7 @@ describe.skipIf(MODE === 'record')('web e2e: remote welcome notice', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
-      locale: 'zh',
+      locale: null,
       remoteAuthority: 'remote.localhost',
       welcomeNoticePending: true,
     })
@@ -43,11 +43,13 @@ describe.skipIf(MODE === 'record')('web e2e: remote welcome notice', () => {
   })
 
   it('advances process-locally and presents the notice again after reload', async () => {
-    const welcome = page.getByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title })
+    await expect.poll(() => page.locator('html').getAttribute('lang')).toBe('ja')
+    const welcome = page.getByRole('dialog', { name: WELCOME_NOTICE_COPY.ja.title })
     await welcome.waitFor({ timeout: 15_000 })
+    expect((await welcome.innerText()).replace(/\s+/gu, ' ')).toContain(WELCOME_NOTICE_COPY.ja.body.replace(/\s+/gu, ' '))
     expect(await page.locator('#root').evaluate((root) => (root as HTMLElement).inert)).toBe(true)
 
-    await welcome.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel }).click()
+    await welcome.getByRole('button', { name: WELCOME_NOTICE_COPY.ja.continueLabel }).click()
     await welcome.waitFor({ state: 'detached', timeout: 15_000 })
     await expect.poll(() => page.locator('#root').evaluate((root) => (root as HTMLElement).inert), { timeout: 15_000 }).toBe(false)
 

@@ -309,8 +309,20 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, locale })
     const opened = await context.newPage()
     tripwires.push(watchConsole(opened))
+    await opened.exposeFunction('__bonusReadLocale', () => {
+      const preference = scaffold.ctx.settings.describe().find((row) => row.ns === 'locale')?.value as { preference?: unknown } | undefined
+      return {
+        languages: [locale],
+        preference: typeof preference?.preference === 'string' ? preference.preference : null,
+      }
+    })
     await opened.addInitScript(() => {
       Object.defineProperty(globalThis, 'dshDesktop', { value: { protocolVersion: 1 } })
+      const bridge = globalThis as typeof globalThis & {
+        __bonusReadLocale(): Promise<unknown>
+        __DSH_LOCALE__: { read(): Promise<unknown>; onChange(locale: string): void }
+      }
+      bridge.__DSH_LOCALE__ = { read: () => bridge.__bonusReadLocale(), onChange: () => undefined }
       // The embedded Platform view is a native child window owned by the Desktop shell.
       // The double answers immediately and records the calls, so the scenario observes
       // which page was opened and that returning destroyed the view.
@@ -339,6 +351,9 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     try {
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await selectLocalePreference(page, locale)
+      await expect
+        .poll(() => scaffold.ctx.settings.describe().find((row) => row.ns === 'locale')?.value, { timeout: 30_000 })
+        .toMatchObject({ preference: locale })
     } finally {
       await page.close()
     }
