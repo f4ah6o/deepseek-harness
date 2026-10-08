@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import {
@@ -26,12 +26,6 @@ afterEach(async () => {
 
 async function tempDir(name: string): Promise<string> {
   const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
-  tempDirs.push(dir)
-  return await realpath(dir)
-}
-
-async function tempHomeDir(name: string): Promise<string> {
-  const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(homedir(), `dsh-${name}-`)))
   tempDirs.push(dir)
   return await realpath(dir)
 }
@@ -232,11 +226,30 @@ describe('FileSystemSkillProvider', () => {
     expect(skills.find((skill) => skill.name === 'bundled-only')).toMatchObject({ source: 'bundled' })
     expect((await ctx.skills.get('bundled-only'))?.content).toBe('Use the skill.')
 
-    // Keep this no-marker fixture outside /tmp/.git so root discovery falls
-    // back to the fixture cwd rather than an unrelated temporary parent.
-    const noGit = await tempHomeDir('skill-no-git')
+    const noGitParent = await tempDir('skill-no-git')
+    const noGit = join(noGitParent, 'project')
+    await mkdir(noGit)
+    await writeSkill(join(noGitParent, '.dsh/skills'), 'ancestor-only', 'Ancestor project skill')
     await writeSkill(join(noGit, '.dsh/skills'), 'fallback-root', 'Fallback root')
-    expect((await ctx.skills.list({ cwd: noGit })).map((skill) => skill.name)).toContain('fallback-root')
+    const noGitCtx = new Context()
+    await noGitCtx.plugin(TestFileSystem)
+    await noGitCtx.plugin(SkillRegistry)
+    await noGitCtx.plugin(SkillFileSystem, {
+      dshHome: join(home, '.dsh'),
+      agentsHome: join(home, '.agents'),
+      watch: false,
+    })
+    const fs = noGitCtx.fs as TestFileSystem
+    for (let current = noGit; ;) {
+      // Return FS_NOT_FOUND for fixture and ancestor .git probes so host roots cannot affect discovery.
+      fs.failResolvePaths.add(join(current, '.git'))
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    const noGitSkills = (await noGitCtx.skills.list({ cwd: noGit })).map((skill) => skill.name)
+    expect(noGitSkills).toContain('fallback-root')
+    expect(noGitSkills).not.toContain('ancestor-only')
   })
 
   it('lets project skills override runtime while runtime overrides custom and user skills', async () => {
