@@ -195,19 +195,18 @@ function githubPath(remote: string | undefined): string | undefined {
     path = match?.[2]
   }
   if (host !== 'github.com' || path === undefined) return undefined
-  const parts = path
-    .replace(/^\/+|\/+$/g, '')
-    .replace(/\.git$/i, '')
-    .split('/')
-  if (parts.length !== 2 || !/^[A-Za-z0-9-]+$/.test(parts[0] ?? '') || !/^[A-Za-z0-9._-]+$/.test(parts[1] ?? '')) return undefined
-  return `${parts[0]}/${parts[1]}`
+  const normalizedPath = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '')
+  const match = /^([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/.exec(normalizedPath)
+  if (match === null) return undefined
+  return `${match[1]}/${match[2]}`
 }
 
-/** Return the final path component with either execution-world separator. */
+/** Return the final path component, or the root itself, with either execution-world separator. */
 function pathBasename(path: string): string {
   const trimmed = path.replace(/[\\/]+$/g, '')
+  if (trimmed === '') return path
   const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
-  return trimmed.slice(separator + 1) || trimmed
+  return trimmed.slice(separator + 1)
 }
 
 export default WorkspaceGit

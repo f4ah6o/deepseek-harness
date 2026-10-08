@@ -240,6 +240,36 @@ describe('workspaceGit.status', () => {
     }
   }, 15_000)
 
+  it('keeps the filesystem root as the fallback repository label', async () => {
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10_000, refreshMs: 5_000 })
+    const id = SessionId('filesystem-root-session')
+    ctx.sessions.create(id, { meta: { cwd: tmpdir() } })
+    vi.spyOn(ctx.subprocess, 'spawn').mockImplementation((spec) => {
+      const args = spec.argv.slice(3)
+      if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return completedGit(spec, '/')
+      if (args[0] === 'symbolic-ref') return completedGit(spec, 'main')
+      if (args[0] === 'remote') return completedGit(spec, '', 1)
+      throw new Error(`Unexpected Git command: ${args.join(' ')}`)
+    })
+
+    try {
+      await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
+        state: { kind: 'branch', repository: '/', branch: 'main' },
+        refreshMs: 5_000,
+      })
+    } finally {
+      await service.dispose()
+      await subprocess.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
   it('ignores inherited indexed Git config and repository selectors', async () => {
     const selectedCwd = await repository('selected-repository')
     const ambientCwd = await repository('ambient-repository')
