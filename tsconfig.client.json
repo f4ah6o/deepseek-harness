@@ -138,6 +138,7 @@
     { "path": "./packages/client/ui-plugin-manager/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
     { "path": "./packages/client/locale/tsconfig.client.json" },
+    { "path": "./packages/client/locale-ja/tsconfig.client.json" },
     { "path": "./packages/client/ui-renderer" },
     { "path": "./packages/client/ui-session" },
     { "path": "./packages/client/resources" },

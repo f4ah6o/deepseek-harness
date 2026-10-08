@@ -44,7 +44,7 @@ Add the plugin to a Client composition that already mounts `dsh-api-remotes` and
 |---|---|---|
 | — | — | This plugin takes no configuration. |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-ui-git-branch) lists every accepted field.
+The generated [configuration catalog](../../../docs/config-catalog.md) lists the plugin among the entries without configuration.
 
 -----
 

@@ -3700,6 +3700,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'workspaceGit',
+    summary: 'Host Remote service that returns sanitized Git repository and branch metadata.',
+    description: 'Host Remote service that returns sanitized Git repository and branch metadata.',
+    methods: [
+      {
+        signature: '@Remote status(sessionId: SessionId, signal: AbortSignal): Promise<WorkspaceGitStatus>',
+        description: 'Read current Git state from the selected Session\'s workspace in the subprocess provider\'s execution world. Only an owner/repository pair from `origin` is returned; credentials and remote URLs never cross the Remote.',
+        parameters: [{ name: 'sessionId', description: 'selected Session whose header supplies the working directory.' }, { name: 'signal', description: 'cancels persistence reads and every spawned Git process.' }],
+        returns: 'the sanitized branch, detached revision, or no-checkout state plus refresh interval.',
+      },
+    ],
+  },
+  {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
     description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
@@ -8355,6 +8368,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceFollowIncrement',
     declaration: 'export type WorkspaceFollowIncrement = {\n    readonly type: \'upsert\';\n    readonly workspace: WorkspaceView;\n} | {\n    readonly type: \'remove\';\n    readonly workspaceId: WorkspaceId;\n} | {\n    readonly type: \'order\';\n    readonly workspaceIds: readonly WorkspaceId[];\n} | {\n    readonly type: \'archived\';\n    readonly archivedSessionIds: readonly SessionId[];\n} | {\n    readonly type: \'pinned\';\n    readonly pinnedSessionIds: readonly SessionId[];\n};',
+  },
+  {
+    name: 'WorkspaceGitState',
+    declaration: 'export type WorkspaceGitState = {\n    readonly kind: \'branch\';\n    readonly repository: string;\n    readonly branch: string;\n} | {\n    readonly kind: \'detached\';\n    readonly repository: string;\n    readonly revision: string;\n} | {\n    readonly kind: \'none\';\n};',
+  },
+  {
+    name: 'WorkspaceGitStatus',
+    declaration: 'export interface WorkspaceGitStatus {\n    readonly state: WorkspaceGitState;\n    readonly refreshMs: number;\n}',
   },
   {
     name: 'WorkspaceInsertBeforeRequest',

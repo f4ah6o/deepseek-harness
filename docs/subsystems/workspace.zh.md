@@ -473,6 +473,28 @@ Host Remote file reads and workspace directory observations over the composed fi
 
 Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspace-files/src/index.ts)
 
+<a id="ctxworkspacegit--workspacegit"></a>
+
+### `ctx.workspaceGit` — `WorkspaceGit`
+
+Host Remote service that returns sanitized Git repository and branch metadata.
+
+```ts cordis-catalog
+/**
+ * Read current Git state from the selected Session's workspace in the
+ * subprocess provider's execution world. Only an owner/repository pair from
+ * `origin` is returned; credentials and remote URLs never cross the Remote.
+ * @param sessionId - selected Session whose header supplies the working directory.
+ * @param signal - cancels persistence reads and every spawned Git process.
+ * @returns the sanitized branch, detached revision, or no-checkout state plus refresh interval.
+ */
+@Remote status(sessionId: SessionId, signal: AbortSignal): Promise<WorkspaceGitStatus>
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/api/workspace-git/src/index.ts`](../../packages/api/workspace-git/src/index.ts)
+
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
 ### `ctx.workspaceRegistry` — `WorkspaceRegistry`

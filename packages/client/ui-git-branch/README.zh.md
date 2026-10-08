@@ -44,7 +44,7 @@ kind: "package-reference"
 |---|---|---|
 | — | — | 此插件无需配置。 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-client-ui-git-branch)列出所有可接受字段。
+生成的[配置目录](../../../docs/config-catalog.zh.md)将此插件列在无配置项的条目中。
 
 -----
 

@@ -118,7 +118,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'locale',
     summary: 'Dictionary registry plus locale preference.',
-    description: 'Dictionary registry plus locale preference. Lookup walks the active language\'s declared fallback chain in the entry namespace, then repeats it in the shared common namespace before showing the key itself. Reads go through getLocale; preferences change only through setLocale, while language packs extend the catalog through addLanguage. A pack may designate one provisional default when no saved preference is available. Continuous sync uses the `locale/change` event or the LocaleFace getSnapshot/subscribe pair installed through `ctx.slots.installLocale`.',
+    description: 'Dictionary registry plus locale preference. Lookup walks the active language\'s declared fallback chain in the entry namespace, then repeats it in the shared common namespace before showing the key itself. Reads go through getLocale; preferences change only through setLocale, while language packs extend the catalog through addLanguage. Continuous sync uses the `locale/change` event or the LocaleFace getSnapshot/subscribe pair installed through `ctx.slots.installLocale`.',
     methods: [
       {
         signature: 'getLocale(): LocaleSnapshot',
@@ -140,15 +140,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'setLocale(id: string): void',
-        description: 'Switch the active locale — the only user preference write entry.\n\nThe durable write happens even when the id already matches the active locale, because the active value may be a provisional browser-derived or fallback resolution that nothing has stored yet. Picking the language already on screen is still an explicit choice, and it must survive a different browser sharing the same DSH home. Only the render notification is conditional: republishing an unchanged locale would churn every subscriber for nothing.',
+        description: 'Switch the active locale — the only user preference write entry.\n\nThe durable write happens even when the id already matches the active locale, because the active value may be a provisional pack default, browser-derived, or fallback resolution that nothing has stored yet. Picking the language already on screen is still an explicit choice, and it must survive a different browser sharing the same DSH home. Only the render notification is conditional: republishing an unchanged locale would churn every subscriber for nothing.',
         parameters: [{ name: 'id', description: 'a registered locale id; unknown ids throw.' }],
       },
       {
         signature: 'addLanguage(input: LanguageRegistration): () => void',
-        description: 'Add one selectable language to the shared catalog. Its fallback must already be registered, and following fallback definitions must terminate at English. Dictionaries may register before or after this definition. Registration rechecks an unresolved Host preference and the provisional locale. One language may set `default: true` to take precedence over browser language detection when no saved preference exists. The caller owns the returned disposer; removing an active language falls back without clearing the stored id.',
-        parameters: [{ name: 'input', description: 'stable id, self-described label, fallback language id, and optional initial-default flag.' }],
+        description: 'Add one selectable language to the shared catalog. Its fallback must already be registered, and following fallback definitions must terminate at English. Dictionaries may register before or after this definition. Registration rechecks an unresolved Host preference and the initial locale. At most one language may be the provisional default; without one, the browser\'s ordered language list chooses among registered locales. The caller owns the returned disposer; removing an active language falls back without clearing the stored id.',
+        parameters: [{ name: 'input', description: 'stable id, self-described label, and fallback language id.' }],
         returns: 'idempotent disposer removing this exact definition.',
-        throws: ['when fields are malformed, the id or default role is occupied, or the fallback target is unknown or creates a cycle.'],
+        throws: ['when fields are malformed, the id is occupied, another default language is registered, or the fallback target is unknown or creates a cycle.'],
       },
       {
         signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void',
@@ -653,7 +653,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LanguageRegistration',
-    declaration: 'export interface LanguageRegistration {\n    id: LocaleId;\n    label: string;\n    fallback: LocaleId;\n}',
+    declaration: 'export interface LanguageRegistration {\n    id: LocaleId;\n    label: string;\n    fallback: LocaleId;\n    default?: boolean;\n}',
   },
   {
     name: 'LiveCompositionNode',
