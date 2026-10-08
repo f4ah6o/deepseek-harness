@@ -39,7 +39,9 @@ function waitingForAbort(spec: SubprocessSpawnSpec): SubprocessHandle {
   const signal = spec.signal
   if (signal === undefined) throw new Error('workspace Git must cancel its subprocess')
   const done = new Promise<SubprocessOutcome>((_resolve, reject) => {
-    signal.addEventListener('abort', () => { reject(signal.reason) }, { once: true })
+    signal.addEventListener('abort', () => {
+      reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)))
+    }, { once: true })
   })
   return {
     stdin: undefined,
@@ -85,6 +87,78 @@ describe('workspaceGit.status', () => {
       await typert.dispose()
     }
   })
+
+  it('ignores inherited indexed Git config and repository selectors', async () => {
+    const selectedCwd = await repository('selected-repository')
+    const ambientCwd = await repository('ambient-repository')
+    git(selectedCwd, 'remote', 'add', 'origin', 'https://alice:session-secret@github.com/shiguredo/selected.git')
+    git(ambientCwd, 'checkout', '-b', 'ambient-branch')
+    git(ambientCwd, 'remote', 'add', 'origin', 'https://alice:ambient-secret@github.com/shiguredo/ambient.git')
+
+    const names = [
+      'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0', 'GIT_CONFIG_PARAMETERS',
+      'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CEILING_DIRECTORIES',
+      'GIT_DISCOVERY_ACROSS_FILESYSTEM',
+    ] as const
+    const original = new Map(names.map(name => [name, process.env[name]] as const))
+    const ctx = new Context()
+    ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const subprocess = await ctx.plugin(LocalSubprocessRuntime)
+    const typert = await ctx.plugin(TypertRegistry)
+    const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 2_000, refreshMs: 5_000 })
+    const id = SessionId('selected-session')
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    try {
+      process.env.GIT_CONFIG_COUNT = '1'
+      process.env.GIT_CONFIG_KEY_0 = 'core.bare'
+      process.env.GIT_CONFIG_VALUE_0 = 'config-value-secret'
+      process.env.GIT_CONFIG_PARAMETERS = "'core.bare'='true'"
+      process.env.GIT_DIR = join(ambientCwd, '.git')
+      process.env.GIT_WORK_TREE = ambientCwd
+      process.env.GIT_COMMON_DIR = join(ambientCwd, '.git')
+      process.env.GIT_INDEX_FILE = join(ambientCwd, '.git', 'index')
+      process.env.GIT_OBJECT_DIRECTORY = join(ambientCwd, '.git', 'objects')
+      process.env.GIT_ALTERNATE_OBJECT_DIRECTORIES = join(ambientCwd, '.git', 'objects')
+      process.env.GIT_CEILING_DIRECTORIES = ambientCwd
+      process.env.GIT_DISCOVERY_ACROSS_FILESYSTEM = '1'
+      ctx.sessions.create(id, { meta: { cwd: selectedCwd } })
+      const status = await ctx.workspaceGit.status(id, new AbortController().signal)
+      expect(status).toEqual({
+        state: { kind: 'branch', repository: 'shiguredo/selected', branch: 'develop' },
+        refreshMs: 5_000,
+      })
+      const body = JSON.stringify(status)
+      expect(body).not.toContain('session-secret')
+      expect(body).not.toContain('ambient-secret')
+      expect(body).not.toContain('config-value-secret')
+      expect(spawn).toHaveBeenCalled()
+      for (const [spec] of spawn.mock.calls) {
+        expect(spec.env?.GIT_CONFIG_COUNT).toBe('0')
+        expect(spec.env?.GIT_CONFIG_VALUE_0).toBeUndefined()
+        expect(spec.env?.GIT_CONFIG_PARAMETERS).toBeUndefined()
+        expect(spec.env?.GIT_DIR).toBeUndefined()
+        expect(spec.env?.GIT_WORK_TREE).toBeUndefined()
+        expect(spec.env?.GIT_COMMON_DIR).toBeUndefined()
+      }
+    } finally {
+      try {
+        spawn.mockRestore()
+        await service.dispose()
+        await subprocess.dispose()
+        await sessions.dispose()
+        await typert.dispose()
+      } finally {
+        for (const name of names) {
+          const value = original.get(name)
+          if (value === undefined) Reflect.deleteProperty(process.env, name)
+          else process.env[name] = value
+        }
+      }
+    }
+  }, 10_000)
 
   it('reports a detached revision and falls back to the Git root name for non-GitHub origins', async () => {
     const cwd = await repository('fallback-root')
@@ -186,7 +260,7 @@ describe('workspaceGit.status', () => {
     const status = ctx.workspaceGit.status(id, new AbortController().signal)
 
     try {
-      await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+      await vi.waitFor(() => { expect(spawn).toHaveBeenCalledOnce() })
       await service.dispose()
       await expect(status).rejects.toThrow('workspace Git service disposed')
       expect(spawn.mock.calls[0]?.[0].signal?.aborted).toBe(true)

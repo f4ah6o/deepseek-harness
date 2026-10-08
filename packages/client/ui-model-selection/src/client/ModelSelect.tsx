@@ -117,6 +117,9 @@ export function ModelSelect(
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
   const currentChoice = choices[selectedIndex]
+  const currentProvider = state.current === null
+    ? undefined
+    : groups.find(group => group.id === state.current?.provider)
   const reasoning = currentChoice?.model.reasoning
   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortLabel = reasoning === undefined
@@ -415,10 +418,12 @@ export function ModelSelect(
   const modelLabel = waiting
     ? t('trigger.loading')
     : currentChoice?.model.name
-      ?? (state.current === null ? t('trigger.fallback') : `${state.current.provider}/${state.current.model}`)
-  const providerLabel = currentChoice === undefined
+      ?? (state.current === null ? t('trigger.fallback') : state.current.model)
+  const providerLabel = state.current === null
     ? undefined
-    : currentChoice.group.id === 'deepseek-account' ? t('provider.account') : currentChoice.group.name
+    : currentProvider?.id === 'deepseek-account'
+      ? t('provider.account')
+      : currentProvider?.name ?? state.current.provider
   const modelWithProvider = providerLabel === undefined ? modelLabel : `${providerLabel} · ${modelLabel}`
   const triggerLabel = effortLabel === undefined ? modelWithProvider : `${modelWithProvider} · ${effortLabel}`
   const triggerAria = waiting

@@ -7,11 +7,11 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 显示所选 Session 的 Git 分支，不公开本地路径或远程 URL。服务会通过配置的子进程提供方读取 Session 工作目录，并返回经过清理的仓库名称以及分支或分离 HEAD 版本号。可为部署设置 Host 截止时间和 Client 刷新间隔。
 
-## Table of Contents
+## 目录
 
 - [使用此包](#use-this-package)
 - [了解实现](#understand-the-implementation)
@@ -60,7 +60,7 @@ Host 会在子进程提供方的执行环境中执行有界 Git 查询，并仅�
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-状态请求会解析在线 Session header，或从持久化存储读取离线 Session header。服务使用 header 中的 `cwd`；只有 header 未提供目录时才回退到已配置的 workspace root。Git 命令通过 `ctx.subprocess` 运行，输出和运行时间均受限制，并会在返回前清理 GitHub remote。Remote 取消信号会传递给 Session 查询和每个已启动的进程。
+状态请求会解析在线 Session header，或从持久化存储读取离线 Session header。服务使用 header 中的 `cwd`；只有 header 未提供目录时才回退到已配置的 workspace root。Git 命令通过 `ctx.subprocess` 运行，会移除继承的 Git 仓库选择变量和索引命令行配置，限制输出和运行时间，并会在返回前清理 GitHub remote。Remote 取消信号会传递给 Session 查询和每个已启动的进程。
 
 | 源文件 | 职责 |
 |---|---|

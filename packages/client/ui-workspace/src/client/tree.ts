@@ -506,6 +506,7 @@ export function visibleSessionIds(
  * @param sessionIds - complete account members in the selected order, including hidden archives.
  * @param rowState - registry-global pin and archive sets plus the archived filter.
  * @param statuses - unified UI status by Session.
+ * @param workspaces - account Workspaces used to label flat Session rows.
  * @returns flat rows in sectioned order with current status indicators.
  */
 export function deriveFlat(

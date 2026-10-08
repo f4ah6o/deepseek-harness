@@ -295,6 +295,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Serves stat, paged text, byte windows, directory listings, and the change feed for files inside a Session\'s workspace root, confined by lstat, containment, and a stat re-check.',
   },
   {
+    key: 'workspaceGit',
+    pkg: 'api-workspace-git',
+    title: 'Host Session workspace Git metadata Remote service',
+    mode: 'core',
+    consumers: ['ui-git-branch'],
+    note: 'Reads bounded Git branch and repository display metadata from the selected Session workspace through the subprocess capability.',
+  },
+  {
     key: 'workspaceChanges',
     pkg: 'workspace-changes',
     title: 'Host per-turn changed-file summaries',

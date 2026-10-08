@@ -60,7 +60,7 @@ The Host performs bounded Git reads in the subprocess provider's execution world
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-A status request resolves a live Session header or reads a cold Session header from persistence. It uses that header's `cwd`, falling back to the configured workspace root only when the header has no directory. It runs Git through `ctx.subprocess`, bounds output and execution time, and sanitizes GitHub remotes before returning a result. The Remote cancellation signal reaches the Session lookup and every spawned process.
+A status request resolves a live Session header or reads a cold Session header from persistence. It uses that header's `cwd`, falling back to the configured workspace root only when the header has no directory. It runs Git through `ctx.subprocess`, removes inherited Git repository selectors and indexed command-line configuration, bounds output and execution time, and sanitizes GitHub remotes before returning a result. The Remote cancellation signal reaches the Session lookup and every spawned process.
 
 | Source | Responsibility |
 |---|---|

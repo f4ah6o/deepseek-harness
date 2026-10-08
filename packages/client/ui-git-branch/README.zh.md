@@ -7,11 +7,11 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 在 composer 的回合和 Token 状态旁显示所选 Session 的 Git 分支。GitHub checkout 会显示经过清理的 owner/repository 名称；其他 remote 则显示仓库目录名。Session 没有 Git checkout 时隐藏此标签。
 
-## Table of Contents
+## 目录
 
 - [使用此包](#use-this-package)
 - [了解实现](#understand-the-implementation)

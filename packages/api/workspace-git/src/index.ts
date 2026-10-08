@@ -71,24 +71,25 @@ export class WorkspaceGit extends TypertRemoteService {
   private async readStatus(sessionId: SessionId, signal: AbortSignal): Promise<WorkspaceGitStatus> {
     const deadline = new AbortController()
     const timer = setTimeout(() => { deadline.abort(new Error('workspace Git metadata deadline exceeded')) }, this.config.deadlineMs)
+    const deadlineExpired = (): boolean => deadline.signal.aborted
     const requestSignal = AbortSignal.any([signal, deadline.signal, this.lifetime.signal])
     try {
       const cwd = await this.sessionDirectory(sessionId, requestSignal)
-      if (cwd === undefined || deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (cwd === undefined || deadlineExpired()) return this.snapshot({ kind: 'none' })
       const root = await this.git(cwd, ['rev-parse', '--show-toplevel'], requestSignal)
-      if (root === undefined || deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (root === undefined || deadlineExpired()) return this.snapshot({ kind: 'none' })
       const branch = await this.git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD'], requestSignal)
-      if (deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (deadlineExpired()) return this.snapshot({ kind: 'none' })
       const remote = await this.git(cwd, ['remote', 'get-url', 'origin'], requestSignal)
-      if (deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (deadlineExpired()) return this.snapshot({ kind: 'none' })
       const repository = repositoryOf(remote, root)
       if (branch !== undefined && branch !== '') return this.snapshot({ kind: 'branch', repository, branch })
       const revision = await this.git(cwd, ['rev-parse', '--short', 'HEAD'], requestSignal)
-      if (revision === undefined || revision === '' || deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (revision === undefined || revision === '' || deadlineExpired()) return this.snapshot({ kind: 'none' })
       return this.snapshot({ kind: 'detached', repository, revision })
     } catch (error: unknown) {
       signal.throwIfAborted()
-      if (deadline.signal.aborted) return this.snapshot({ kind: 'none' })
+      if (deadlineExpired()) return this.snapshot({ kind: 'none' })
       throw error
     } finally {
       clearTimeout(timer)
@@ -110,9 +111,37 @@ export class WorkspaceGit extends TypertRemoteService {
   private async git(cwd: string, args: readonly string[], signal: AbortSignal): Promise<string | undefined> {
     signal.throwIfAborted()
     try {
-      const process = this.ctx.subprocess.spawn({
+      const indexedConfigEnv = Object.fromEntries(Object.keys(process.env)
+        .filter(name => /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/iu.test(name))
+        .map(name => [name, undefined]))
+      const child = this.ctx.subprocess.spawn({
         argv: ['git', '-C', cwd, ...args],
         cwd,
+        // `git -C` does not override these environment-selected repositories.
+        // Reset indexed config because the shared credential scrub removes
+        // GIT_CONFIG_KEY_n before the counter can be read by Git; remove its
+        // indexed values too because their names do not match that scrub.
+        env: {
+          ...indexedConfigEnv,
+          GIT_CONFIG_COUNT: '0',
+          GIT_CONFIG_PARAMETERS: undefined,
+          GIT_CONFIG: undefined,
+          GIT_DIR: undefined,
+          GIT_WORK_TREE: undefined,
+          GIT_COMMON_DIR: undefined,
+          GIT_IMPLICIT_WORK_TREE: undefined,
+          GIT_INDEX_FILE: undefined,
+          GIT_OBJECT_DIRECTORY: undefined,
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: undefined,
+          GIT_CEILING_DIRECTORIES: undefined,
+          GIT_DISCOVERY_ACROSS_FILESYSTEM: undefined,
+          GIT_GRAFT_FILE: undefined,
+          GIT_NAMESPACE: undefined,
+          GIT_NO_REPLACE_OBJECTS: undefined,
+          GIT_REPLACE_REF_BASE: undefined,
+          GIT_PREFIX: undefined,
+          GIT_SHALLOW_FILE: undefined,
+        },
         stdio: {
           stdin: 'ignore',
           stdout: { maxBytes: 4_096 },
@@ -121,10 +150,10 @@ export class WorkspaceGit extends TypertRemoteService {
         graceMs: this.config.deadlineMs,
         signal,
       })
-      const outcome = await process.done
+      const outcome = await child.done
       signal.throwIfAborted()
       if (outcome.exitCode !== 0) return undefined
-      return process.collected.stdout?.readFrom(0).text.trim()
+      return child.collected.stdout?.readFrom(0).text.trim()
     } catch (_error: unknown) {
       signal.throwIfAborted()
       // A missing Git executable or a directory outside a checkout is an empty

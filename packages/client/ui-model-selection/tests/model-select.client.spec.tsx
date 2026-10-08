@@ -165,7 +165,7 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('button', { name: '提供商' })).toBeNull()
   })
 
-  it('shows the durable model id when the catalog has no matching display name', () => {
+  it('shows the saved provider and model ids when the catalog has no matching model', () => {
     const directory = createSnapshotStore(state({
       current: { provider: 'deepseek-official', model: 'removed-model' },
     }))
@@ -179,11 +179,14 @@ describe('ModelSelect reasoning effort', () => {
       t={t}
     />)
 
-    const trigger = screen.getByRole('button', { name: '选择模型，当前 deepseek-official/removed-model' })
-    expect(trigger.textContent).toContain('deepseek-official/removed-model')
+    const trigger = screen.getByRole('button', { name: '选择模型，当前 DeepSeek · removed-model' })
+    expect(trigger.textContent).toContain('DeepSeek')
+    expect(trigger.textContent).toContain('removed-model')
     fireEvent.click(trigger)
     expect(screen.queryByRole('menuitem', { name: /推理等级/ })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    expect(screen.getByText('提供商')).toBeTruthy()
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0)
     expect(screen.queryByRole('menuitemradio', { name: 'removed-model' })).toBeNull()
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
     expect(screen.queryByText('Fast catalog description')).toBeNull()
@@ -197,9 +200,32 @@ describe('ModelSelect reasoning effort', () => {
       snapshot.groups = removed === 'provider' ? [] : snapshot.groups.map(group => ({ ...group, models: [] }))
       snapshot.routable = false
     }) })
-    expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent)
-      .toMatchInlineSnapshot('"deepseek-official/deepseek-v4-flashHigh"')
+    expect(screen.getByRole('button', { name: /选择模型，当前/ }).getAttribute('aria-label'))
+      .toMatch(removed === 'provider' ? /deepseek-official · deepseek-v4-flash/ : /DeepSeek · deepseek-v4-flash/)
     expect(directory.getSnapshot().current).toEqual(state().current)
+  })
+
+  it('uses the saved provider id when its provider group is no longer in the catalog', () => {
+    const directory = createSnapshotStore(state({
+      current: { provider: 'removed-provider', model: 'removed-model' },
+      groups: [],
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue({ ok: true, value: undefined })}
+      t={t}
+    />)
+
+    const trigger = screen.getByRole('button', {
+      name: '选择模型，当前 removed-provider · removed-model',
+    })
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    expect(screen.getByText('提供商')).toBeTruthy()
+    expect(screen.getAllByText('removed-provider')).toHaveLength(2)
   })
 
   it('shows loading until the catalog and Session projection are both ready', async () => {
@@ -934,7 +960,7 @@ it('restores the account model name after login without changing the saved route
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek 账号·DeepSeek FlashHigh')
   act(() => { directory.update((snapshot) => { snapshot.groups = []; snapshot.routable = false }) })
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent)
-    .toMatchInlineSnapshot('"deepseek-account/deepseek-flashHigh"')
+    .toMatchInlineSnapshot('"deepseek-account·deepseek-flashHigh"')
   act(() => { directory.update((snapshot) => { snapshot.groups = groups; snapshot.routable = true }) })
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek 账号·DeepSeek FlashHigh')
   expect(directory.getSnapshot().current).toEqual(selected)
