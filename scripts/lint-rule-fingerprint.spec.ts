@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vite-plus/test'
 type Rules = Record<string, unknown>
 
 interface VitePlusLintConfig {
-  readonly lint?: {
-    readonly overrides?: readonly unknown[]
+  readonly lint: {
+    readonly overrides: readonly unknown[]
   }
 }
 
@@ -37,6 +37,12 @@ const profiles = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isVitePlusLintConfig(value: unknown): value is VitePlusLintConfig {
+  if (!isRecord(value)) return false
+  const lint = value['lint']
+  return isRecord(lint) && Array.isArray(lint['overrides'])
 }
 
 function isUnknownArray(value: unknown): value is unknown[] {
@@ -75,9 +81,12 @@ function mergedRules(overrides: readonly unknown[], indexes: readonly number[]):
   return normalizedRules(merged)
 }
 
-const { default: viteConfig } = (await import('../vite.config.ts')) as { default: VitePlusLintConfig }
-const overrides = viteConfig.lint?.overrides
-if (overrides === undefined) throw new Error('vite.config.ts must define lint.overrides')
+const configUrl = new URL('../vite.config.ts', import.meta.url).href
+const loaded: unknown = await import(/* @vite-ignore */ configUrl)
+if (!isRecord(loaded) || !isVitePlusLintConfig(loaded.default)) {
+  throw new Error('vite.config.ts must define lint.overrides')
+}
+const overrides = loaded.default.lint.overrides
 
 describe('Vite+ repository rule fingerprint', () => {
   it('pins every override field', () => {
