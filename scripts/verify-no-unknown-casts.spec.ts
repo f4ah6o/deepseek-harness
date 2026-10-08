@@ -161,10 +161,36 @@ describe('unknown assertion syntax', () => {
     ['optional chaining', 'value?.item as unknown', 'value.item as unknown'],
     ['optional-chain termination', '(object?.field).next as unknown', 'object?.field.next as unknown'],
     ['sparse array', '[value,,] as unknown', '[value] as unknown'],
+    ['prefix unary operator', 'const result = +input as unknown', 'const result = -input as unknown'],
+    ['postfix unary operator', 'const result = input++ as unknown', 'const result = input-- as unknown'],
+    ['type operator', 'const result = input as unknown | keyof T[]', 'const result = input as unknown | readonly T[]'],
+    [
+      'import type query mode',
+      'const result = input as unknown | typeof import("module")',
+      'const result = input as unknown | import("module")',
+    ],
+    ['meta-property keyword', 'const result = new.target as unknown', 'const result = import.meta as unknown'],
+    ['class heritage clause', 'const result = class extends Base {} as unknown', 'const result = class implements Base {} as unknown'],
+    [
+      'import attribute token',
+      'const result = input as unknown | typeof import("module", { with: { "resolution-mode": "import" } })',
+      'const result = input as unknown | typeof import("module", { assert: { "resolution-mode": "import" } })',
+    ],
   ])('preserves semantic syntax in the %s fingerprint', (_name, original, changed) => {
     expect(findUnknownCasts('input.ts', changed).map((cast) => cast.fingerprint)).not.toEqual(
       findUnknownCasts('input.ts', original).map((cast) => cast.fingerprint),
     )
+  })
+
+  it.each(['let', 'const', 'using', 'await using'])('preserves %s declaration semantics inside a cast expression', (kind) => {
+    const cast = (declarationKind: string) =>
+      `const fn = async function () { ${declarationKind} resource = acquire(); return resource } as unknown`
+    const baseline = findUnknownCasts('input.ts', cast('var'))
+    const changed = findUnknownCasts('input.ts', cast(kind))
+
+    expect(baseline).toHaveLength(1)
+    expect(changed).toHaveLength(1)
+    expect(changed[0]?.fingerprint).not.toBe(baseline[0]?.fingerprint)
   })
 
   it.each([

@@ -18,7 +18,7 @@ export interface UnknownCast {
   file: string
   /** One-based source line. */
   line: number
-  /** SHA-256 of the ordered TypeScript AST after syntax-only formatting normalization. */
+  /** SHA-256 of the ordered TypeScript syntax tree and semantic fields after formatting-only normalization. */
   fingerprint: string
 }
 
@@ -49,6 +49,31 @@ function numericLiteralValue(node: ts.NumericLiteral): string {
   return String(value)
 }
 
+function semanticSyntaxFields(node: ts.Node): readonly unknown[] | undefined {
+  const fields: unknown[] = []
+  const add = (name: string, value: unknown): void => {
+    fields.push([name, value])
+  }
+
+  if (ts.isVariableDeclarationList(node)) add('declarationFlags', node.flags & ts.NodeFlags.BlockScoped)
+  if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) || ts.isTypeOperatorNode(node)) {
+    add('operator', ts.tokenToString(node.operator))
+  }
+  if (ts.isImportTypeNode(node)) add('isTypeOf', node.isTypeOf)
+  if (ts.isHeritageClause(node)) add('token', ts.tokenToString(node.token))
+  if (ts.isMetaProperty(node)) add('keywordToken', ts.tokenToString(node.keywordToken))
+  if (ts.isImportAttributes(node)) add('token', ts.tokenToString(node.token))
+  if (ts.isImportClause(node)) {
+    add('phaseModifier', node.phaseModifier === undefined ? undefined : ts.tokenToString(node.phaseModifier))
+  }
+  if (ts.isImportEqualsDeclaration(node) || ts.isImportSpecifier(node) || ts.isExportDeclaration(node) || ts.isExportSpecifier(node)) {
+    add('isTypeOnly', node.isTypeOnly)
+  }
+  if (ts.isExportAssignment(node)) add('isExportEquals', node.isExportEquals === true)
+
+  return fields.length === 0 ? undefined : fields
+}
+
 function structuralSyntax(node: ts.Node, source: ts.SourceFile): unknown {
   if (ts.isJSDoc(node)) return undefined
   if (ts.isParenthesizedExpression(node)) return structuralSyntax(node.expression, source)
@@ -73,7 +98,11 @@ function structuralSyntax(node: ts.Node, source: ts.SourceFile): unknown {
     },
   )
   const strictDirective = ts.isExpressionStatement(node) && isStrictDirective(node, source)
-  return ['node', ts.SyntaxKind[node.kind], (node.flags & ts.NodeFlags.OptionalChain) !== 0, strictDirective, children]
+  const semanticFields = semanticSyntaxFields(node)
+  if (semanticFields === undefined) {
+    return ['node', ts.SyntaxKind[node.kind], (node.flags & ts.NodeFlags.OptionalChain) !== 0, strictDirective, children]
+  }
+  return ['node', ts.SyntaxKind[node.kind], (node.flags & ts.NodeFlags.OptionalChain) !== 0, strictDirective, semanticFields, children]
 }
 
 function syntaxFingerprint(node: ts.Node, source: ts.SourceFile): string {
