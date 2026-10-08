@@ -245,7 +245,7 @@ describe('preboot Session-log upload migration', () => {
     writeFileSync(homePatch, patchText)
 
     await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
-      .rejects.toThrow(/cyclic Cordis group/)
+      .rejects.toThrow(/cyclic (Cordis group|YAML anchor)/)
 
     expect(readFileSync(homePatch, 'utf8')).toBe(patchText)
     expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)

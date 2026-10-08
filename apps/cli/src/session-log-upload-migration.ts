@@ -228,6 +228,7 @@ function migrateEntrySequence(
   remove: boolean,
   ancestors: readonly Node[],
 ): boolean {
+  if (sequence.anchor !== undefined) detachAliasConsumers(document, sequence, path)
   let changed = false
   for (const [index, rawRow] of sequence.items.entries()) {
     const rowPath = `${path}[${index}]`
@@ -241,6 +242,8 @@ function migrateEntrySequence(
       row = cloneWithoutAnchors(resolvedRow, rowPath) as import('yaml').YAMLMap
       copyComments(rawRow, row)
       sequence.items[index] = row
+    } else if (row.anchor !== undefined && (id === SESSION_LOG_ENTRY_ID || hasKnownChildren)) {
+      detachAliasConsumers(document, row, rowPath)
     }
     if (id === SESSION_LOG_ENTRY_ID) changed = migrateUploaderRow(document, row, rowPath, remove) || changed
 

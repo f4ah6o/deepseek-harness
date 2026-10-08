@@ -148,4 +148,34 @@ describe('session-log migration through real patch composition', () => {
     expect(enabled).toBe(false)
     expect(await firstRequestHasSessionLog(enabled, 'legacy-expression-reset')).toBe(false)
   })
+
+  it.each(['row', 'sequence'] as const)(
+    'preserves an unrelated config alias to an anchored uploader %s after composition',
+    async (anchorKind) => {
+      const home = mkdtempSync(join(tmpdir(), `dsh-upload-${anchorKind}-anchor-`))
+      homes.push(home)
+      const profileDir = makeProfile(home, [
+        anchorKind === 'row'
+          ? '- insert:\n    - &uploader\n      id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploader }\n'
+          : '- insert: &uploaderRows\n    - id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n- insert:\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploaderRows }\n',
+      ].join('\n'))
+      const profilePatch = join(profileDir, 'cordis.patch.yml')
+      const homePatch = join(home, 'cordis.patch.yml')
+      writeFileSync(homePatch, '[]\n')
+
+      await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
+
+      const entries = composeEntries([loadOverlayPatches('dsh-test', profilePatch)])
+      const uploader = entries.find(entry => entry.id === 'session-log-deepseek')
+      const unrelated = entries.find(entry => entry.id === 'unrelated')
+      const enabled = configuredEnabled(uploader?.config)
+      expect(enabled).toBe(false)
+      expect(unrelated?.config).toEqual({
+        retained: anchorKind === 'row'
+          ? { id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }
+          : [{ id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }],
+      })
+      expect(await firstRequestHasSessionLog(enabled, `${anchorKind}-anchor-reset`)).toBe(false)
+    },
+  )
 })
