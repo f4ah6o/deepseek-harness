@@ -4912,6 +4912,44 @@ describe('workspace context inbox synchronization', () => {
     }
   })
 
+  it('does not requeue a context already present in durable session history', async () => {
+    const root = await tempRepo()
+    const home = await tempRepo()
+    try {
+      await mkdir(join(root, '.git'), { recursive: true })
+      await write(join(root, 'AGENTS.md'), 'durable baseline')
+      const ctx = new Context()
+      await mountAgentInstructions(ctx, { dshHome: home, maxBytes: 65536 })
+      const agent = await stubAgent(root)
+      await syncAgentInstructions(ctx, agent)
+      const desired = await agentInstructionsOf(agent)
+      const event = agent.session.append('user/message', desired, { surfaceOp: 'append' })
+
+      expect(agent.session.surface.nodes).toContain(event.seq)
+
+      await agentEvents(ctx, agent).waterfall(
+        'agent/pre-step',
+        {
+          messages: [
+            createUserMessage({
+              content: [{ type: 'text', text: 'unrelated claimed message' }],
+              source: { kind: 'other' },
+            }),
+          ],
+          turn: 1,
+          step: 1,
+          signal: testToolSignal,
+        },
+        async () => ({ kind: 'enter' as const, messages: [] }),
+      )
+
+      expect(agent.inbox.nextStep).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
   it('holds back a dynamic change a one-byte positive render budget cannot represent', async () => {
     const root = await tempRepo()
     const home = await tempRepo()
