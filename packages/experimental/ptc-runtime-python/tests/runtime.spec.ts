@@ -5466,33 +5466,78 @@ describe('PythonPtcRuntime — hostile peer', () => {
     // byte cap, so a binding that resolves a wide value AFTER the run already
     // settled (here on `maxWallMs`) spent host heap building a frame that is then
     // discarded. The check now runs before the snapshot.
-    //
-    // The binding resolves well after the 1s wall clock with a 2M-element array;
-    // the run must still report `timeout`, and the late value must not appear.
+
+    // The handshake proves Python entered the binding before the real wall
+    // timer settles the run. Releasing the binding after that result makes its
+    // wide value late by construction; the getter records whether snapshotting
+    // ever began without requiring a delay guess after the run settles.
+    let signalEntered!: () => void
+    const entered = new Promise<void>((resolve) => {
+      signalEntered = resolve
+    })
+    let releaseBinding!: () => void
+    const bindingRelease = new Promise<void>((resolve) => {
+      releaseBinding = resolve
+    })
+    let signalReturned!: () => void
+    const returned = new Promise<void>((resolve) => {
+      signalReturned = resolve
+    })
+    let bindingStarted = false
     let resolvedLate = false
-    const { runtime } = await setup({ maxWallMs: 1_000 })
-    const result = await runtime.run(
-      runtime.resolve({
-        program: 'return await tools.slow({})',
-        bindings: [
-          {
-            global: 'tools',
-            functions: {
-              slow: async () => {
-                await new Promise((resolve) => setTimeout(resolve, 2_500))
-                resolvedLate = true
-                return Array.from({ length: 2_000_000 }, () => 0)
+    let snapshotReads = 0
+    const lateValue: PtcJsonValue = {
+      get payload() {
+        snapshotReads += 1
+        return Array.from({ length: 2_000_000 }, () => 0)
+      },
+    }
+    const { fiber, runtime } = await setup({ maxWallMs: 15_000 })
+    try {
+      const run = runtime.run(
+        runtime.resolve({
+          program: 'return await tools.slow({})',
+          bindings: [
+            {
+              global: 'tools',
+              functions: {
+                slow: async () => {
+                  bindingStarted = true
+                  signalEntered()
+                  await bindingRelease
+                  resolvedLate = true
+                  signalReturned()
+                  return lateValue
+                },
               },
             },
-          },
-        ],
-      }),
-    )
-    expect(result.error?.kind).toBe('timeout')
-    expect(result.value).toBeUndefined()
-    // Pin that the late path actually ran, so the assertion above is not vacuous.
-    await new Promise((resolve) => setTimeout(resolve, 2_000))
-    expect(resolvedLate).toBe(true)
+          ],
+        }),
+      )
+      // If startup is so delayed that the actual wall timer wins, fail this
+      // case rather than mistaking an unentered binding for a late resolution.
+      const enteredBeforeSettlement = await Promise.race([entered.then(() => true), run.then(() => false)])
+      expect(enteredBeforeSettlement).toBe(true)
+
+      const result = await run
+      expect(result.error?.kind).toBe('timeout')
+      expect(result.value).toBeUndefined()
+
+      releaseBinding()
+      await returned
+      // Drain the binding promise's reaction in the runtime before checking
+      // whether it started the snapshot walk.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(resolvedLate).toBe(true)
+      expect(snapshotReads).toBe(0)
+    } finally {
+      releaseBinding()
+      if (bindingStarted) {
+        await returned
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+      await fiber.dispose()
+    }
   }, 90_000)
 
   it('paces concurrent binding replies instead of queueing every frame at once', async () => {
