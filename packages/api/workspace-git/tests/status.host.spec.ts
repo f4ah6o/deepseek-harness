@@ -68,6 +68,14 @@ function completedGit(spec: SubprocessSpawnSpec, text: string, exitCode = 0, del
     // post-command checkpoint, rather than the abort throw, owns the result.
     signal.throwIfAborted = () => {}
   }
+  const done =
+    delayMs === 0
+      ? Promise.resolve<SubprocessOutcome>({ exitCode, signal: null })
+      : new Promise<SubprocessOutcome>((resolve) => {
+          setTimeout(() => {
+            resolve({ exitCode, signal: null })
+          }, delayMs)
+        })
   return {
     stdin: undefined,
     stdout: undefined,
@@ -78,11 +86,7 @@ function completedGit(spec: SubprocessSpawnSpec, text: string, exitCode = 0, del
         readFrom: () => ({ text, nextOffset: Buffer.byteLength(text), lossy: false }),
       },
     },
-    done: new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ exitCode, signal: null })
-      }, delayMs)
-    }),
+    done,
     terminate: () => {},
     waitForExit: async () => true,
   }
@@ -448,24 +452,24 @@ describe('workspaceGit.status', () => {
       const sessions = await ctx.plugin(SessionStore)
       const subprocess = await ctx.plugin(LocalSubprocessRuntime)
       const typert = await ctx.plugin(TypertRegistry)
-      const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 5, refreshMs: 5_000 })
+      const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 25, refreshMs: 5_000 })
       const id = SessionId(`deadline-${stage.replaceAll(' ', '-')}`)
       const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation((spec) => {
         const args = spec.argv.slice(3)
         if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') {
-          return completedGit(spec, cwd, 0, stage === 'repository root' ? 25 : 0)
+          return completedGit(spec, cwd, 0, stage === 'repository root' ? 100 : 0)
         }
         if (args[0] === 'symbolic-ref') {
           return completedGit(
             spec,
             stage === 'detached revision' ? '' : 'develop',
             stage === 'detached revision' ? 1 : 0,
-            stage === 'branch' ? 25 : 0,
+            stage === 'branch' ? 100 : 0,
           )
         }
-        if (args[0] === 'remote') return completedGit(spec, 'https://github.com/owner/repo.git', 0, stage === 'origin' ? 25 : 0)
+        if (args[0] === 'remote') return completedGit(spec, 'https://github.com/owner/repo.git', 0, stage === 'origin' ? 100 : 0)
         if (args[0] === 'rev-parse' && args[1] === '--short')
-          return completedGit(spec, 'abc1234', 0, stage === 'detached revision' ? 25 : 0)
+          return completedGit(spec, 'abc1234', 0, stage === 'detached revision' ? 100 : 0)
         throw new Error(`Unexpected Git command: ${args.join(' ')}`)
       })
       if (stage === 'session directory') {
@@ -473,7 +477,7 @@ describe('workspaceGit.status', () => {
           stat: async (_sessionId: SessionId, options: { signal?: AbortSignal }) => {
             const signal = options.signal
             if (signal === undefined) throw new Error('workspace Git must cancel persistence reads')
-            await new Promise((resolve) => setTimeout(resolve, 25))
+            await new Promise((resolve) => setTimeout(resolve, 100))
             signal.throwIfAborted = () => {}
             return { header: { id, createdAt: 1, cwd }, revision: 'test' }
           },
