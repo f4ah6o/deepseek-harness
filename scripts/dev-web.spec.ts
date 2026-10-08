@@ -10,6 +10,7 @@ import {
   discoverPluginDirs,
   parseDevWebArguments,
   StageSupervisor,
+  withPollingInputOptions,
   withRootPackDependencyDefaults,
   watchClientPlugins,
 } from './dev-web.ts'
@@ -138,6 +139,47 @@ it('inherits root pack dependency defaults without replacing package Client sett
   expect(normalized.format).toBe('cjs')
   expect(normalized.platform).toBe('browser')
   expect(withRootPackDependencyDefaults({ deps: { resolveDepSubpath: false } }).deps?.resolveDepSubpath).toBe(false)
+})
+
+it('adds polling while preserving resolver and watcher options', () => {
+  const normalized = withPollingInputOptions(
+    {
+      resolve: { conditionNames: ['production', 'browser', 'import', 'module', 'default'] },
+      watch: {
+        buildDelay: 17,
+        watcher: { usePolling: false, pollInterval: 25, compareContentsForPolling: true },
+      },
+    },
+    50,
+  )
+
+  expect(typeof normalized).toBe('object')
+  if (typeof normalized === 'function') throw new Error('object input options became a callback')
+  expect(normalized.resolve?.conditionNames).toEqual(['production', 'browser', 'import', 'module', 'default'])
+  expect(normalized.watch).toMatchObject({
+    buildDelay: 17,
+    watcher: { usePolling: true, pollInterval: 50, compareContentsForPolling: true },
+  })
+})
+
+it('adds polling after a package input-options callback resolves', async () => {
+  const inputOptions = withPollingInputOptions(
+    (options) => ({
+      ...options,
+      resolve: { conditionNames: ['production', 'browser', 'import', 'module', 'default'] },
+    }),
+    50,
+  )
+
+  if (typeof inputOptions !== 'function') throw new Error('input-options callback became an object')
+  const resolved = await inputOptions({}, 'cjs', { cjsDts: false })
+  expect(resolved?.resolve?.conditionNames).toEqual(['production', 'browser', 'import', 'module', 'default'])
+  expect(resolved?.watch).toMatchObject({ watcher: { usePolling: true, pollInterval: 50 } })
+
+  const noReturn = withPollingInputOptions(() => undefined, 100)
+  if (typeof noReturn !== 'function') throw new Error('input-options callback became an object')
+  const fallback = await noReturn({}, 'cjs', { cjsDts: false })
+  expect(fallback?.watch).toMatchObject({ watcher: { usePolling: true, pollInterval: 100 } })
 })
 
 it('waits for every config first success when one config rebuilds before another initializes', async () => {

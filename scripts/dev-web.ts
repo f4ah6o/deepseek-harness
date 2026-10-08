@@ -108,6 +108,45 @@ export function withRootPackDependencyDefaults(config: InlineConfig): InlineConf
 }
 
 /**
+ * Add source polling without dropping package resolver or watch settings.
+ * @param inputOptions - package Rolldown options or their config callback.
+ * @param pollInterval - source polling interval in milliseconds.
+ * @returns input options with polling enabled.
+ */
+export function withPollingInputOptions(
+  inputOptions: InlineConfig['inputOptions'],
+  pollInterval: number,
+): NonNullable<InlineConfig['inputOptions']> {
+  if (typeof inputOptions === 'function') {
+    return (options, format, context) => {
+      const configured = inputOptions(options, format, context)
+      return Promise.resolve(configured).then((resolved) => {
+        return withPollingOptions(resolved ?? options, pollInterval)
+      })
+    }
+  }
+  return withPollingOptions(inputOptions ?? {}, pollInterval)
+}
+
+function withPollingOptions(
+  inputOptions: Exclude<NonNullable<InlineConfig['inputOptions']>, (...args: never[]) => unknown>,
+  pollInterval: number,
+): Exclude<NonNullable<InlineConfig['inputOptions']>, (...args: never[]) => unknown> {
+  const watch = typeof inputOptions.watch === 'object' ? inputOptions.watch : {}
+  return {
+    ...inputOptions,
+    watch: {
+      ...watch,
+      watcher: {
+        ...watch.watcher,
+        usePolling: true,
+        pollInterval,
+      },
+    },
+  }
+}
+
+/**
  * Track one successful initialization build per watched pack config.
  * @param buildCount - number of configs that must finish their first build.
  * @returns the readiness promise and a per-config callback that ignores later rebuilds.
@@ -247,7 +286,7 @@ export async function watchClientPlugins(
           watch: true,
           env: { DSH_BUILD_FACE: 'client' },
           onSuccess,
-          ...(pollInterval !== undefined ? { inputOptions: { watch: { watcher: { usePolling: true, pollInterval } } } } : {}),
+          ...(pollInterval !== undefined ? { inputOptions: withPollingInputOptions(config.inputOptions, pollInterval) } : {}),
         })
         handles.push(await build(watchConfig))
       }
