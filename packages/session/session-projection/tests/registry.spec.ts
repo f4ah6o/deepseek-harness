@@ -7,16 +7,10 @@
  * and effect-tied removal of registrations and change listeners (HMR safety).
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import SessionStore, {
-  SESSION_FORMAT_VERSION,
-  Session,
-  SessionId,
-  SessionLogOffset,
-  SessionSeq,
-} from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -57,15 +51,16 @@ const RESTORE_HEADER: SessionHeader = {
   isSeeded: false,
 }
 /** Whole-value unit: latest test/mark event wins; unrelated events return the same reference. */
-const marksUnit = (): Omit<ProjectionDefinition<'test/marks', MarksState>, 'wire'>
-  & { wire: NonNullable<ProjectionDefinition<'test/marks', MarksState>['wire']> } => ({
+const marksUnit = (): Omit<ProjectionDefinition<'test/marks', MarksState>, 'wire'> & {
+  wire: NonNullable<ProjectionDefinition<'test/marks', MarksState>['wire']>
+} => ({
   key: 'test/marks',
   stateSchema: marksViewSchema.nullable(),
   init: () => null,
-  apply: (state, event) => (event.type === 'test/mark' ? (event).data : state),
+  apply: (state, event) => (event.type === 'test/mark' ? event.data : state),
   wire: {
     viewSchema: marksViewSchema,
-    view: state => state ?? { marks: [] },
+    view: (state) => state ?? { marks: [] },
   },
   stateVersion: 1,
 })
@@ -75,37 +70,36 @@ const countUnit = (): ProjectionDefinition<'test/count', number> => ({
   key: 'test/count',
   stateSchema: z.number().int().nonnegative(),
   init: () => 0,
-  apply: state => state + 1,
+  apply: (state) => state + 1,
   stateVersion: 1,
 })
 
-const stableViewUnit = (
-  view: (state: StableViewState) => StableViewState['value'],
-) => ({
-  key: 'test/stable-view',
-  stateSchema: z.object({
-    revision: z.number().int().nonnegative(),
-    value: marksViewSchema,
-  }),
-  init: () => ({ revision: 0, value: { marks: [] } }),
-  apply: (state, event) => {
-    if (event.type === 'turn/start') return { ...state, revision: state.revision + 1 }
-    if (event.type === 'test/mark') return { revision: state.revision + 1, value: event.data }
-    return state
-  },
-  wire: {
-    viewSchema: marksViewSchema,
-    view,
-  },
-  stateVersion: 1,
-}) satisfies ProjectionDefinition<'test/stable-view', StableViewState>
+const stableViewUnit = (view: (state: StableViewState) => StableViewState['value']) =>
+  ({
+    key: 'test/stable-view',
+    stateSchema: z.object({
+      revision: z.number().int().nonnegative(),
+      value: marksViewSchema,
+    }),
+    init: () => ({ revision: 0, value: { marks: [] } }),
+    apply: (state, event) => {
+      if (event.type === 'turn/start') return { ...state, revision: state.revision + 1 }
+      if (event.type === 'test/mark') return { revision: state.revision + 1, value: event.data }
+      return state
+    },
+    wire: {
+      viewSchema: marksViewSchema,
+      view,
+    },
+    stateVersion: 1,
+  }) satisfies ProjectionDefinition<'test/stable-view', StableViewState>
 
 /** Host-only unit whose initial state proves the exact inherited cut. */
 const cutUnit = (): ProjectionDefinition<'test/cut', number> => ({
   key: 'test/cut',
   stateSchema: z.number().int().nonnegative(),
   init: (_header, inheritedEventCount) => inheritedEventCount,
-  apply: state => state,
+  apply: (state) => state,
   stateVersion: 1,
 })
 
@@ -116,8 +110,7 @@ async function harness(): Promise<{ ctx: Context; session: Session }> {
   return { ctx, session: ctx.sessions.create() }
 }
 
-const mark = (session: Session, marks: string[]): SessionEvent =>
-  session.append('test/mark', { marks })
+const mark = (session: Session, marks: string[]): SessionEvent => session.append('test/mark', { marks })
 
 const STATE_SEQUENCES = [
   [0, 0, 0, 0],
@@ -157,7 +150,7 @@ function sameIdentities(left: readonly unknown[], right: readonly unknown[]): bo
 }
 
 function sequenceName(sequence: readonly number[], prefix: string): string {
-  return sequence.map(value => `${prefix}${String(value + 1)}`).join(',')
+  return sequence.map((value) => `${prefix}${String(value + 1)}`).join(',')
 }
 
 describe('SessionProjectionRegistry drive', () => {
@@ -177,13 +170,7 @@ describe('SessionProjectionRegistry drive', () => {
     })
 
     expect(ctx.sessionProjections.stateOf(session, 'test/cut')).toBe(inherited.length)
-    const restored = ctx.sessionProjections.restore(
-      {},
-      inherited,
-      SessionLogOffset(0),
-      session.header,
-      session.inheritedEventCount,
-    )
+    const restored = ctx.sessionProjections.restore({}, inherited, SessionLogOffset(0), session.header, session.inheritedEventCount)
     expect(restored.checkpoint['test/cut']?.val).toBe(inherited.length)
     const prepared = Session.create(
       SessionId('projection-cut-prepared'),
@@ -191,12 +178,7 @@ describe('SessionProjectionRegistry drive', () => {
       { ...session.header, id: SessionId('projection-cut-prepared') },
       session.inheritedEventCount,
     )
-    expect(ctx.sessionProjections.hydrate(
-      prepared,
-      {},
-      inherited,
-      SessionLogOffset(0),
-    ).asOfSeq).toBe(1)
+    expect(ctx.sessionProjections.hydrate(prepared, {}, inherited, SessionLogOffset(0)).asOfSeq).toBe(1)
     expect(ctx.sessionProjections.stateOf(prepared, 'test/cut')).toBe(inherited.length)
   })
 
@@ -336,14 +318,8 @@ describe('SessionProjectionRegistry drive', () => {
         for (const baselineKnown of [false, true]) {
           for (let listenerMask = 0; listenerMask < 8; listenerMask++) {
             const scenario = String(checked++)
-            const states = Array.from(
-              { length: stateCount },
-              (_, index): MarksState => ({ marks: [`state-${scenario}-${String(index)}`] }),
-            )
-            const views = Array.from(
-              { length: Math.max(...viewSequence) + 1 },
-              (): MarksView => ({ marks: [] }),
-            )
+            const states = Array.from({ length: stateCount }, (_, index): MarksState => ({ marks: [`state-${scenario}-${String(index)}`] }))
+            const views = Array.from({ length: Math.max(...viewSequence) + 1 }, (): MarksView => ({ marks: [] }))
             for (let index = 0; index < stateCount; index++) {
               viewByState.set(states[index] as MarksState, views[viewSequence[index] as number] as MarksView)
             }
@@ -372,9 +348,7 @@ describe('SessionProjectionRegistry drive', () => {
 
             const expectedViews: MarksView[] = []
             const expectedNotifications: number[] = []
-            let comparable = baselineKnown
-              ? views[viewSequence[stateSequence[0] as number] as number] as MarksView
-              : undefined
+            let comparable = baselineKnown ? (views[viewSequence[stateSequence[0] as number] as number] as MarksView) : undefined
             for (let index = 1; index < stateSequence.length; index++) {
               const listening = (listenerMask & (1 << (index - 1))) !== 0
               setListening(listening)
@@ -395,19 +369,19 @@ describe('SessionProjectionRegistry drive', () => {
             }
             setListening(false)
 
-            if (!sameIdentities(computedViews, expectedViews)
-              || notifications.length !== expectedNotifications.length
-              || notifications.some((seq, index) => seq !== expectedNotifications[index])) {
+            if (
+              !sameIdentities(computedViews, expectedViews) ||
+              notifications.length !== expectedNotifications.length ||
+              notifications.some((seq, index) => seq !== expectedNotifications[index])
+            ) {
               mismatchCount += 1
               const stateName = sequenceName(stateSequence, 'v')
               if (!failures.has(stateName) || (baselineKnown && listenerMask === 7)) {
                 failures.set(stateName, {
                   state: stateName,
-                  view: stateSequence.map(value => `r${String((viewSequence[value] as number) + 1)}`).join(','),
+                  view: stateSequence.map((value) => `r${String((viewSequence[value] as number) + 1)}`).join(','),
                   baseline: baselineKnown ? 'known' : 'unknown',
-                  listeners: [0, 1, 2]
-                    .map(index => (listenerMask & (1 << index)) === 0 ? 'off' : 'on')
-                    .join(','),
+                  listeners: [0, 1, 2].map((index) => ((listenerMask & (1 << index)) === 0 ? 'off' : 'on')).join(','),
                   expectedViewCalls: expectedViews.length,
                   actualViewCalls: computedViews.length,
                   expectedNotifications,
@@ -487,8 +461,9 @@ describe('SessionProjectionRegistry drive', () => {
     // The one incompatibility a runtime comparison can name: the versioned
     // contract says the cached state shape differs, so the two cannot share
     // cells. Everything else about a definition is functions.
-    expect(() => ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 9 }))
-      .toThrow(/already registered at stateVersion 1; refusing to share it with stateVersion 9/)
+    expect(() => ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 9 })).toThrow(
+      /already registered at stateVersion 1; refusing to share it with stateVersion 9/,
+    )
   })
 
   it('rejects a non-integer or negative stateVersion at register time', async () => {
@@ -511,12 +486,17 @@ describe('SessionProjectionRegistry drive', () => {
   it('removes registrations and change listeners when their owning fiber unloads (HMR safety)', async () => {
     const { ctx, session } = await harness()
     const notifications: string[] = []
-    const fiber = await ctx.plugin(Object.assign((inner: Context) => {
-      inner.sessionProjections.register(marksUnit())
-      inner.sessionProjections.onChanged((_session, key) => {
-        notifications.push(key)
-      })
-    }, { inject: ['sessionProjections'] }))
+    const fiber = await ctx.plugin(
+      Object.assign(
+        (inner: Context) => {
+          inner.sessionProjections.register(marksUnit())
+          inner.sessionProjections.onChanged((_session, key) => {
+            notifications.push(key)
+          })
+        },
+        { inject: ['sessionProjections'] },
+      ),
+    )
     mark(session, ['live'])
     expect(notifications).toEqual(['test/marks'])
     await fiber.dispose()
@@ -571,20 +551,26 @@ describe('SessionProjectionRegistry drive', () => {
     expect(ctx.sessionProjections.restoreFloor({})).toBe(0)
     // Lowest usable watermark is count's 5 → the anchored tail starts AT 5
     // (one below the first needed seq 6), so the read proves seq 5 still exists.
-    expect(ctx.sessionProjections.restoreFloor({
-      'test/marks': { ver: 1, seq: SessionSeq(10), val: { marks: [] } },
-      'test/count': { ver: 1, seq: SessionSeq(5), val: 6 },
-    })).toBe(5)
+    expect(
+      ctx.sessionProjections.restoreFloor({
+        'test/marks': { ver: 1, seq: SessionSeq(10), val: { marks: [] } },
+        'test/count': { ver: 1, seq: SessionSeq(5), val: 6 },
+      }),
+    ).toBe(5)
     // A version-mismatched row forces that key back to a full refold.
-    expect(ctx.sessionProjections.restoreFloor({
-      'test/marks': { ver: 2, seq: SessionSeq(10), val: { marks: [] } },
-      'test/count': { ver: 1, seq: SessionSeq(5), val: 6 },
-    })).toBe(0)
+    expect(
+      ctx.sessionProjections.restoreFloor({
+        'test/marks': { ver: 2, seq: SessionSeq(10), val: { marks: [] } },
+        'test/count': { ver: 1, seq: SessionSeq(5), val: 6 },
+      }),
+    ).toBe(0)
     // A fresh (-1) row still needs the whole tail from 0.
-    expect(ctx.sessionProjections.restoreFloor({
-      'test/marks': { ver: 1, seq: -1, val: null },
-      'test/count': { ver: 1, seq: -1, val: 0 },
-    })).toBe(0)
+    expect(
+      ctx.sessionProjections.restoreFloor({
+        'test/marks': { ver: 1, seq: -1, val: null },
+        'test/count': { ver: 1, seq: -1, val: 0 },
+      }),
+    ).toBe(0)
   })
 
   it('restore folds the tail past each usable row and refolds from init on version mismatch', async () => {
@@ -597,11 +583,18 @@ describe('SessionProjectionRegistry drive', () => {
     ]
     // marks row usable (watermark 2, tail starts at 3); count row mismatched — but
     // a mismatch with baseSeq > 0 cannot silently refold: it throws for a re-read.
-    expect(() => ctx.sessionProjections.restore({
-      'test/marks': { ver: 1, seq: SessionSeq(2), val: { marks: ['old'] } },
-      'test/count': { ver: 99, seq: SessionSeq(2), val: 3 },
-    }, tail, SessionLogOffset(3), RESTORE_HEADER, SessionLogOffset(0)))
-      .toThrow(/re-read from seq 0/)
+    expect(() =>
+      ctx.sessionProjections.restore(
+        {
+          'test/marks': { ver: 1, seq: SessionSeq(2), val: { marks: ['old'] } },
+          'test/count': { ver: 99, seq: SessionSeq(2), val: 3 },
+        },
+        tail,
+        SessionLogOffset(3),
+        RESTORE_HEADER,
+        SessionLogOffset(0),
+      ),
+    ).toThrow(/re-read from seq 0/)
     // The full-log re-read (baseSeq 0) refolds the mismatched key from init.
     const full: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } },
@@ -609,10 +602,16 @@ describe('SessionProjectionRegistry drive', () => {
       { type: 'test/mark', seq: SessionSeq(2), time: 2, data: { marks: ['old', '2'] } },
       ...tail,
     ]
-    const { snapshot, checkpoint } = ctx.sessionProjections.restore({
-      'test/marks': { ver: 1, seq: SessionSeq(2), val: { marks: ['old', '2'] } },
-      'test/count': { ver: 99, seq: SessionSeq(2), val: 3 },
-    }, full, SessionLogOffset(0), RESTORE_HEADER, SessionLogOffset(0))
+    const { snapshot, checkpoint } = ctx.sessionProjections.restore(
+      {
+        'test/marks': { ver: 1, seq: SessionSeq(2), val: { marks: ['old', '2'] } },
+        'test/count': { ver: 99, seq: SessionSeq(2), val: 3 },
+      },
+      full,
+      SessionLogOffset(0),
+      RESTORE_HEADER,
+      SessionLogOffset(0),
+    )
     expect(snapshot.asOfSeq).toBe(4)
     expect(snapshot.values['test/marks']).toEqual({ marks: ['new'] })
     expect('test/count' in snapshot.values).toBe(false)
@@ -633,13 +632,7 @@ describe('SessionProjectionRegistry drive', () => {
       { type: 'turn/start', seq: SessionSeq(3), time: 3, data: { turn: 2 } },
       { type: 'turn/end', seq: SessionSeq(4), time: 4, data: { turn: 2, reason: { kind: 'completed' } } },
     ]
-    const { snapshot, checkpoint } = ctx.sessionProjections.restore(
-      rows,
-      tail,
-      SessionLogOffset(3),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )
+    const { snapshot, checkpoint } = ctx.sessionProjections.restore(rows, tail, SessionLogOffset(3), RESTORE_HEADER, SessionLogOffset(0))
     expect(snapshot.asOfSeq).toBe(4)
     // marks already covers the tail (watermark 4): nothing re-applied.
     expect(snapshot.values['test/marks']).toEqual({ marks: ['done'] })
@@ -648,10 +641,16 @@ describe('SessionProjectionRegistry drive', () => {
     expect('test/count' in snapshot.values).toBe(false)
 
     // Empty tail (checkpoint is current): the cut sits at baseSeq - 1.
-    const { snapshot: current, checkpoint: currentCheckpoint } = ctx.sessionProjections.restore({
-      'test/marks': { ver: 1, seq: SessionSeq(4), val: { marks: ['done'] } },
-      'test/count': { ver: 1, seq: SessionSeq(4), val: 5 },
-    }, [], SessionLogOffset(5), RESTORE_HEADER, SessionLogOffset(0))
+    const { snapshot: current, checkpoint: currentCheckpoint } = ctx.sessionProjections.restore(
+      {
+        'test/marks': { ver: 1, seq: SessionSeq(4), val: { marks: ['done'] } },
+        'test/count': { ver: 1, seq: SessionSeq(4), val: 5 },
+      },
+      [],
+      SessionLogOffset(5),
+      RESTORE_HEADER,
+      SessionLogOffset(0),
+    )
     expect(current.asOfSeq).toBe(4)
     expect('test/count' in current.values).toBe(false)
     expect(currentCheckpoint['test/count']).toEqual({ ver: 1, seq: 4, val: 5 })
@@ -682,13 +681,7 @@ describe('SessionProjectionRegistry drive', () => {
       'test/marks': { marks: ['stored'] },
     })
 
-    const restored = ctx.sessionProjections.restore(
-      rows,
-      [],
-      SessionLogOffset(5),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )
+    const restored = ctx.sessionProjections.restore(rows, [], SessionLogOffset(5), RESTORE_HEADER, SessionLogOffset(0))
     expect(restored.snapshot.values).toEqual({
       'test/marks': { marks: ['stored'] },
     })
@@ -703,13 +696,7 @@ describe('SessionProjectionRegistry drive', () => {
     }
 
     expect(ctx.sessionProjections.viewCheckpoint(drifted)).toEqual({})
-    expect(() => ctx.sessionProjections.restore(
-      drifted,
-      [],
-      SessionLogOffset(3),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )).toThrow()
+    expect(() => ctx.sessionProjections.restore(drifted, [], SessionLogOffset(3), RESTORE_HEADER, SessionLogOffset(0))).toThrow()
   })
 
   it('restore rejects a row claiming events past the supplied log end (shrunk log ⇒ re-read)', async () => {
@@ -722,36 +709,20 @@ describe('SessionProjectionRegistry drive', () => {
     expect(floor).toBe(9)
     // …an intact log serves the anchor event and the checkpoint stands as-is.
     const anchor: SessionEvent = { type: 'turn/end', seq: SessionSeq(9), time: 9, data: { turn: 2, reason: { kind: 'completed' } } }
-    const anchored = ctx.sessionProjections.restore(
-      rows,
-      [anchor],
-      SessionLogOffset(9),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )
+    const anchored = ctx.sessionProjections.restore(rows, [anchor], SessionLogOffset(9), RESTORE_HEADER, SessionLogOffset(0))
     expect(anchored.snapshot.values).toEqual({})
     expect(anchored.checkpoint['test/count']).toEqual({ ver: 1, seq: 9, val: 10 })
     // …while a log crash-repaired down to fewer events returns an empty tail:
     // the row overreaches the proven end and a tail read cannot fix this key.
-    expect(() => ctx.sessionProjections.restore(
-      rows,
-      [],
-      SessionLogOffset(9),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )).toThrow(/re-read from seq 0/)
+    expect(() => ctx.sessionProjections.restore(rows, [], SessionLogOffset(9), RESTORE_HEADER, SessionLogOffset(0))).toThrow(
+      /re-read from seq 0/,
+    )
     // The full re-read discards the overreaching row and refolds from init.
     const events: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } },
       { type: 'turn/end', seq: SessionSeq(1), time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
-    const { snapshot, checkpoint } = ctx.sessionProjections.restore(
-      rows,
-      events,
-      SessionLogOffset(0),
-      RESTORE_HEADER,
-      SessionLogOffset(0),
-    )
+    const { snapshot, checkpoint } = ctx.sessionProjections.restore(rows, events, SessionLogOffset(0), RESTORE_HEADER, SessionLogOffset(0))
     expect(snapshot.asOfSeq).toBe(1)
     expect(snapshot.values).toEqual({})
     expect(checkpoint['test/count']).toEqual({ ver: 1, seq: 1, val: 2 })
@@ -763,7 +734,7 @@ describe('SessionProjectionRegistry drive', () => {
       key: 'test/marks',
       stateSchema: z.object({ marks: z.array(z.string()) }).nullable(),
       init: () => null as MarksState,
-      apply: state => state,
+      apply: (state) => state,
       wire: {
         viewSchema: z.object({ marks: z.array(z.string()) }),
         // A Promise (what an accidentally-async view would return) is not the

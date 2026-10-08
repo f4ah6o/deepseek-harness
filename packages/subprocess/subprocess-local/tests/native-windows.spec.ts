@@ -3,14 +3,16 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vite-plus/test'
 import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { targetEnvironment } from '../src/runner-launch.ts'
 import { bindManagedProcess } from '../src/spawn.ts'
 import { launchWindowsJob, probeWindowsJob } from '../src/windows-job.ts'
 
 const scratch = mkdtempSync(join(tmpdir(), 'dsh-native-windows-'))
-afterAll(() => { rmSync(scratch, { recursive: true, force: true }) })
+afterAll(() => {
+  rmSync(scratch, { recursive: true, force: true })
+})
 
 function spec(argv: string[], graceMs = 100, env?: NodeJS.ProcessEnv): SubprocessSpawnSpec {
   return {
@@ -35,7 +37,7 @@ async function waitForPid(path: string): Promise<number> {
     } catch {
       // Target has not written its descendant pid yet.
     }
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`pid file ${path} was not written`)
 }
@@ -48,7 +50,7 @@ async function waitGone(pid: number): Promise<void> {
     } catch {
       return
     }
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`pid ${pid} remained alive`)
 }
@@ -71,7 +73,9 @@ function directSpawnFailure(argv: readonly string[], cwd = scratch): Promise<Spa
     try {
       const child = spawn(argv[0] as string, argv.slice(1), { cwd, stdio: 'ignore' })
       child.once('error', resolve)
-      child.once('spawn', () => { reject(new Error(`expected ${argv[0]} to fail before spawn`)) })
+      child.once('spawn', () => {
+        reject(new Error(`expected ${argv[0]} to fail before spawn`))
+      })
     } catch (error) {
       resolve(error as SpawnFailure)
     }
@@ -189,15 +193,23 @@ describe.skipIf(!windowsNative)('Windows Job native containment', () => {
       })
       const descendant = await waitForPid(pidFile)
       await expect(handle.done).resolves.toEqual({ exitCode: 42, signal: null })
-      await expect(Promise.race([
-        Promise.all([stdoutEnded, stderrEnded]).then(() => true),
-        new Promise<boolean>(resolve => setTimeout(() => { resolve(false) }, 5_000)),
-      ])).resolves.toBe(true)
-      expect(readFileSync(factsFile, 'utf8')).toBe(JSON.stringify({
-        cwd: targetCwd,
-        value: 'explicit',
-        arg: 'literal $HOME ${UNCHANGED}',
-      }))
+      await expect(
+        Promise.race([
+          Promise.all([stdoutEnded, stderrEnded]).then(() => true),
+          new Promise<boolean>((resolve) =>
+            setTimeout(() => {
+              resolve(false)
+            }, 5_000),
+          ),
+        ]),
+      ).resolves.toBe(true)
+      expect(readFileSync(factsFile, 'utf8')).toBe(
+        JSON.stringify({
+          cwd: targetCwd,
+          value: 'explicit',
+          arg: 'literal $HOME ${UNCHANGED}',
+        }),
+      )
       await expect(handle.waitForExit(AbortSignal.timeout(30))).resolves.toBe(false)
       handle.terminate()
       await expect(handle.waitForExit()).resolves.toBe(true)

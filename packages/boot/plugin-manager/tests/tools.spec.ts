@@ -8,7 +8,7 @@ import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type PluginManager from '../src/index.ts'
 import * as tool from '../src/tools.ts'
 
@@ -37,15 +37,29 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
   await ctx.plugin(SandboxPolicy, { mode })
   if (approval !== undefined) await ctx.plugin(ApprovalService, { policy: approval })
   const fiber = await ctx.plugin(tool)
-  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => ctx.tools.execute({ name: 'plugin_manager', arguments: args,
-    ...agent === undefined ? {} : { agent },
-    callId: ToolCallId('manager-call'), signal })
+  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) =>
+    ctx.tools.execute({
+      name: 'plugin_manager',
+      arguments: args,
+      ...(agent === undefined ? {} : { agent }),
+      callId: ToolCallId('manager-call'),
+      signal,
+    })
   return { ctx, manager, call, fiber }
 }
 
 it.each(['read-only', 'workspace-write'] as const)('denies every management action in %s before accessing the manager', async (mode) => {
   const { call, manager } = await fixture(mode)
-  for (const action of ['list_plugins', 'list_bundles', 'set_plugin', 'set_bundle', 'install_bundle', 'remove_bundle', 'list_version_exemptions', 'set_version_exemption']) {
+  for (const action of [
+    'list_plugins',
+    'list_bundles',
+    'set_plugin',
+    'set_bundle',
+    'install_bundle',
+    'remove_bundle',
+    'list_version_exemptions',
+    'set_version_exemption',
+  ]) {
     const result = await call({ action, target: 'bundle', enabled: true })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain('requires approval, but no approval service is composed')
@@ -55,10 +69,15 @@ it.each(['read-only', 'workspace-write'] as const)('denies every management acti
 
 it('preserves selected bundle load errors in the agent list result', async () => {
   const { manager, call } = await fixture()
-  const bundles = [{
-    name: 'bundle', enabled: true,
-    error: { code: 'operation-error', diagnostic: 'bundle patch is unreadable' }, rows: [], overrides: [],
-  }]
+  const bundles = [
+    {
+      name: 'bundle',
+      enabled: true,
+      error: { code: 'operation-error', diagnostic: 'bundle patch is unreadable' },
+      rows: [],
+      overrides: [],
+    },
+  ]
   manager.listBundles.mockResolvedValue(bundles)
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toMatchInlineSnapshot(`
     {
@@ -107,17 +126,32 @@ it.each(['read-only', 'workspace-write'] as const)('approves each action once in
   const agent = activeAgent()
   const prompted = vi.fn(async () => 'allowed-once' as const)
   const dispose = ctx.on('approval/request', prompted)
-  for (const action of ['list_plugins', 'list_bundles', 'set_plugin', 'set_bundle', 'install_bundle', 'remove_bundle', 'list_version_exemptions', 'set_version_exemption']) {
-    expect((await call({ action, target: 'bundle@1.0.0', enabled: true, runtimeVersion: '0.1.7-alpha.1', acceptRisk: true }, agent)).isError).toBe(false)
+  for (const action of [
+    'list_plugins',
+    'list_bundles',
+    'set_plugin',
+    'set_bundle',
+    'install_bundle',
+    'remove_bundle',
+    'list_version_exemptions',
+    'set_version_exemption',
+  ]) {
+    expect(
+      (await call({ action, target: 'bundle@1.0.0', enabled: true, runtimeVersion: '0.1.7-alpha.1', acceptRisk: true }, agent)).isError,
+    ).toBe(false)
   }
   expect(prompted).toHaveBeenCalledTimes(8)
   for (const method of Object.values(manager)) expect(method).toHaveBeenCalledTimes(1)
   expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe(mode)
-  const audit = agent.session.snapshotEvents().filter(event => event.type.startsWith('approval/'))
+  const audit = agent.session.snapshotEvents().filter((event) => event.type.startsWith('approval/'))
   expect(audit).toHaveLength(16)
-  expect(audit[0]).toMatchObject({ type: 'approval/asked', data: {
-    toolName: 'plugin_manager', callId: 'manager-call',
-  } })
+  expect(audit[0]).toMatchObject({
+    type: 'approval/asked',
+    data: {
+      toolName: 'plugin_manager',
+      callId: 'manager-call',
+    },
+  })
   const request = audit[0]
   if (request?.type !== 'approval/asked') throw new Error('Expected an approval request')
   expect(request.data.reason).toContain('"action":"list_plugins"')
@@ -133,8 +167,12 @@ it.each(['rejected', 'cancelled', 'unavailable'] as const)('does not mutate the 
   const agent = activeAgent()
   expect((await call({ action: 'install_bundle', target: 'bundle' }, agent)).isError).toBe(true)
   expect(manager.installBundle).not.toHaveBeenCalled()
-  expect(agent.session.snapshotEvents().filter(event => event.type === 'approval/decided')
-    .map(event => event.data.outcome)).toEqual([outcome])
+  expect(
+    agent.session
+      .snapshotEvents()
+      .filter((event) => event.type === 'approval/decided')
+      .map((event) => event.data.outcome),
+  ).toEqual([outcome])
 })
 
 it('rejects never policy without prompting and keeps full-access calls prompt-free', async () => {
@@ -154,7 +192,10 @@ it('cancels an approval wait before any manager operation', async () => {
   const { ctx, call, manager } = await fixture('workspace-write', 'ask')
   const asked = Promise.withResolvers<undefined>()
   const answer = Promise.withResolvers<ApprovalOutcome>()
-  ctx.on('approval/request', () => { asked.resolve(undefined); return answer.promise })
+  ctx.on('approval/request', () => {
+    asked.resolve(undefined)
+    return answer.promise
+  })
   const controller = new AbortController()
   const result = call({ action: 'install_bundle', target: 'bundle' }, activeAgent(), controller.signal)
   await asked.promise
@@ -192,13 +233,23 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
   const meta = { title: { en: 'Plugin', zh: '插件' }, error: 'UI-only diagnostic' }
   manager.listPlugins.mockImplementationOnce(async () => [{ entryId: 'include:plugin', enabled: true, meta }])
   expect(JSON.parse(resultText(await call({ action: 'list_plugins' })))).toEqual({
-    entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
+    entries: [{ entryId: 'include:plugin', enabled: true }],
+    total: 1,
+    nextOffset: null,
   })
-  manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
-  }])
+  manager.listBundles.mockImplementationOnce(async () => [
+    {
+      name: 'bundle',
+      source: 'bundle@^1.0.0',
+      enabled: true,
+      meta,
+      rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    },
+  ])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
-    entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
+    entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }],
+    total: 1,
+    nextOffset: null,
   })
 })
 
@@ -229,7 +280,8 @@ it.each([
   { action: 'list_bundles', limit: 1.5 },
   { action: 'set_plugin', enabled: true },
   { action: 'set_bundle', target: 'bundle' },
-  { action: 'install_bundle' }, { action: 'remove_bundle' },
+  { action: 'install_bundle' },
+  { action: 'remove_bundle' },
   { action: 'set_version_exemption', enabled: true, runtimeVersion: '1.0.0' },
   { action: 'set_version_exemption', target: 'plugin@1.0.0', enabled: true },
   { action: 'set_version_exemption', target: 'plugin@1.0.0', runtimeVersion: '1.0.0' },

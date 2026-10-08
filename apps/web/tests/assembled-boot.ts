@@ -12,14 +12,12 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { act, cleanup } from '@testing-library/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vite-plus/test'
 import { bootInjections, orderByModuleGraph } from '@deepseek-ai/dsh-client-modules'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '@deepseek-ai/dsh-client-modules/client'
 import type { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
-import {
-  createAssembledRemote, type AssembledRemote, type AssembledRemoteOptions,
-} from './assembled-remote.ts'
+import { createAssembledRemote, type AssembledRemote, type AssembledRemoteOptions } from './assembled-remote.ts'
 
 interface AssembledPlugin extends WebBootEntry {
   /** Absolute path to the built client artifact declared by this package. */
@@ -58,20 +56,22 @@ interface BootComposition {
 }
 
 const REPO_ROOT = process.cwd()
-const BUNDLE_LAYERS = ['packages/bundle/base', 'packages/bundle/web-app'].map(dir => ({
+const BUNDLE_LAYERS = ['packages/bundle/base', 'packages/bundle/web-app'].map((dir) => ({
   dir: join(REPO_ROOT, dir),
   manifest: join(REPO_ROOT, dir, 'package.json'),
 }))
-const bundleResolvers = BUNDLE_LAYERS.map(layer => createRequire(layer.manifest))
+const bundleResolvers = BUNDLE_LAYERS.map((layer) => createRequire(layer.manifest))
 const webBundleResolver = bundleResolvers[1]
 if (webBundleResolver === undefined) throw new Error('assembled boot: web bundle resolver missing')
-const workspacePackageManifests = new Map(globSync('packages/*/*/package.json', { cwd: REPO_ROOT }).map((relative) => {
-  const path = join(REPO_ROOT, relative)
-  const pkg = JSON.parse(readFileSync(path, 'utf8')) as ClientPackageManifest
-  if (pkg.name === undefined) throw new Error(`assembled boot: workspace package has no name: ${path}`)
-  return [pkg.name, path]
-}))
-const appBoot = await import(pathToFileURL(webBundleResolver.resolve('@deepseek-ai/dsh-app-boot')).href) as unknown as BootComposition
+const workspacePackageManifests = new Map(
+  globSync('packages/*/*/package.json', { cwd: REPO_ROOT }).map((relative) => {
+    const path = join(REPO_ROOT, relative)
+    const pkg = JSON.parse(readFileSync(path, 'utf8')) as ClientPackageManifest
+    if (pkg.name === undefined) throw new Error(`assembled boot: workspace package has no name: ${path}`)
+    return [pkg.name, path]
+  }),
+)
+const appBoot = (await import(pathToFileURL(webBundleResolver.resolve('@deepseek-ai/dsh-app-boot')).href)) as unknown as BootComposition
 
 function resolvePackageManifest(specifier: string): string | undefined {
   return workspacePackageManifests.get(specifier)
@@ -88,14 +88,16 @@ function resolveClientExport(packagePath: string, pkg: ClientPackageManifest): s
 
 /** App-directory-relative combo references, matching the wire the Host composes. */
 const comboReference = (ids: readonly string[], rev: string): string =>
-  `plugins/??${ids.map(id => `${id}/client.js`).join(',')}&rev=${rev}`
+  `plugins/??${ids.map((id) => `${id}/client.js`).join(',')}&rev=${rev}`
 
 /** Derive the assembled browser graph from the same bundle patches and package declarations as `dsh web`. */
 function loadAssembledPlugins(): readonly AssembledPlugin[] {
-  const entries = appBoot.composeEntries(BUNDLE_LAYERS.map((layer) => {
-    const declared = (JSON.parse(readFileSync(layer.manifest, 'utf8')) as { dsh: { bundle: { patch: string | string[] } } }).dsh.bundle
-    return appBoot.bundlePatchPaths(layer.dir, declared).flatMap(patch => appBoot.loadOverlayPatches('assembled boot', patch))
-  }))
+  const entries = appBoot.composeEntries(
+    BUNDLE_LAYERS.map((layer) => {
+      const declared = (JSON.parse(readFileSync(layer.manifest, 'utf8')) as { dsh: { bundle: { patch: string | string[] } } }).dsh.bundle
+      return appBoot.bundlePatchPaths(layer.dir, declared).flatMap((patch) => appBoot.loadOverlayPatches('assembled boot', patch))
+    }),
+  )
   const plugins = new Map<string, AssembledPlugin>()
   for (const entry of entries) {
     if (entry.disabled === true || typeof entry.name !== 'string') continue
@@ -131,46 +133,54 @@ const BOOTSTRAP_IDS = ['@deepseek-ai/dsh-client-modules'] as const
 
 /** Build the fixture graph after applying per-scenario package exclusions. */
 function bootGraph(plugins: readonly AssembledPlugin[]): WebBootGraph {
-  const bootstrapEntries = plugins
-    .map(plugin => plugin.id)
-    .filter(id => BOOTSTRAP_IDS.includes(id as typeof BOOTSTRAP_IDS[number]))
+  const bootstrapEntries = plugins.map((plugin) => plugin.id).filter((id) => BOOTSTRAP_IDS.includes(id as (typeof BOOTSTRAP_IDS)[number]))
   const applicationEntries = plugins
-    .map(plugin => plugin.id)
-    .filter(id => !BOOTSTRAP_IDS.includes(id as typeof BOOTSTRAP_IDS[number]))
+    .map((plugin) => plugin.id)
+    .filter((id) => !BOOTSTRAP_IDS.includes(id as (typeof BOOTSTRAP_IDS)[number]))
   return {
     rev: 'fx',
     entries: plugins.map(({ bundlePath: _bundlePath, ...plugin }) => plugin),
     batches: [
-      ...(bootstrapEntries.length === 0 ? [] : [{
-        phase: 'bootstrap' as const,
-        url: comboReference(bootstrapEntries, 'fx'),
-        rev: 'fx',
-        entries: bootstrapEntries,
-      }]),
-      ...(applicationEntries.length === 0 ? [] : [{
-        phase: 'application' as const,
-        url: comboReference(applicationEntries, 'fx'),
-        rev: 'fx',
-        entries: applicationEntries,
-      }]),
+      ...(bootstrapEntries.length === 0
+        ? []
+        : [
+            {
+              phase: 'bootstrap' as const,
+              url: comboReference(bootstrapEntries, 'fx'),
+              rev: 'fx',
+              entries: bootstrapEntries,
+            },
+          ]),
+      ...(applicationEntries.length === 0
+        ? []
+        : [
+            {
+              phase: 'application' as const,
+              url: comboReference(applicationEntries, 'fx'),
+              rev: 'fx',
+              entries: applicationEntries,
+            },
+          ]),
     ],
   }
 }
 
 /** Build single-resource and startup combo script bodies for one fixture composition. */
 function bundleTable(graph: WebBootGraph, plugins: readonly AssembledPlugin[]): Map<string, string> {
-  const bundles = new Map(plugins.map(plugin => [
-    plugin.url,
-    readFileSync(plugin.bundlePath, 'utf8'),
-  ]))
+  const bundles = new Map(plugins.map((plugin) => [plugin.url, readFileSync(plugin.bundlePath, 'utf8')]))
   for (const batch of graph.batches) {
-    bundles.set(batch.url, batch.entries.map((id) => {
-      const plugin = plugins.find(candidate => candidate.id === id)
-      if (plugin === undefined) throw new Error(`assembled boot: batch names unknown plugin ${id}`)
-      const code = bundles.get(plugin.url)
-      if (code === undefined) throw new Error(`assembled boot: missing built bundle ${plugin.url}`)
-      return code
-    }).join('\n;\n'))
+    bundles.set(
+      batch.url,
+      batch.entries
+        .map((id) => {
+          const plugin = plugins.find((candidate) => candidate.id === id)
+          if (plugin === undefined) throw new Error(`assembled boot: batch names unknown plugin ${id}`)
+          const code = bundles.get(plugin.url)
+          if (code === undefined) throw new Error(`assembled boot: missing built bundle ${plugin.url}`)
+          return code
+        })
+        .join('\n;\n'),
+    )
   }
   return bundles
 }
@@ -214,7 +224,15 @@ export function installAssembledBootEnv(): void {
   // measures the caret with one after a programmatic edit settles focus.
   if (typeof Range.prototype.getBoundingClientRect !== 'function') {
     Range.prototype.getBoundingClientRect = () => ({
-      top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     })
   }
   let fontsDescriptor: PropertyDescriptor | undefined
@@ -230,15 +248,24 @@ export function installAssembledBootEnv(): void {
     document.title = 'DeepSeek Harness'
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     vi.stubGlobal('EventSource', EventSourceStub)
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-      setTimeout(() => { callback(0) }, 0) as unknown as number)
-    vi.stubGlobal('cancelAnimationFrame', (id: number) => { clearTimeout(id) })
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      (callback: FrameRequestCallback) =>
+        setTimeout(() => {
+          callback(0)
+        }, 0) as unknown as number,
+    )
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      clearTimeout(id)
+    })
   })
 
   afterEach(async () => {
     const failures: unknown[] = []
     try {
-      await act(async () => { await unmount?.() })
+      await act(async () => {
+        await unmount?.()
+      })
     } catch (error) {
       failures.push(error)
     }
@@ -254,7 +281,9 @@ export function installAssembledBootEnv(): void {
     delete win.__ModuleLoader__
     delete win.__DSH_TRANSPORT__
     document.body.innerHTML = ''
-    document.head.querySelectorAll('style[data-plugin]').forEach((style) => { style.remove() })
+    document.head.querySelectorAll('style[data-plugin]').forEach((style) => {
+      style.remove()
+    })
     document.title = ''
     history.replaceState(null, '', '/')
     // Deleting the own properties uncovers jsdom's own accessors again
@@ -277,7 +306,7 @@ export function installAssembledBootEnv(): void {
  */
 export function mountAssembledApp(options: AssembledBootOptions = {}): AssembledRemote {
   const excluded = new Set(options.exclude)
-  const plugins = PLUGINS.filter(plugin => !excluded.has(plugin.id))
+  const plugins = PLUGINS.filter((plugin) => !excluded.has(plugin.id))
   const remote = createAssembledRemote(options.remote)
   mountedRemote = remote.mock
   win.__DSH_TRANSPORT__ = { rpc: remote.mock.rpc }
@@ -292,7 +321,7 @@ export function mountAssembledApp(options: AssembledBootOptions = {}): Assembled
   if (facadeRow?.kind !== 'script') throw new Error('missing injected ModuleLoader facade row')
   ;(0, eval)(facadeRow.text)
   // Mirror the blocking Host-injected bootstrap batch before the Vite entry calls create().
-  const bootstrapUrl = graph.batches.find(batch => batch.phase === 'bootstrap')?.url
+  const bootstrapUrl = graph.batches.find((batch) => batch.phase === 'bootstrap')?.url
   const bootstrap = bootstrapUrl === undefined ? undefined : bundles.get(bootstrapUrl)
   if (bootstrap === undefined) throw new Error('missing parser-preloaded fixture batch')
   ;(0, eval)(bootstrap)
@@ -321,7 +350,9 @@ export function mountAssembledApp(options: AssembledBootOptions = {}): Assembled
  * @returns whether the element carries that module class.
  */
 export function hasClass(el: Element, name: string): boolean {
-  return [...el.classList].some(cls => cls === name || cls.endsWith(`_${name}`) || cls.startsWith(`_${name}_`) || cls.includes(`_${name}_`))
+  return [...el.classList].some(
+    (cls) => cls === name || cls.endsWith(`_${name}`) || cls.startsWith(`_${name}_`) || cls.includes(`_${name}_`),
+  )
 }
 
 /**

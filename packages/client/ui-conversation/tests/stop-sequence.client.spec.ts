@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { StopSequence, type StopTarget } from '../src/client/stop-sequence.ts'
 
@@ -50,9 +50,12 @@ describe('double Escape stop sequence', () => {
     sequence.press(target)
     const next: StopTarget = {
       ...target,
-      ...(field === 'session' ? { sessionId: id('s2') }
-        : field === 'turn' ? { turn: 2 }
-          : field === 'generation' ? { generation: {} }
+      ...(field === 'session'
+        ? { sessionId: id('s2') }
+        : field === 'turn'
+          ? { turn: 2 }
+          : field === 'generation'
+            ? { generation: {} }
             : { region: document.createElement('div') }),
     }
     expect(sequence.press(next)).toBe(false)

@@ -1,10 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  apply,
-  type ConnectionGenerationSource,
-  type ConnectionHandle,
-} from '../src/client/index.ts'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { apply, type ConnectionGenerationSource, type ConnectionHandle } from '../src/client/index.ts'
 
 type BrowserGlobal = {
   location?: { hostname: string }
@@ -15,7 +11,7 @@ const contexts = new Set<Context>()
 afterEach(async () => {
   vi.restoreAllMocks()
   delete (globalThis as BrowserGlobal).location
-  await Promise.all([...contexts].map(async ctx => ctx.fiber.dispose()))
+  await Promise.all([...contexts].map(async (ctx) => ctx.fiber.dispose()))
   contexts.clear()
 })
 
@@ -36,7 +32,14 @@ describe('Connection generation facts', () => {
       ready({ home: '/home/from-ready' })
       return new Promise<void>((resolve) => {
         if (signal.aborted) resolve()
-        else signal.addEventListener('abort', () => { resolve() }, { once: true })
+        else
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve()
+            },
+            { once: true },
+          )
       })
     }
     connection.registerGenerationSource(source)
@@ -44,12 +47,15 @@ describe('Connection generation facts', () => {
     const stopListening = connection.generation.subscribe(() => {
       seen.push(connection.generation.getSnapshot()?.host.home)
     })
-    const loop = connection.start({}, {
-      backoffBaseMs: 1,
-      backoffFactor: 2,
-      backoffMaxMs: 8,
-      generationReadyTimeoutMs: 100,
-    })
+    const loop = connection.start(
+      {},
+      {
+        backoffBaseMs: 1,
+        backoffFactor: 2,
+        backoffMaxMs: 8,
+        generationReadyTimeoutMs: 100,
+      },
+    )
 
     await vi.waitFor(() => {
       expect(connection.generation.getSnapshot()).toEqual({

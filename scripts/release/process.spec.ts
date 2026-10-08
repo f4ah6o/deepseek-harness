@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { capture, pnpmCommand } from './process.ts'
 import { packedIdentity, tarballFiles } from './tarball.ts'
 
@@ -20,7 +20,7 @@ async function packedTarball(name: string, version: string): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-tarball-'))
   directories.push(directory)
   const contents = join(directory, 'package')
-  await import('node:fs/promises').then(async fs => fs.mkdir(contents))
+  await import('node:fs/promises').then(async (fs) => fs.mkdir(contents))
   await writeFile(join(contents, 'package.json'), JSON.stringify({ name, version }))
   await writeFile(join(contents, 'index.js'), '')
   const archive = join(directory, `${name.replaceAll('/', '-').replace('@', '')}-${version}.tgz`)

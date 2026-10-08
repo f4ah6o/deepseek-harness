@@ -5,7 +5,7 @@
  * semantics live in the editor (lexical-editor-core spec) — the machine only
  * observes drafts through event payloads.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { CommandClaim } from '../src/client/contract/input.ts'
 import type { InputEffect, SubmitAttempt } from '../src/client/contract/input.ts'
 import { SubmitMachine } from '../src/client/input/machine.ts'
@@ -21,7 +21,9 @@ function claimOf(name: string, hint?: string): CommandClaim {
 }
 
 function effectAt<T extends InputEffect['type']>(
-  effects: readonly InputEffect[], index: number, type: T,
+  effects: readonly InputEffect[],
+  index: number,
+  type: T,
 ): Extract<InputEffect, { type: T }> {
   const e = effects[index]
   expect(e?.type).toBe(type)
@@ -203,8 +205,12 @@ describe('submit-machine: claimed lifecycle', () => {
   })
 
   it.each([
-    ['goal', '/goal '], ['goal', '/目标 '], ['plan', '/plan '], ['plan', '/计划 '],
-    ['feedback', '/feedback '], ['feedback', '/反馈 '],
+    ['goal', '/goal '],
+    ['goal', '/目标 '],
+    ['plan', '/plan '],
+    ['plan', '/计划 '],
+    ['feedback', '/feedback '],
+    ['feedback', '/反馈 '],
   ])('retains %s as %s without its separator and submits an empty argument', (name, token) => {
     const m = new SubmitMachine()
     m.dispatch({ type: 'claim', claim: { ...claimOf(name), token } })
@@ -258,7 +264,10 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: true, draft: '/goal x',
+      type: 'submit-settled',
+      attempt,
+      ok: true,
+      draft: '/goal x',
       outcome: { kind: 'success', text: 'goal saved' },
     })
     expect(effectAt(fx, 0, 'commit-draft').retainSuffixOf).toBe('/goal x')
@@ -271,7 +280,10 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: false, draft: 'deviated',
+      type: 'submit-settled',
+      attempt,
+      ok: false,
+      draft: 'deviated',
       outcome: { kind: 'error', text: 'rejected' },
     })
     expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'rejected' })
@@ -357,8 +369,10 @@ describe('decorations: scanTextRefs', () => {
 
   it('matches lexicon tokens at line start and after whitespace, in draft order', () => {
     const out = scanTextRefs('/goal then @research and /commit-helper', lexicon)
-    expect(out.map(r => [r.start, r.end, r.trigger])).toEqual([
-      [0, 5, '/'], [11, 20, '@'], [25, 39, '/'],
+    expect(out.map((r) => [r.start, r.end, r.trigger])).toEqual([
+      [0, 5, '/'],
+      [11, 20, '@'],
+      [25, 39, '/'],
     ])
   })
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { JobId, JobRegistry } from '@deepseek-ai/dsh-jobs'
@@ -28,13 +28,11 @@ class ScriptedJobRegistry extends JobRegistry {
   }
 
   list(caller?: SessionId): JobView[] {
-    return this.rows
-      .filter(row => row.owner === undefined || row.owner === caller)
-      .map(row => this.view(row))
+    return this.rows.filter((row) => row.owner === undefined || row.owner === caller).map((row) => this.view(row))
   }
 
   get(id: JobId): JobView {
-    const row = this.rows.find(candidate => candidate.id === id)
+    const row = this.rows.find((candidate) => candidate.id === id)
     if (row === undefined) throw new Error(`unknown job ${id}`)
     return this.view(row)
   }
@@ -50,7 +48,7 @@ class ScriptedJobRegistry extends JobRegistry {
   kill(id: JobId, caller?: SessionId, reason?: string): 'requested' | 'already-finished' {
     if (id === this.refusing) throw new Error('producer refuses cancel')
     this.kills.push([id, caller, reason])
-    const row = this.rows.find(candidate => candidate.id === id)
+    const row = this.rows.find((candidate) => candidate.id === id)
     if (row !== undefined) row.status = 'stopping'
     return 'requested'
   }
@@ -70,7 +68,7 @@ class ScriptedJobRegistry extends JobRegistry {
       id: JobId(row.id),
       kind: 'bash',
       label: row.label,
-      ...row.owner === undefined ? {} : { owner: row.owner },
+      ...(row.owner === undefined ? {} : { owner: row.owner }),
       status: row.status,
       startedAt: 0,
       output: { total: 0, earliest: 0 },
@@ -107,7 +105,13 @@ describe('Job archive admission', () => {
     )
     ctx.on('workspace/session-activity', async (_request, next) => [...(await next()), { kind: 'turn' }])
     expect(await ask(ctx, owner)).toEqual([
-      { kind: 'job', items: [{ id: 'bash-1', label: 'pnpm run build' }, { id: 'bash-2', label: 'pnpm test' }] },
+      {
+        kind: 'job',
+        items: [
+          { id: 'bash-1', label: 'pnpm run build' },
+          { id: 'bash-2', label: 'pnpm test' },
+        ],
+      },
       { kind: 'turn' },
     ])
     expect(await ask(ctx, SessionId('nobody'))).toEqual([{ kind: 'turn' }])

@@ -3,7 +3,7 @@
  * Inline projection of sent user text: decoration adds no block containers,
  * preserves whitespace, and folds wire session forms to their label.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { fireEvent, render } from '@testing-library/react'
 import { projectUserText } from '../src/user-text.tsx'
 
@@ -12,8 +12,7 @@ const project = (
   labels: readonly string[] = [],
   slashNames: readonly string[] = [],
   slashKind: 'skill' | 'command' = 'skill',
-) =>
-  render(<div data-host>{projectUserText(text, labels, slashNames, slashKind)}</div>).container.querySelector('[data-host]')!
+) => render(<div data-host>{projectUserText(text, labels, slashNames, slashKind)}</div>).container.querySelector('[data-host]')!
 
 describe('projectUserText', () => {
   it('keeps decorated text inline and preserves whitespace between references', () => {
@@ -21,10 +20,10 @@ describe('projectUserText', () => {
     expect(host.querySelectorAll('div').length).toBe(0)
     expect(host.textContent).toBe('反反复复 /dsh-acp-test 执行几个命令测试')
     const chips = host.querySelectorAll('[data-ref-chip]')
-    expect([...chips].map(c => c.getAttribute('data-ref-chip'))).toEqual(['skill', 'session'])
+    expect([...chips].map((c) => c.getAttribute('data-ref-chip'))).toEqual(['skill', 'session'])
     // The whitespace between tokens survives as its own inline run.
-    const runs = [...host.querySelectorAll('span')].filter(s => !s.hasAttribute('data-ref-chip') && s.closest('[data-ref-chip]') === null)
-    expect(runs.map(r => r.textContent)).toEqual(['反反复复 ', ' '])
+    const runs = [...host.querySelectorAll('span')].filter((s) => !s.hasAttribute('data-ref-chip') && s.closest('[data-ref-chip]') === null)
+    expect(runs.map((r) => r.textContent)).toEqual(['反反复复 ', ' '])
   })
 
   it('folds the wire session form to its label with the session glyph', () => {
@@ -44,8 +43,7 @@ describe('projectUserText', () => {
 
   it('decorates recall-associated labels, files, folders, and quoted paths', () => {
     const host = project('@会话一 说 @src/deep/file.txt 与 @dir/ 与 @"a b.md"', ['会话一'])
-    const kinds = [...host.querySelectorAll('[data-ref-chip]')].map(c =>
-      [c.getAttribute('data-ref-chip'), c.textContent])
+    const kinds = [...host.querySelectorAll('[data-ref-chip]')].map((c) => [c.getAttribute('data-ref-chip'), c.textContent])
     expect(kinds).toEqual([
       ['session', '会话一'],
       ['file', 'file.txt'],
@@ -74,14 +72,15 @@ describe('projectUserText', () => {
     const unresolved = project('用 /plan 看看')
     expect(unresolved.querySelectorAll('[data-ref-chip]').length).toBe(0)
     const resolved = project('用 /plan 看看', [], ['plan'])
-    expect([...resolved.querySelectorAll('[data-ref-chip]')].map(c => [c.getAttribute('data-ref-chip'), c.textContent]))
-      .toEqual([['skill', '/plan']])
+    expect([...resolved.querySelectorAll('[data-ref-chip]')].map((c) => [c.getAttribute('data-ref-chip'), c.textContent])).toEqual([
+      ['skill', '/plan'],
+    ])
   })
 
   it('marks a resolved slash token as a command chip when the caller says so', () => {
     const host = project('/goal ship it\nsecond line', [], ['goal'], 'command')
     const chips = [...host.querySelectorAll('[data-ref-chip]')]
-    expect(chips.map(c => [c.getAttribute('data-ref-chip'), c.textContent])).toEqual([['command', '/goal']])
+    expect(chips.map((c) => [c.getAttribute('data-ref-chip'), c.textContent])).toEqual([['command', '/goal']])
     expect(host.textContent).toBe('/goal ship it\nsecond line')
   })
 
@@ -95,7 +94,7 @@ describe('projectUserText', () => {
   it('prefers the longer recall label when one nests inside another', () => {
     const host = project('@会话一 收尾', ['会话', '会话一'])
     const chips = [...host.querySelectorAll('[data-ref-chip="session"]')]
-    expect(chips.map(c => c.textContent)).toEqual(['会话一'])
+    expect(chips.map((c) => c.textContent)).toEqual(['会话一'])
     expect(host.textContent).toBe('会话一 收尾')
   })
 
@@ -108,10 +107,14 @@ describe('projectUserText', () => {
   it('opens decoded files and loaded skills without activating session, folder, or command references', () => {
     const openFile = vi.fn()
     const openSkill = vi.fn()
-    const view = render(<div>{projectUserText(
-      '@src/a.ts @"notes a.md" /review @history @dir/ @"dir a/"', ['history'], ['review'], 'skill',
-      { openFile, openSkill },
-    )}</div>)
+    const view = render(
+      <div>
+        {projectUserText('@src/a.ts @"notes a.md" /review @history @dir/ @"dir a/"', ['history'], ['review'], 'skill', {
+          openFile,
+          openSkill,
+        })}
+      </div>,
+    )
     fireEvent.click(view.getByRole('button', { name: 'a.ts' }))
     fireEvent.click(view.getByRole('button', { name: 'notes a.md' }))
     fireEvent.click(view.getByRole('button', { name: '/review' }))

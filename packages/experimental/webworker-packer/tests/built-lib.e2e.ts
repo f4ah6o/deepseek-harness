@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { pnpmInvocation } from '../../../../scripts/pnpm-invocation.ts'
 
 const experimentalDirectory = fileURLToPath(new URL('../..', import.meta.url))
 const packages = ['webworker-runtime', 'webworker-packer']
-const packageNames = new Set(packages.map(name => `@deepseek-ai/dsh-experimental-${name}`))
+const packageNames = new Set(packages.map((name) => `@deepseek-ai/dsh-experimental-${name}`))
 
 it('loads both tarballs through plain Node and mounts their base image and overlay', { retry: 0 }, async (test) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-webworker-packed-'))
@@ -51,7 +51,7 @@ it('loads both tarballs through plain Node and mounts their base image and overl
     await mkdir(directory, { recursive: true })
     const invocation = pnpmInvocation(['pack', '--pack-destination', packRoot])
     await run(invocation.command, invocation.args, source)
-    const archives = (await readdir(packRoot)).filter(file => file.endsWith('.tgz'))
+    const archives = (await readdir(packRoot)).filter((file) => file.endsWith('.tgz'))
     expect(archives).toHaveLength(1)
     await run('tar', ['-xzf', join(packRoot, archives[0]!), '-C', directory, '--strip-components=1'], root)
     expect(existsSync(join(directory, 'src'))).toBe(false)

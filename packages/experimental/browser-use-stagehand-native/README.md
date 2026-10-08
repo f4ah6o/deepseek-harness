@@ -68,14 +68,14 @@ Attachment allows one exact live Agent at a time. Another Session receives a res
 The focused checks exercise native model configuration, lifetime, Loader composition, cancellation, and screenshot admission.
 
 ```sh
-pnpm exec vitest run packages/experimental/browser-use-stagehand-native/tests
+pnpm exec vp test run packages/experimental/browser-use-stagehand-native/tests
 ```
 
 The opt-in installed-browser tests use a controlled local page and the built attachment Worker. Set `DSH_BROWSER_EXECUTABLE` to the installed Chromium executable. Native inference is tested only when `DSH_STAGEHAND_MODEL` and `DSH_STAGEHAND_MODEL_API_KEY` are also supplied.
 
 ```sh
 pnpm run build
-env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vitest run --config vitest.e2e.config.ts packages/experimental/browser-use-stagehand-native/tests/native.e2e.ts
+env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vp test run --config vitest.e2e.config.ts packages/experimental/browser-use-stagehand-native/tests/native.e2e.ts
 ```
 
 -----

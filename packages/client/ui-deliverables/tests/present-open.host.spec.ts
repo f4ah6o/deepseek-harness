@@ -11,7 +11,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type { SessionEventReadRequest } from '@deepseek-ai/dsh-session-query'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { registerPresentOpen } from '../src/present-open.ts'
 import { presentedFileUrl, PRESENT_OPEN_PATH } from '../src/presented.ts'
 
@@ -36,9 +36,13 @@ async function fixture() {
   ctx.provide('sandboxPolicy', { workspaceRoot: cwd } as never)
   await ctx.plugin({
     inject: ['fs', 'sandboxPolicy'],
-    apply: (scope) => { new WorkspaceFiles(scope, { maxBytes: 1024, maxFileBytes: 1024, maxLines: 100, maxEntries: 100 }) },
+    apply: (scope) => {
+      new WorkspaceFiles(scope, { maxBytes: 1024, maxFileBytes: 1024, maxLines: 100, maxEntries: 100 })
+    },
   })
-  const resolveAgent = vi.fn<Context['sessionController']['resolveAgent']>(() => { throw new Error('Agent activation is unavailable') })
+  const resolveAgent = vi.fn<Context['sessionController']['resolveAgent']>(() => {
+    throw new Error('Agent activation is unavailable')
+  })
   const readEvent = vi.fn(async (request: SessionEventReadRequest) => {
     if (request.sessionId !== 'owner') throw new SessionQueryError('missing', 'SESSION_QUERY_SESSION_NOT_FOUND')
     if (request.seq !== 7) throw new SessionQueryError('missing', 'SESSION_QUERY_EVENT_NOT_FOUND')
@@ -47,14 +51,21 @@ async function fixture() {
   ctx.provide('sessionQuery', { readEvent } as never)
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
   const applications = vi.fn(async () => [{ id: 'player', name: 'Player', default: true, icon: null }])
-  ctx.provide('sessionController', { workspacePathApplications: applications, resolveAgent, openWorkspacePath: opener, workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }) } as never)
+  ctx.provide('sessionController', {
+    workspacePathApplications: applications,
+    resolveAgent,
+    openWorkspacePath: opener,
+    workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }),
+  } as never)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
-  const fiber = ctx.plugin({ inject: ['connection', 'sessionQuery', 'sessionController', 'workspaceFiles', 'fs', 'sandboxPolicy'], apply: registerPresentOpen })
+  const fiber = ctx.plugin({
+    inject: ['connection', 'sessionQuery', 'sessionController', 'workspaceFiles', 'fs', 'sandboxPolicy'],
+    apply: registerPresentOpen,
+  })
   await fiber
   const handler = connection.createSharedFetchHandler('/api')
-  const open = (query = '?sessionId=owner&seq=7&index=0', signal?: AbortSignal) => handler.fetch(new Request(
-    `http://localhost${PRESENT_OPEN_PATH}${query}`, { method: 'POST', signal: signal ?? null },
-  ))
+  const open = (query = '?sessionId=owner&seq=7&index=0', signal?: AbortSignal) =>
+    handler.fetch(new Request(`http://localhost${PRESENT_OPEN_PATH}${query}`, { method: 'POST', signal: signal ?? null }))
   return { applications, root, cwd, ctx, fiber, file, session, readEvent, open, opener, handler, resolveAgent }
 }
 
@@ -86,14 +97,23 @@ describe('Presented workspace file native open route', () => {
     await mkdir(fork)
     await writeFile(join(fork, file.path), 'child source')
     session.cwd = fork
-    readEvent.mockResolvedValueOnce({ session, target: { type: 'deliverables/presented', data: { turn: 1, callId: 'inherited', files: [file] } } as SessionEvent })
+    readEvent.mockResolvedValueOnce({
+      session,
+      target: { type: 'deliverables/presented', data: { turn: 1, callId: 'inherited', files: [file] } } as SessionEvent,
+    })
     expect((await open('?sessionId=fork&seq=7&index=0')).status).toBe(204)
     expect(opener.mock.lastCall?.[0].path).toBe(await realpath(join(fork, file.path)))
   })
 
-  it.each(['', '?seq=7&index=0', '?sessionId=owner&index=0', '?sessionId=owner&seq=7',
-    '?sessionId=owner&seq=-1&index=0', '?sessionId=owner&seq=7&index=0.1',
-    '?sessionId=owner&seq=9007199254740992&index=0', '?sessionId=owner&seq=7&index=9007199254740992',
+  it.each([
+    '',
+    '?seq=7&index=0',
+    '?sessionId=owner&index=0',
+    '?sessionId=owner&seq=7',
+    '?sessionId=owner&seq=-1&index=0',
+    '?sessionId=owner&seq=7&index=0.1',
+    '?sessionId=owner&seq=9007199254740992&index=0',
+    '?sessionId=owner&seq=7&index=9007199254740992',
   ])('rejects invalid coordinates before reading: %s', async (query) => {
     const { open, readEvent } = await fixture()
     expect((await open(query)).status).toBe(400)
@@ -110,8 +130,14 @@ describe('Presented workspace file native open route', () => {
     expect(opener).not.toHaveBeenCalled()
   })
 
-  it.each([null, [], 'invalid', {}, { turn: 1, callId: 'call', files: null },
-    { turn: 1, callId: 'call', files: [null] }, { turn: 1, callId: 'call', files: [{ path: '' }] },
+  it.each([
+    null,
+    [],
+    'invalid',
+    {},
+    { turn: 1, callId: 'call', files: null },
+    { turn: 1, callId: 'call', files: [null] },
+    { turn: 1, callId: 'call', files: [{ path: '' }] },
     { turn: 1, callId: 'call', files: [{ path: 'a', description: 1 }] },
   ])('refuses malformed recorded delivery data: %j', async (data) => {
     const { open, readEvent, session, opener } = await fixture()
@@ -170,7 +196,13 @@ describe('Presented workspace file native open route', () => {
     const release = Promise.withResolvers<undefined>()
     const { open, fiber, opener } = await fixture()
     opener.mockImplementation(async (_request, signal) => {
-      signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+      signal.addEventListener(
+        'abort',
+        () => {
+          aborted.resolve(undefined)
+        },
+        { once: true },
+      )
       entered.resolve(undefined)
       await release.promise
       signal.throwIfAborted()
@@ -179,14 +211,15 @@ describe('Presented workspace file native open route', () => {
     const request = open().catch((error: unknown) => error)
     await entered.promise
     let disposed = false
-    const disposal = fiber.dispose().then(() => { disposed = true })
+    const disposal = fiber.dispose().then(() => {
+      disposed = true
+    })
     await aborted.promise
     expect(disposed).toBe(false)
     release.resolve(undefined)
     await Promise.all([request, disposal])
   })
 })
-
 
 it('reports the serving desktop and reveals only an authorized declared source', async () => {
   const { cwd, file, open, opener, handler } = await fixture()
@@ -210,7 +243,6 @@ it('refuses native actions when the configured Host desktop is unavailable', asy
   expect(opener).not.toHaveBeenCalled()
 })
 
-
 it('refuses native opening without a matching Host mapping even when a same-name Host file exists', async () => {
   const { ctx, open, opener } = await fixture()
   const mapping = vi.spyOn(ctx.fs, 'processPathFromHostPath').mockReturnValue(undefined)
@@ -222,7 +254,10 @@ it('refuses native opening without a matching Host mapping even when a same-name
 
 it('opens a viewed child Session without activating an Agent', async () => {
   const { session, readEvent, open, opener, resolveAgent } = await fixture()
-  readEvent.mockResolvedValueOnce({ session, target: { type: 'deliverables/presented', data: { turn: 1, callId: 'child', files: [{ path: '日记模板.docx' }] } } as SessionEvent })
+  readEvent.mockResolvedValueOnce({
+    session,
+    target: { type: 'deliverables/presented', data: { turn: 1, callId: 'child', files: [{ path: '日记模板.docx' }] } } as SessionEvent,
+  })
   expect((await open('?sessionId=child&seq=7&index=0')).status).toBe(204)
   expect(opener).toHaveBeenCalledOnce()
   expect(resolveAgent).not.toHaveBeenCalled()
@@ -234,7 +269,6 @@ it('uses the deployment workspace root when the viewed Session has no cwd', asyn
   expect((await open()).status).toBe(204)
   expect(opener.mock.lastCall?.[0].path).toBe(await realpath(join(cwd, file.path)))
 })
-
 
 it('queries handlers only after file authorization and forwards explicit application choices', async () => {
   const { handler, applications, opener, open, ctx } = await fixture()

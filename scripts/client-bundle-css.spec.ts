@@ -5,7 +5,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { clientBundle } from '../packages/client/tsdown.client.ts'
 
 interface CssPlugin {
@@ -15,14 +15,11 @@ interface CssPlugin {
 }
 
 function cssPlugin(name: 'dsh-css-modules-inline' | 'dsh-css-global-inline' | 'dsh-css-text-inline'): CssPlugin {
-  const configs = clientBundle(
-    '@deepseek-ai/dsh-client-test',
-    ['lib/types/index.js'],
-  )({ env: { DSH_BUILD_FACE: 'client' } })
-  const client = configs.find(config => config.platform === 'browser')
+  const configs = clientBundle('@deepseek-ai/dsh-client-test', ['lib/types/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
+  const client = configs.find((config) => config.platform === 'browser')
   if (client === undefined) throw new Error('client config missing')
   const plugins = (client as { plugins: CssPlugin[] }).plugins
-  const plugin = plugins.find(candidate => candidate.name === name)
+  const plugin = plugins.find((candidate) => candidate.name === name)
   if (plugin === undefined) throw new Error(`${name} missing from client config`)
   return plugin
 }
@@ -41,7 +38,7 @@ describe('client bundle CSS Modules', () => {
       }
       const watched: string[] = []
 
-      const output = await plugin.load.call({ addWatchFile: id => watched.push(id) }, virtualId)
+      const output = await plugin.load.call({ addWatchFile: (id) => watched.push(id) }, virtualId)
 
       expect(watched).toEqual([stylesheet])
       expect(output).toContain('data-plugin-css')
@@ -65,7 +62,7 @@ describe('client bundle global CSS', () => {
       }
       const watched: string[] = []
 
-      const output = await plugin.load.call({ addWatchFile: id => watched.push(id) }, virtualId)
+      const output = await plugin.load.call({ addWatchFile: (id) => watched.push(id) }, virtualId)
 
       expect(watched).toEqual([stylesheet])
       expect(output).toContain('data-plugin-css')
@@ -88,7 +85,7 @@ describe('client bundle global CSS', () => {
       }
       const watched: string[] = []
 
-      const output = await plugin.load.call({ addWatchFile: id => watched.push(id) }, virtualId)
+      const output = await plugin.load.call({ addWatchFile: (id) => watched.push(id) }, virtualId)
 
       expect(watched).toEqual([stylesheet])
       expect(output).toContain('export default "body{color:red}"')

@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { delimiter, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
+import { afterAll, describe, expect, it, vi, type TestContext } from 'vite-plus/test'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
@@ -57,7 +57,7 @@ const AGENT: AgentUnderTest = {
 
 async function materializedPatch(root: string, filename: string): Promise<string> {
   const entries = await readdir(root, { recursive: true })
-  const matches = entries.filter(entry => entry.endsWith(filename))
+  const matches = entries.filter((entry) => entry.endsWith(filename))
   expect(matches).toHaveLength(1)
   return join(root, matches[0] as string)
 }
@@ -80,13 +80,17 @@ async function scenario(behavior: object): Promise<{ dir: string; fixtureFile: s
 function isolateDiagnosticTimeout(onTestFinished: TestContext['onTestFinished']): void {
   const waitFor = vi.waitFor
   const wait = vi.spyOn(vi, 'waitFor')
-  onTestFinished(() => { wait.mockRestore() })
+  onTestFinished(() => {
+    wait.mockRestore()
+  })
   wait.mockImplementation(async (callback, options) => {
     if (typeof options !== 'object' || options.timeout !== 20) return waitFor(callback, options)
     try {
       return await callback()
     } catch (error) {
-      return waitFor(() => { throw error }, options)
+      return waitFor(() => {
+        throw error
+      }, options)
     }
   })
 }
@@ -105,10 +109,13 @@ it('keeps scenario-owned snapshot spill root length stable across platforms', ()
 })
 
 function environmentEcho(rawStdout: string): Record<string, unknown> {
-  const frames = rawStdout.trim().split('\n')
-    .map(line => JSON.parse(line) as { params?: { update?: { content?: { text?: unknown } } } })
-  const text = frames.map(frame => frame.params?.update?.content?.text)
-    .find(value => typeof value === 'string' && value.startsWith('env:'))
+  const frames = rawStdout
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as { params?: { update?: { content?: { text?: unknown } } } })
+  const text = frames
+    .map((frame) => frame.params?.update?.content?.text)
+    .find((value) => typeof value === 'string' && value.startsWith('env:'))
   if (typeof text !== 'string') throw new Error('fake ACP agent did not echo its environment')
   return JSON.parse(text.slice('env:'.length)) as Record<string, unknown>
 }
@@ -119,10 +126,16 @@ describe('runScenario', () => {
     const launched = launchAcpTestAgent({ agent: AGENT, cwd: join(dir, 'missing') })
     let stdioClosed = false
     let clientClosed = false
-    launched.child.once('close', () => { stdioClosed = true })
+    launched.child.once('close', () => {
+      stdioClosed = true
+    })
     void launched.client.closed.then(
-      () => { clientClosed = true },
-      () => { clientClosed = true },
+      () => {
+        clientClosed = true
+      },
+      () => {
+        clientClosed = true
+      },
     )
     await expect(launched.spawned).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(launched.close()).rejects.toMatchObject({ code: 'ENOENT' })
@@ -146,16 +159,21 @@ describe('runScenario', () => {
     })
     await launched.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await launched.client.newSession({ cwd: dir, mcpServers: [] })
-    const nextChunk = launched.waitForUpdate(update => update.sessionUpdate === 'agent_message_chunk')
-    const laterChunk = launched.waitForUpdate(update => update.sessionUpdate === 'agent_message_chunk'
-      && update.content.type === 'text' && update.content.text === 'never this one')
+    const nextChunk = launched.waitForUpdate((update) => update.sessionUpdate === 'agent_message_chunk')
+    const laterChunk = launched.waitForUpdate(
+      (update) =>
+        update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text' && update.content.text === 'never this one',
+    )
     const predicateFailure = new Error('predicate failed')
-    const failedPredicate = launched.waitForUpdate(() => { throw predicateFailure })
+    const failedPredicate = launched
+      .waitForUpdate(() => {
+        throw predicateFailure
+      })
       .catch((error: unknown): unknown => error)
     await launched.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] })
     expect(await failedPredicate).toBe(predicateFailure)
     expect((await nextChunk).sessionUpdate).toBe('agent_message_chunk')
-    expect(launched.updates.some(update => update.sessionUpdate === 'agent_message_chunk')).toBe(true)
+    expect(launched.updates.some((update) => update.sessionUpdate === 'agent_message_chunk')).toBe(true)
     expect(launched.rawStdout()).toContain('permission:{\\"outcome\\":\\"cancelled\\"}')
     expect(launched.stderr()).toContain('launcher stderr')
     void laterChunk.catch(() => undefined)
@@ -170,7 +188,9 @@ describe('runScenario', () => {
     await minimal.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const childFailure = new Error('child process failed')
     let exited = false
-    minimal.child.once('exit', () => { exited = true })
+    minimal.child.once('exit', () => {
+      exited = true
+    })
     minimal.child.emit('error', childFailure)
     await expect(minimal.close('SIGTERM')).rejects.toBe(childFailure)
     // close rejects only after the fallback SIGKILL has produced an exit edge.
@@ -191,27 +211,30 @@ describe('runScenario', () => {
       mkdir(scopedPackageDir, { recursive: true }),
     ])
     await Promise.all([
-      writeFile(basePatch, [
-        '- id: asserted',
-        '  name: ./plugin.mjs',
-        '  disabled: true',
-        '- insert:',
-        '    - id: relative',
-        '      name: ./plugin.mjs',
-        '    - id: package',
-        '      name: example-package',
-        '    - id: scoped-package',
-        "      name: '@fixture/example-package/subpath'",
-        '    - id: builtin',
-        '      name: fs',
-        '    - id: group',
-        '      name: cordis:group',
-        '      group: true',
-        '      config:',
-        '        - id: nested',
-        '          name: ../nested.mjs',
-        '',
-      ].join('\n')),
+      writeFile(
+        basePatch,
+        [
+          '- id: asserted',
+          '  name: ./plugin.mjs',
+          '  disabled: true',
+          '- insert:',
+          '    - id: relative',
+          '      name: ./plugin.mjs',
+          '    - id: package',
+          '      name: example-package',
+          '    - id: scoped-package',
+          "      name: '@fixture/example-package/subpath'",
+          '    - id: builtin',
+          '      name: fs',
+          '    - id: group',
+          '      name: cordis:group',
+          '      group: true',
+          '      config:',
+          '        - id: nested',
+          '          name: ../nested.mjs',
+          '',
+        ].join('\n'),
+      ),
       writeFile(selectedPatch, '[]\n'),
       writeFile(replayPatch, '[]\n'),
       writeFile(join(patchDir, 'plugin.mjs'), 'export function apply() {}\n'),
@@ -233,10 +256,10 @@ describe('runScenario', () => {
     expect(materialized).toContain(pathToFileURL(join(patchDir, 'plugin.mjs')).href)
     expect(materialized).toContain(pathToFileURL(join(dir, 'nested.mjs')).href)
     expect(materialized).toContain('example-package')
-    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package')))
-      .toBe(await realpath(packageDir))
-    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package')))
-      .toBe(await realpath(scopedPackageDir))
+    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package'))).toBe(await realpath(packageDir))
+    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package'))).toBe(
+      await realpath(scopedPackageDir),
+    )
     expect(await readFile(await materializedPatch(materializedRoot, '1-selected.cordis.yml'), 'utf8')).toContain('[]')
 
     const replay = launchAcpTestAgent({
@@ -247,10 +270,8 @@ describe('runScenario', () => {
     })
     await replay.spawned
     await replay.close()
-    expect(await readFile(await materializedPatch(materializedRoot, '1-selected.cordis.snapshot.yml'), 'utf8'))
-      .toContain('[]')
-    expect((await readdir(materializedRoot, { withFileTypes: true })).filter(entry => entry.isDirectory()))
-      .toHaveLength(2)
+    expect(await readFile(await materializedPatch(materializedRoot, '1-selected.cordis.snapshot.yml'), 'utf8')).toContain('[]')
+    expect((await readdir(materializedRoot, { withFileTypes: true })).filter((entry) => entry.isDirectory())).toHaveLength(2)
 
     const conflictPatch = join(dir, 'conflict.cordis.yml')
     const conflictPackage = join(dir, 'node_modules', 'conflict-package')
@@ -266,19 +287,23 @@ describe('runScenario', () => {
       writeFile(join(otherPackage, 'package.json'), '{"name":"conflict-package","version":"2.0.0"}\n'),
     ])
     await symlink(otherPackage, conflictLink, process.platform === 'win32' ? 'junction' : 'dir')
-    expect(() => launchAcpTestAgent({
-      agent: { ...profileAgent, configPath: conflictPatch },
-      cwd: dir,
-      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
-    })).toThrow('snapshot profile package conflict-package resolves to two directories')
+    expect(() =>
+      launchAcpTestAgent({
+        agent: { ...profileAgent, configPath: conflictPatch },
+        cwd: dir,
+        env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
+      }),
+    ).toThrow('snapshot profile package conflict-package resolves to two directories')
 
     const invalidPatch = join(dir, 'invalid.cordis.yml')
     await writeFile(invalidPatch, 'not: a-list\n')
-    expect(() => launchAcpTestAgent({
-      agent: { ...profileAgent, configPath: invalidPatch },
-      cwd: dir,
-      env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
-    })).toThrow(`snapshot profile patch must be a top-level array: ${invalidPatch}`)
+    expect(() =>
+      launchAcpTestAgent({
+        agent: { ...profileAgent, configPath: invalidPatch },
+        cwd: dir,
+        env: { DSH_SNAPSHOT: 'record', DSH_SNAPSHOT_FILE: fixtureFile },
+      }),
+    ).toThrow(`snapshot profile patch must be a top-level array: ${invalidPatch}`)
   })
 
   it('waits for inherited stdio and buffered ACP parsing after the parent exits', { timeout: 20_000 }, async () => {
@@ -290,10 +315,10 @@ describe('runScenario', () => {
     })
     await launched.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     await launched.client.newSession({ cwd: dir, mcpServers: [] })
-    const lateUpdate = launched.waitForUpdate(update =>
-      update.sessionUpdate === 'agent_message_chunk'
-      && update.content.type === 'text'
-      && update.content.text === 'late inherited stdout')
+    const lateUpdate = launched.waitForUpdate(
+      (update) =>
+        update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text' && update.content.text === 'late inherited stdout',
+    )
     // Arm rejection handling before close may exhaust the stream; the later assertion still
     // observes the original promise and turns a missing inherited frame into the test failure.
     void lateUpdate.catch(() => undefined)
@@ -313,17 +338,18 @@ describe('runScenario', () => {
     const childFailure = Object.assign(new Error('signal refused'), { code: 'EPERM' })
     const originalKill = launched.child.kill.bind(launched.child)
     const kill = vi.spyOn(launched.child, 'kill').mockReturnValue(false)
-    const closed = new Promise<void>(resolve => launched.child.once('close', () => { resolve() }))
+    const closed = new Promise<void>((resolve) =>
+      launched.child.once('close', () => {
+        resolve()
+      }),
+    )
     try {
       launched.child.emit('error', childFailure)
       const rejection = await launched.close('SIGTERM').catch((error: unknown): unknown => error)
       expect(rejection).toBeInstanceOf(AggregateError)
       expect(rejection).toMatchObject({
         message: 'ACP test agent failed and fallback termination was refused',
-        errors: [
-          childFailure,
-          expect.objectContaining({ message: 'Fallback SIGKILL was not accepted by the child process' }),
-        ],
+        errors: [childFailure, expect.objectContaining({ message: 'Fallback SIGKILL was not accepted by the child process' })],
       })
       expect(kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
       expect(kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
@@ -366,7 +392,9 @@ describe('runScenario', () => {
     const originalKill = launched.child.kill.bind(launched.child)
     const kill = vi.spyOn(launched.child, 'kill').mockImplementation((signal) => {
       expect(signal).toBe('SIGTERM')
-      setTimeout(() => { originalKill('SIGKILL') }, 10)
+      setTimeout(() => {
+        originalKill('SIGKILL')
+      }, 10)
       return true
     })
     try {
@@ -437,7 +465,11 @@ describe('runScenario', () => {
       if (signal === 'SIGKILL') queueMicrotask(() => launched.child.emit('error', fallbackFailure))
       return signal === 'SIGKILL'
     })
-    const closed = new Promise<void>(resolve => launched.child.once('close', () => { resolve() }))
+    const closed = new Promise<void>((resolve) =>
+      launched.child.once('close', () => {
+        resolve()
+      }),
+    )
     try {
       launched.child.emit('error', childFailure)
       const rejection = await launched.close('SIGTERM').catch((error: unknown): unknown => error)
@@ -458,9 +490,13 @@ describe('runScenario', () => {
   it('waits for in-flight client callbacks after the ACP stream closes', { timeout: 20_000 }, async () => {
     const { dir, fixtureFile } = await scenario({ permissionProbe: true })
     let releasePermission: (() => void) | undefined
-    const permissionReleased = new Promise<void>((resolve) => { releasePermission = resolve })
+    const permissionReleased = new Promise<void>((resolve) => {
+      releasePermission = resolve
+    })
     let markPermissionStarted: (() => void) | undefined
-    const permissionStarted = new Promise<void>((resolve) => { markPermissionStarted = resolve })
+    const permissionStarted = new Promise<void>((resolve) => {
+      markPermissionStarted = resolve
+    })
     let permissionFinished = false
     const launched = launchAcpTestAgent({
       agent: AGENT,
@@ -480,7 +516,9 @@ describe('runScenario', () => {
 
     const childClosed = once(launched.child, 'close')
     let closeSettled = false
-    const closing = launched.close('SIGKILL').then(() => { closeSettled = true })
+    const closing = launched.close('SIGKILL').then(() => {
+      closeSettled = true
+    })
     await childClosed
     await launched.client.closed
     expect(closeSettled).toBe(false)
@@ -492,24 +530,25 @@ describe('runScenario', () => {
 
   it('includes agent stderr when the ACP connection closes during startup', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ failOnBoot: true, stderrNote: 'fake agent requested startup failure' })
-    await expect(runScenario(
-      { steps: [{ op: 'initialize' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(/agent stderr:\nfake agent requested startup failure/)
+    await expect(runScenario({ steps: [{ op: 'initialize' }] }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toThrow(
+      /agent stderr:\nfake agent requested startup failure/,
+    )
   })
 
   it('preserves launch-resolution errors when no child process exists', async () => {
     const { dir, fixtureFile } = await scenario({})
     vi.stubEnv('DSH_EXAMPLE_MODE', 'lib')
     try {
-      await expect(runScenario(
-        { steps: [] },
-        {
-          agent: { ...AGENT, binScript: join(dir, 'outside-src.ts'), libBinScript: undefined },
-          mode: 'replay',
-          fixtureFile,
-        },
-      )).rejects.toThrow(/expected a "\/src\/" segment/)
+      await expect(
+        runScenario(
+          { steps: [] },
+          {
+            agent: { ...AGENT, binScript: join(dir, 'outside-src.ts'), libBinScript: undefined },
+            mode: 'replay',
+            fixtureFile,
+          },
+        ),
+      ).rejects.toThrow(/expected a "\/src\/" segment/)
     } finally {
       vi.unstubAllEnvs()
     }
@@ -518,13 +557,15 @@ describe('runScenario', () => {
   it('drives a full turn: initialize, session, prompt, permission stub, harvest', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({
       permissionProbe: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
-          { type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
+            { type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } },
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       { steps: [{ op: 'initialize' }, { op: 'newSession' }, { op: 'prompt', text: 'go' }] },
@@ -542,7 +583,7 @@ describe('runScenario', () => {
     // The cwd is JSON-encoded in the log line, so compare the parsed field
     // rather than substring-matching a raw path (which breaks when the path
     // separator is escaped inside JSON text on Windows).
-    const sessionLine = result.sessionLogs[0]?.content.split('\n').find(l => l.includes('"type":"session"')) ?? '{}'
+    const sessionLine = result.sessionLogs[0]?.content.split('\n').find((l) => l.includes('"type":"session"')) ?? '{}'
     expect((JSON.parse(sessionLine) as { cwd?: string }).cwd).toBe(result.cwd)
   })
 
@@ -550,14 +591,17 @@ describe('runScenario', () => {
     const { fixtureFile } = await scenario({})
     const result = await runScenario(
       {
-        steps: [...boot, {
-          op: 'promptContent',
-          content: [
-            { type: 'text', text: 'before' },
-            { type: 'image', data: 'AQ==', mimeType: 'image/png' },
-            { type: 'text', text: 'after' },
-          ],
-        }],
+        steps: [
+          ...boot,
+          {
+            op: 'promptContent',
+            content: [
+              { type: 'text', text: 'before' },
+              { type: 'image', data: 'AQ==', mimeType: 'image/png' },
+              { type: 'text', text: 'after' },
+            ],
+          },
+        ],
       },
       { agent: AGENT, mode: 'replay', fixtureFile },
     )
@@ -584,11 +628,12 @@ describe('runScenario', () => {
     // Child paths ride one env var, joined with the platform delimiter.
     // Parse the fake bin's env-probe chunk rather than substring-matching a
     // JSON-encoded path (the escaping breaks raw-substring compares on Windows).
-    const envChunk = result.rawStdout.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-      .map(l => JSON.parse(l) as { params?: { update?: { content?: { text?: string } } } })
-      .find(f => f.params?.update?.content?.text?.startsWith('env:'))
+    const envChunk = result.rawStdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+      .map((l) => JSON.parse(l) as { params?: { update?: { content?: { text?: string } } } })
+      .find((f) => f.params?.update?.content?.text?.startsWith('env:'))
     const env = JSON.parse((envChunk?.params?.update?.content?.text ?? 'env:{}').slice('env:'.length)) as {
       childFiles: string | null
     }
@@ -600,28 +645,26 @@ describe('runScenario', () => {
     const failure = { error: Object.assign(new Error('spill allocation failed'), { code: 'ENOSPC' }), allocated: [] as string[] }
     fsControl.spillAllocationFailure = failure
     try {
-      await expect(runScenario(
-        { steps: boot },
-        { agent: AGENT, mode: 'replay', fixtureFile },
-      )).rejects.toBe(failure.error)
+      await expect(runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toBe(failure.error)
       expect(failure.allocated).toHaveLength(2)
       for (const root of failure.allocated) {
         await expect(readdir(root)).rejects.toMatchObject({ code: 'ENOENT' })
       }
     } finally {
       fsControl.spillAllocationFailure = undefined
-      await Promise.all(failure.allocated.map(root => rm(root, { recursive: true, force: true })))
+      await Promise.all(failure.allocated.map((root) => rm(root, { recursive: true, force: true })))
     }
   })
 
   it('gives concurrent runs of the same scenario private temporary spill roots', { timeout: 20_000 }, async () => {
     const fixture = await scenario({ echoEnv: true })
-    const results = await Promise.all([fixture, fixture].map(({ fixtureFile }) => runScenario(
-      { steps: [...boot, { op: 'prompt', text: 'env?' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )))
-    const roots = results.map(result => environmentEcho(result.rawStdout).spillRoot)
-    expect(roots.every(root => typeof root === 'string')).toBe(true)
+    const results = await Promise.all(
+      [fixture, fixture].map(({ fixtureFile }) =>
+        runScenario({ steps: [...boot, { op: 'prompt', text: 'env?' }] }, { agent: AGENT, mode: 'replay', fixtureFile }),
+      ),
+    )
+    const roots = results.map((result) => environmentEcho(result.rawStdout).spillRoot)
+    expect(roots.every((root) => typeof root === 'string')).toBe(true)
     expect(new Set(roots).size).toBe(2)
     expect((roots[0] as string).length).toBe((roots[1] as string).length)
     for (const root of roots as string[]) {
@@ -674,10 +717,7 @@ describe('runScenario', () => {
     const workspaceParent = await mkdtemp(join(tmpdir(), 'acp-snap-parent-'))
     tempDirs.push(workspaceParent)
 
-    const result = await runScenario(
-      { steps: boot },
-      { agent: AGENT, mode: 'replay', fixtureFile, workspaceParent },
-    )
+    const result = await runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile, workspaceParent })
 
     const child = relative(workspaceParent, result.cwd)
     expect(child).not.toBe('')
@@ -704,38 +744,49 @@ describe('runScenario', () => {
     await writeFile(join(workspaceDir, 'started.txt'), 'started')
     const result = await runScenario(
       {
-        steps: [...boot, {
-          op: 'promptAndCancel',
-          text: 'hang',
-          waitForFile: { path: 'started.txt' },
-        }],
+        steps: [
+          ...boot,
+          {
+            op: 'promptAndCancel',
+            text: 'hang',
+            waitForFile: { path: 'started.txt' },
+          },
+        ],
       },
       { agent: AGENT, mode: 'replay', fixtureFile, workspaceDir },
     )
     expect(result.rawStdout).toContain('"stopReason":"cancelled"')
 
     const missing = await scenario({ prompt: 'hang-until-cancel' })
-    await expect(runScenario(
-      {
-        steps: [...boot, {
-          op: 'promptAndCancel',
-          text: 'hang',
-          waitForFile: { path: 'never.txt', timeoutMs: 20 },
-        }],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
-    )).rejects.toThrow(/workspace file "never\.txt" did not appear within 20ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [
+            ...boot,
+            {
+              op: 'promptAndCancel',
+              text: 'hang',
+              waitForFile: { path: 'never.txt', timeoutMs: 20 },
+            },
+          ],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      ),
+    ).rejects.toThrow(/workspace file "never\.txt" did not appear within 20ms/)
   })
 
   it('promptAndWaitForAgentMessage keeps the app live through a matching later update', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ prompt: 'respond' })
     const result = await runScenario(
       {
-        steps: [...boot, {
-          op: 'promptAndWaitForAgentMessage',
-          text: 'go',
-          waitForText: 'thinking about it',
-        }],
+        steps: [
+          ...boot,
+          {
+            op: 'promptAndWaitForAgentMessage',
+            text: 'go',
+            waitForText: 'thinking about it',
+          },
+        ],
       },
       { agent: AGENT, mode: 'replay', fixtureFile, configPath: AGENT.configPath },
     )
@@ -746,13 +797,15 @@ describe('runScenario', () => {
     const { fixtureFile } = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnEnd' }] },
@@ -765,22 +818,24 @@ describe('runScenario', () => {
     const { fixtureFile } = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          {
-            type: 'agent/inbox/spliced',
-            seq: 0,
-            time: 2,
-            data: {
-              target: 'next-turn',
-              start: 0,
-              inserted: [{ role: 'user', content: [{ type: 'text', text: 'durable marker' }] }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            {
+              type: 'agent/inbox/spliced',
+              seq: 0,
+              time: 2,
+              data: {
+                target: 'next-turn',
+                start: 0,
+                inserted: [{ role: 'user', content: [{ type: 'text', text: 'durable marker' }] }],
+              },
             },
-          },
-        ],
-      }],
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForInboxMessage', text: 'marker' }] },
@@ -791,45 +846,49 @@ describe('runScenario', () => {
 
   it('waitForInboxMessage times out when the session log or matching insertion is absent', { timeout: 20_000 }, async () => {
     const absent = await scenario({ prompt: 'hang-until-cancel', persistLogsOnCancel: true })
-    await expect(runScenario(
-      { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: absent.fixtureFile },
-    )).rejects.toThrow(/did not persist expected inbox message within 20ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: absent.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist expected inbox message within 20ms/)
 
     const unmatched = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [{ type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 }],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [{ type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 }],
+        },
+      ],
     })
-    await expect(runScenario(
-      { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: unmatched.fixtureFile },
-    )).rejects.toThrow(/did not persist expected inbox message within 20ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: unmatched.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist expected inbox message within 20ms/)
   })
 
   it('waitForTitleAfterTurnEnd holds the app through a standalone durable title', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title' } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+            { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title' } },
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTitleAfterTurnEnd' },
-        ],
+        steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTitleAfterTurnEnd' }],
       },
       { agent: AGENT, mode: 'replay', fixtureFile },
     )
@@ -840,21 +899,19 @@ describe('runScenario', () => {
     const { fixtureFile } = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/start', seq: 0, time: 1, data: { turn: 3 } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/start', seq: 0, time: 1, data: { turn: 3 } },
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTurnStart', minimumTurn: 3 },
-        ],
+        steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnStart', minimumTurn: 3 }],
       },
       { agent: AGENT, mode: 'replay', fixtureFile },
     )
@@ -863,179 +920,185 @@ describe('runScenario', () => {
 
   it('waitForTurnStart rejects missing, earlier, and malformed durable turns', { timeout: 20_000 }, async () => {
     const missing = await scenario({})
-    await expect(runScenario(
-      { steps: [...boot, { op: 'waitForTurnStart', timeoutMs: 200 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
-    )).rejects.toThrow(/did not persist turn\/start within 200ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'waitForTurnStart', timeoutMs: 200 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist turn\/start within 200ms/)
 
     const earlier = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+          ],
+        },
+      ],
     })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTurnStart', minimumTurn: 3, timeoutMs: 200 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: earlier.fixtureFile },
-    )).rejects.toThrow(/turn\/start at or beyond turn 3 within 200ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnStart', minimumTurn: 3, timeoutMs: 200 }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: earlier.fixtureFile },
+      ),
+    ).rejects.toThrow(/turn\/start at or beyond turn 3 within 200ms/)
 
     const closed = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'stop' } } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+            { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'stop' } } },
+          ],
+        },
+      ],
     })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTurnStart', timeoutMs: 200 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
-    )).rejects.toThrow(/did not persist turn\/start within 200ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnStart', timeoutMs: 200 }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist turn\/start within 200ms/)
 
     for (const turn of [undefined, 0]) {
       const malformed = await scenario({
         prompt: 'hang-until-cancel',
         persistLogsOnCancel: true,
-        logs: [{
-          file: 'project/main/session.jsonl',
-          lines: [
-            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-            { type: 'turn/start', seq: 0, time: 1, data: turn === undefined ? {} : { turn } },
-          ],
-        }],
+        logs: [
+          {
+            file: 'project/main/session.jsonl',
+            lines: [
+              { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+              { type: 'turn/start', seq: 0, time: 1, data: turn === undefined ? {} : { turn } },
+            ],
+          },
+        ],
       })
-      await expect(runScenario(
-        {
-          steps: [
-            ...boot,
-            { op: 'promptAndCancel', text: 'hang' },
-            { op: 'waitForTurnStart' },
-          ],
-        },
-        { agent: AGENT, mode: 'replay', fixtureFile: malformed.fixtureFile },
-      )).rejects.toThrow('invalid persisted turn/start record')
+      await expect(
+        runScenario(
+          {
+            steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnStart' }],
+          },
+          { agent: AGENT, mode: 'replay', fixtureFile: malformed.fixtureFile },
+        ),
+      ).rejects.toThrow('invalid persisted turn/start record')
     }
   })
 
   it('waitForTurnEnd times out for a missing log and an open logged turn', { timeout: 20_000 }, async () => {
     const missing = await scenario({})
-    await expect(runScenario(
-      { steps: [...boot, { op: 'waitForTurnEnd', timeoutMs: 200 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
-    )).rejects.toThrow(/did not persist turn\/end within 200ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'waitForTurnEnd', timeoutMs: 200 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist turn\/end within 200ms/)
 
     const open = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+          ],
+        },
+      ],
     })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTurnEnd', timeoutMs: 200 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: open.fixtureFile },
-    )).rejects.toThrow(/did not persist turn\/end within 200ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForTurnEnd', timeoutMs: 200 }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: open.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist turn\/end within 200ms/)
   })
 
   it('waitForGoalPhase requires the requested durable goal phase', { timeout: 20_000 }, async () => {
     const reached = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'goal/change', seq: 1, time: 2, data: {} },
-          { type: 'goal/change', seq: 2, time: 3, data: { goal: { phase: 'active' } } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'goal/change', seq: 1, time: 2, data: {} },
+            { type: 'goal/change', seq: 2, time: 3, data: { goal: { phase: 'active' } } },
+          ],
+        },
+      ],
     })
     const result = await runScenario(
       {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForGoalPhase', phase: 'active' },
-        ],
+        steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForGoalPhase', phase: 'active' }],
       },
       { agent: AGENT, mode: 'replay', fixtureFile: reached.fixtureFile },
     )
     expect(result.sessionLogs[0]?.content).toContain('"phase":"active"')
 
     const missing = await scenario({})
-    await expect(runScenario(
-      { steps: [...boot, { op: 'waitForGoalPhase', phase: 'blocked', timeoutMs: 20 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
-    )).rejects.toThrow(/did not persist goal phase "blocked" within 20ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'waitForGoalPhase', phase: 'blocked', timeoutMs: 20 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      ),
+    ).rejects.toThrow(/did not persist goal phase "blocked" within 20ms/)
   })
 
   it.each([
     { label: 'session', step: { op: 'waitForTurnEnd', timeoutMs: 20 }, expected: 'did not persist turn/end within 20ms' },
-    { label: 'child', step: { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 },
-      expected: 'subagent child #2 did not persist closed turn 1 within 20ms' },
-  ] satisfies { label: string; step: InputStep; expected: string }[])
-  ('identifies the $label wait when its first log harvest outlasts the deadline', async ({ step, expected }) => {
-    const { fixtureFile } = await scenario({})
-    const reading = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    let pendingRead: Promise<unknown> | undefined
-    const originalReaddir = readdir
-    const spy = vi.spyOn(fsPromises, 'readdir').mockImplementation(async (...args) => {
-      if (pendingRead === undefined && String(args[0]).includes('acp-snap-sessions-')) {
-        const read = release.promise.then(() => originalReaddir(...args))
-        pendingRead = read
-        reading.resolve(undefined)
-        return await read
+    {
+      label: 'child',
+      step: { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 },
+      expected: 'subagent child #2 did not persist closed turn 1 within 20ms',
+    },
+  ] satisfies { label: string; step: InputStep; expected: string }[])(
+    'identifies the $label wait when its first log harvest outlasts the deadline',
+    async ({ step, expected }) => {
+      const { fixtureFile } = await scenario({})
+      const reading = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      let pendingRead: Promise<unknown> | undefined
+      const originalReaddir = readdir
+      const spy = vi.spyOn(fsPromises, 'readdir').mockImplementation(async (...args) => {
+        if (pendingRead === undefined && String(args[0]).includes('acp-snap-sessions-')) {
+          const read = release.promise.then(() => originalReaddir(...args))
+          pendingRead = read
+          reading.resolve(undefined)
+          return await read
+        }
+        return await originalReaddir(...args)
+      })
+      const run = runScenario({ steps: [...boot, step] }, { agent: AGENT, mode: 'replay', fixtureFile })
+      const rejected = expect(run).rejects.toThrow(expected)
+      try {
+        await Promise.race([reading.promise, rejected])
+        expect(pendingRead).toBeDefined()
+        await rejected
+        await expect(run).rejects.toHaveProperty('cause', expect.any(Error))
+      } finally {
+        release.resolve(undefined)
+        await Promise.allSettled([pendingRead, run, rejected])
+        spy.mockRestore()
       }
-      return await originalReaddir(...args)
-    })
-    const run = runScenario(
-      { steps: [...boot, step] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )
-    const rejected = expect(run).rejects.toThrow(expected)
-    try {
-      await Promise.race([reading.promise, rejected])
-      expect(pendingRead).toBeDefined()
-      await rejected
-      await expect(run).rejects.toHaveProperty('cause', expect.any(Error))
-    } finally {
-      release.resolve(undefined)
-      await Promise.allSettled([pendingRead, run, rejected])
-      spy.mockRestore()
-    }
-  })
+    },
+  )
 
   it('waitForSubagentTurnEnd requires a closed child work turn', { timeout: 20_000 }, async ({ onTestFinished }) => {
     isolateDiagnosticTimeout(onTestFinished)
@@ -1064,25 +1127,19 @@ describe('runScenario', () => {
     })
     const result = await runScenario(
       {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForSubagentTurnEnd' },
-        ],
+        steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForSubagentTurnEnd' }],
       },
       { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
     )
     expect(result.sessionLogs[1]?.parentSession).toBe(result.sessionId)
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForSubagentTurnEnd', minimumTurn: 2, timeoutMs: 20 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
-    )).rejects.toThrow(/subagent child #1 did not persist closed turn 2 within 20ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForSubagentTurnEnd', minimumTurn: 2, timeoutMs: 20 }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
+      ),
+    ).rejects.toThrow(/subagent child #1 did not persist closed turn 2 within 20ms/)
 
     const seedOnly = await scenario({
       prompt: 'hang-until-cancel',
@@ -1107,98 +1164,113 @@ describe('runScenario', () => {
         },
       ],
     })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForSubagentTurnEnd', timeoutMs: 20 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: seedOnly.fixtureFile },
-    )).rejects.toThrow(/subagent child #1 did not persist closed turn 1 within 20ms/)
+    await expect(
+      runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForSubagentTurnEnd', timeoutMs: 20 }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: seedOnly.fixtureFile },
+      ),
+    ).rejects.toThrow(/subagent child #1 did not persist closed turn 1 within 20ms/)
 
     const missing = await scenario({})
-    await expect(runScenario(
-      { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 }] },
-      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
-    )).rejects.toThrow(/subagent child #2 did not persist closed turn 1 within 20ms/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      ),
+    ).rejects.toThrow(/subagent child #2 did not persist closed turn 1 within 20ms/)
   })
 
   it('waitForTitleAfterTurnEnd times out when the title precedes the boundary', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title' } },
-          { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-        ],
-      }],
+      logs: [
+        {
+          file: 'project/main/session.jsonl',
+          lines: [
+            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+            { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title' } },
+            { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+          ],
+        },
+      ],
     })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForTitleAfterTurnEnd', timeoutMs: titleDiagnosticTimeoutMs },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(new RegExp(`did not persist session/title after turn/end within ${titleDiagnosticTimeoutMs}ms`))
+    await expect(
+      runScenario(
+        {
+          steps: [
+            ...boot,
+            { op: 'promptAndCancel', text: 'hang' },
+            { op: 'waitForTitleAfterTurnEnd', timeoutMs: titleDiagnosticTimeoutMs },
+          ],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile },
+      ),
+    ).rejects.toThrow(new RegExp(`did not persist session/title after turn/end within ${titleDiagnosticTimeoutMs}ms`))
   })
 
-  it('waitForEventAfterTurnEnd holds the app for a typed post-boundary record and times out otherwise', { timeout: 20_000 }, async ({ onTestFinished }) => {
-    isolateDiagnosticTimeout(onTestFinished)
-    const late = await scenario({
-      prompt: 'hang-until-cancel',
-      persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'user/message', seq: 2, time: 3, data: { content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } } },
+  it(
+    'waitForEventAfterTurnEnd holds the app for a typed post-boundary record and times out otherwise',
+    { timeout: 20_000 },
+    async ({ onTestFinished }) => {
+      isolateDiagnosticTimeout(onTestFinished)
+      const late = await scenario({
+        prompt: 'hang-until-cancel',
+        persistLogsOnCancel: true,
+        logs: [
+          {
+            file: 'project/main/session.jsonl',
+            lines: [
+              { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+              { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+              {
+                type: 'user/message',
+                seq: 2,
+                time: 3,
+                data: { content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } },
+              },
+            ],
+          },
         ],
-      }],
-    })
-    const result = await runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForEventAfterTurnEnd', type: 'user/message' },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: late.fixtureFile },
-    )
-    expect(result.sessionLogs[0]?.content).toMatch(/"turn\/end"[\s\S]*"user\/message"/)
+      })
+      const result = await runScenario(
+        {
+          steps: [...boot, { op: 'promptAndCancel', text: 'hang' }, { op: 'waitForEventAfterTurnEnd', type: 'user/message' }],
+        },
+        { agent: AGENT, mode: 'replay', fixtureFile: late.fixtureFile },
+      )
+      expect(result.sessionLogs[0]?.content).toMatch(/"turn\/end"[\s\S]*"user\/message"/)
 
-    const early = await scenario({
-      prompt: 'hang-until-cancel',
-      persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [
-          { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'user/message', seq: 1, time: 1, data: { content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } } },
-          { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+      const early = await scenario({
+        prompt: 'hang-until-cancel',
+        persistLogsOnCancel: true,
+        logs: [
+          {
+            file: 'project/main/session.jsonl',
+            lines: [
+              { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
+              { type: 'user/message', seq: 1, time: 1, data: { content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } } },
+              { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+            ],
+          },
         ],
-      }],
-    })
-    await expect(runScenario(
-      {
-        steps: [
-          ...boot,
-          { op: 'promptAndCancel', text: 'hang' },
-          { op: 'waitForEventAfterTurnEnd', type: 'user/message', timeoutMs: 20 },
-        ],
-      },
-      { agent: AGENT, mode: 'replay', fixtureFile: early.fixtureFile },
-    )).rejects.toThrow(/did not persist user\/message after turn\/end within 20ms/)
-  })
+      })
+      await expect(
+        runScenario(
+          {
+            steps: [
+              ...boot,
+              { op: 'promptAndCancel', text: 'hang' },
+              { op: 'waitForEventAfterTurnEnd', type: 'user/message', timeoutMs: 20 },
+            ],
+          },
+          { agent: AGENT, mode: 'replay', fixtureFile: early.fixtureFile },
+        ),
+      ).rejects.toThrow(/did not persist user\/message after turn\/end within 20ms/)
+    },
+  )
 
   it('promptExpectError swallows a model-error response as the expected outcome', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ prompt: 'error' })
@@ -1209,13 +1281,16 @@ describe('runScenario', () => {
     expect(result.rawStdout).toContain('model exploded')
   })
 
-  it('promptExpectError throws when the prompt unexpectedly succeeds (and teardown kills the live child)', { timeout: 20_000 }, async () => {
-    const { fixtureFile } = await scenario({ prompt: 'respond' })
-    await expect(runScenario(
-      { steps: [...boot, { op: 'promptExpectError', text: 'fine' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(/expected the prompt to fail/)
-  })
+  it(
+    'promptExpectError throws when the prompt unexpectedly succeeds (and teardown kills the live child)',
+    { timeout: 20_000 },
+    async () => {
+      const { fixtureFile } = await scenario({ prompt: 'respond' })
+      await expect(
+        runScenario({ steps: [...boot, { op: 'promptExpectError', text: 'fine' }] }, { agent: AGENT, mode: 'replay', fixtureFile }),
+      ).rejects.toThrow(/expected the prompt to fail/)
+    },
+  )
 
   it('reports scenario and cleanup failures together', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ prompt: 'respond' })
@@ -1240,10 +1315,9 @@ describe('runScenario', () => {
     const cleanupFailure = new Error('cleanup failed')
     fsControl.cleanupFailure = cleanupFailure
 
-    const failure = await runScenario(
-      { steps: boot },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    ).catch((error: unknown): unknown => error)
+    const failure = await runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile }).catch(
+      (error: unknown): unknown => error,
+    )
 
     expect(failure).toBeInstanceOf(AggregateError)
     expect((failure as AggregateError).message).toBe('snapshot cleanup failed')
@@ -1270,18 +1344,14 @@ describe('runScenario', () => {
 
   it('newSessionExpectError throws when session/new unexpectedly succeeds', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({})
-    await expect(runScenario(
-      { steps: [{ op: 'initialize' }, { op: 'newSessionExpectError' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(/expected session\/new to be rejected/)
+    await expect(
+      runScenario({ steps: [{ op: 'initialize' }, { op: 'newSessionExpectError' }] }, { agent: AGENT, mode: 'replay', fixtureFile }),
+    ).rejects.toThrow(/expected session\/new to be rejected/)
   })
 
   it('a plain cancel step is forwarded (and ignored by an idle agent)', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({})
-    const result = await runScenario(
-      { steps: [...boot, { op: 'cancel' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )
+    const result = await runScenario({ steps: [...boot, { op: 'cancel' }] }, { agent: AGENT, mode: 'replay', fixtureFile })
     expect(result.sessionId).toBeDefined()
   })
 
@@ -1326,19 +1396,15 @@ describe('runScenario', () => {
     [{ op: 'cancel' }, /cancel before newSession/],
   ] as [InputStep, RegExp][])('rejects %j before newSession', { timeout: 20_000 }, async (step, message) => {
     const { fixtureFile } = await scenario({})
-    await expect(runScenario(
-      { steps: [{ op: 'initialize' }, step] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(message)
+    await expect(runScenario({ steps: [{ op: 'initialize' }, step] }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toThrow(
+      message,
+    )
   })
 
   it('rejects an unknown input op', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({})
     const bogus = { op: 'reticulate' } as unknown as InputStep
-    await expect(runScenario(
-      { steps: [bogus] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(/unknown input op/)
+    await expect(runScenario({ steps: [bogus] }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toThrow(/unknown input op/)
   })
 
   it('harvests all logs primary-first, children by createdAt then id, skipping filesystem noise', { timeout: 20_000 }, async () => {
@@ -1349,19 +1415,22 @@ describe('runScenario', () => {
         // File names chosen so readdir feeds the sort children-first AND
         // parent-in-the-middle: the comparator then sees a parent on both
         // sides of a pair, plus the same-createdAt (localeCompare) tiebreak.
-        { file: 'b1/aa-child-c/session.jsonl', lines: [{ type: 'session', version: 0, id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
+        {
+          file: 'b1/aa-child-c/session.jsonl',
+          lines: [{ type: 'session', version: 0, id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }],
+        },
         { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: 'superseded-parent', createdAt: 1 }] },
         { file: 'b1/bb-parent/session.v1.jsonl', lines: [{ type: 'session', version: 1, id: '{{SID}}', createdAt: 900 }] },
-        { file: 'b1/cc-child-a/session.jsonl', lines: [{ type: 'session', version: 0, id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
+        {
+          file: 'b1/cc-child-a/session.jsonl',
+          lines: [{ type: 'session', version: 0, id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }],
+        },
         // Missing id/createdAt fall back to ''/0; earliest child by createdAt.
         { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, parentSession: '{{SID}}' }] },
       ],
     })
-    const result = await runScenario(
-      { steps: [...boot, { op: 'prompt', text: 'go' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )
-    expect(result.sessionLogs.map(l => [l.id, l.createdAt])).toEqual([
+    const result = await runScenario({ steps: [...boot, { op: 'prompt', text: 'go' }] }, { agent: AGENT, mode: 'replay', fixtureFile })
+    expect(result.sessionLogs.map((l) => [l.id, l.createdAt])).toEqual([
       [result.sessionId, 900],
       ['', 0],
       ['aaaaaaaa-0000-4000-8000-000000000000', 500],
@@ -1372,28 +1441,23 @@ describe('runScenario', () => {
 
   it('rejects an empty persisted generation', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ logs: [{ file: 'b/empty/session.jsonl', lines: [] }] })
-    await expect(runScenario(
-      { steps: boot },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow('session.jsonl: session fixture is empty')
+    await expect(runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toThrow(
+      'session.jsonl: session fixture is empty',
+    )
   })
 
   it('rejects a persisted filename/header generation mismatch', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({
       logs: [{ file: 'b/mismatch/session.v1.jsonl', lines: [{ type: 'session', version: 0 }] }],
     })
-    await expect(runScenario(
-      { steps: boot },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow('filename declares Session format v1, header declares v0')
+    await expect(runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile })).rejects.toThrow(
+      'filename declares Session format v1, header declares v0',
+    )
   })
 
   it('yields no logs when the sessions root vanished', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ deleteSessionsRoot: true })
-    const result = await runScenario(
-      { steps: boot },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )
+    const result = await runScenario({ steps: boot }, { agent: AGENT, mode: 'replay', fixtureFile })
     expect(result.sessionLogs).toHaveLength(0)
   })
 
@@ -1430,9 +1494,11 @@ describe('runScenario', () => {
     // absorb the bug as an error-means-denial), and the RUN fails: a callback
     // throw would only reach the agent as a JSON-RPC error response, letting
     // a tolerant agent carry on and the scenario pass — or record.
-    await expect(runScenario(
-      { steps: [...boot, { op: 'prompt', text: 'impossible click' }], permissionAnswers: [{ kind: 'allow_always' }] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow(/allow_always not among the offered options \[allow_once, reject_once\]/)
+    await expect(
+      runScenario(
+        { steps: [...boot, { op: 'prompt', text: 'impossible click' }], permissionAnswers: [{ kind: 'allow_always' }] },
+        { agent: AGENT, mode: 'replay', fixtureFile },
+      ),
+    ).rejects.toThrow(/allow_always not among the offered options \[allow_once, reject_once\]/)
   })
 })

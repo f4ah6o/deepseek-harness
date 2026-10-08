@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Terminal startup, title editing and xterm's screen lifetime. */
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type { ITheme } from '@xterm/xterm'
@@ -23,7 +23,9 @@ class FakeTerminal {
   readonly disposeInput = vi.fn()
   readonly parser = { registerOscHandler: vi.fn(() => ({ dispose: vi.fn() })) }
   renderFrame: (() => void) | undefined
-  readonly disposeRender = vi.fn(() => { this.renderFrame = undefined })
+  readonly disposeRender = vi.fn(() => {
+    this.renderFrame = undefined
+  })
   readonly onRender = vi.fn((listener: () => void) => {
     this.renderFrame = listener
     return { dispose: this.disposeRender }
@@ -32,14 +34,34 @@ class FakeTerminal {
   readonly reset = vi.fn()
   readonly focus = vi.fn()
   readonly dispose = vi.fn()
-  readonly write = vi.fn((_data: string, callback: () => void) => { callback() })
+  readonly write = vi.fn((_data: string, callback: () => void) => {
+    callback()
+  })
   readonly loadAddon = vi.fn()
-  constructor(options: object) { this.options = options; fake.terminals.push(this) }
-  open(node: HTMLElement) { node.appendChild(this.textarea!) }
-  onData(input: (data: string) => void) { this.input = input; return { dispose: this.disposeInput } }
+  constructor(options: object) {
+    this.options = options
+    fake.terminals.push(this)
+  }
+  open(node: HTMLElement) {
+    node.appendChild(this.textarea!)
+  }
+  onData(input: (data: string) => void) {
+    this.input = input
+    return { dispose: this.disposeInput }
+  }
 }
-vi.mock('@xterm/xterm', () => ({ Terminal: vi.fn(function (options: object) { return new FakeTerminal(options) }) }))
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { proposeDimensions() { return fake.dimensions } } }))
+vi.mock('@xterm/xterm', () => ({
+  Terminal: vi.fn(function (options: object) {
+    return new FakeTerminal(options)
+  }),
+}))
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    proposeDimensions() {
+      return fake.dimensions
+    }
+  },
+}))
 
 let measure: (() => void) | undefined
 const disconnect = vi.fn()
@@ -52,47 +74,105 @@ beforeEach(() => {
   boxHeight = 600
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => boxWidth)
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => boxHeight)
-  vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { measure = callback } observe() {} disconnect = disconnect })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        measure = callback
+      }
+      observe() {}
+      disconnect = disconnect
+    },
+  )
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); disconnect.mockClear(); measure = undefined })
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  disconnect.mockClear()
+  measure = undefined
+})
 
-const info = { id: 'terminal' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running' as const, exitCode: null }
+const info = {
+  id: 'terminal' as WebTerminalId,
+  title: 'bash',
+  shell: { path: '/bin/bash', name: 'bash', args: ['-i'] },
+  cwd: '/workspace',
+  cols: 80,
+  rows: 24,
+  state: 'running' as const,
+  exitCode: null,
+}
 const environment = { cwd: '/workspace', maxCols: 200, maxRows: 100, scrollback: 1000, maxInputBytes: 1000 }
 const idle: TerminalViewState = { phase: 'idle', writable: false, environment }
 const titleSurfaces = [
   {
-    name: 'docked tab', selector: '[data-dockkit-tab]',
-    wrap: (title: ReactNode) => <div role="tab" tabIndex={0} aria-selected data-dockkit-tab="tab"><span>{title}</span></div>,
+    name: 'docked tab',
+    selector: '[data-dockkit-tab]',
+    wrap: (title: ReactNode) => (
+      <div role="tab" tabIndex={0} aria-selected data-dockkit-tab="tab">
+        <span>{title}</span>
+      </div>
+    ),
   },
   {
-    name: 'floating grip', selector: '[data-dockkit-float-grip]',
-    wrap: (title: ReactNode) => <header data-dockkit-float-grip="pane"><div data-dockkit-float-title><span>{title}</span></div></header>,
+    name: 'floating grip',
+    selector: '[data-dockkit-float-grip]',
+    wrap: (title: ReactNode) => (
+      <header data-dockkit-float-grip="pane">
+        <div data-dockkit-float-title>
+          <span>{title}</span>
+        </div>
+      </header>
+    ),
   },
 ]
 function mount(initial: TerminalViewState | undefined = idle, dictionary = en) {
   let state: TerminalViewState | undefined = initial
   let visible = true
-  let theme: ThemeSnapshot = { preference: 'light', fontSize: 14, active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0 }
+  let theme: ThemeSnapshot = {
+    preference: 'light',
+    fontSize: 14,
+    active: { id: 'light', colorScheme: 'light', tokens: {} },
+    themes: [],
+    revision: 0,
+  }
   const detach = vi.fn()
   const model = {
-    mount: vi.fn(() => detach), refresh: vi.fn(async () => {}),
-    rename: vi.fn(async () => {}), connect: vi.fn(), write: vi.fn(), resize: vi.fn(), acknowledge: vi.fn(),
+    mount: vi.fn(() => detach),
+    refresh: vi.fn(async () => {}),
+    rename: vi.fn(async () => {}),
+    connect: vi.fn(),
+    write: vi.fn(),
+    resize: vi.fn(),
+    acknowledge: vi.fn(),
   }
   const openTab = vi.fn()
   const tab = () => ({ tab: { id: 'tab', title: 'Terminal', visible, actions: { openTab } } })
   // The test supplies the owner and model hooks consumed here; the remaining slot props are framework-owned.
   const props = {
     view: () => model,
-    useTerminal: (_key: string, select?: (value: TerminalViewState | undefined) => unknown) => select === undefined ? state : select(state),
+    useTerminal: (_key: string, select?: (value: TerminalViewState | undefined) => unknown) =>
+      select === undefined ? state : select(state),
     useTheme: (select: (value: ThemeSnapshot) => unknown) => select(theme),
-    useTabInfo: tab, t: makeTranslate(dictionary),
+    useTabInfo: tab,
+    t: makeTranslate(dictionary),
   } as unknown as TerminalBodyProps
   const view = render(<TerminalBody {...props} />)
   return {
-    view, props, model, detach, openTab,
-    changeTheme() { theme = { ...theme, revision: theme.revision + 1 }; view.rerender(<TerminalBody {...props} />) },
+    view,
+    props,
+    model,
+    detach,
+    openTab,
+    changeTheme() {
+      theme = { ...theme, revision: theme.revision + 1 }
+      view.rerender(<TerminalBody {...props} />)
+    },
     update(next: TerminalViewState | undefined, shown = visible) {
-      state = next; visible = shown; view.rerender(<TerminalBody {...props} />)
+      state = next
+      visible = shown
+      view.rerender(<TerminalBody {...props} />)
     },
   }
 }
@@ -134,7 +214,13 @@ it('shows only the terminal screen while connected and detaches on unmount', () 
 })
 
 it('keeps one emulator across rename and locale updates, applies snapshots and output once, and releases listeners', () => {
-  const snapshot: TerminalViewState = { ...idle, info, phase: 'connected', writable: true, render: { revision: 1, frame: { type: 'snapshot', sequence: 0, info, screen: 'restored' } } }
+  const snapshot: TerminalViewState = {
+    ...idle,
+    info,
+    phase: 'connected',
+    writable: true,
+    render: { revision: 1, frame: { type: 'snapshot', sequence: 0, info, screen: 'restored' } },
+  }
   const h = mount(snapshot)
   const terminal = fake.terminals[0]!
   expect(terminal.reset).toHaveBeenCalledOnce()
@@ -189,7 +275,10 @@ it('updates screen, cursor and selection colors without replacing the terminal o
   const h = mount({ ...idle, info, phase: 'connected', writable: true })
   const terminal = fake.terminals[0]!
   expect(terminal.options.theme).toMatchObject({
-    background: colors.backgroundColor, foreground: colors.color, cursor: colors.color, selectionForeground: colors.backgroundColor,
+    background: colors.backgroundColor,
+    foreground: colors.color,
+    cursor: colors.color,
+    selectionForeground: colors.backgroundColor,
   })
   const appliedTheme = terminal.options.theme
   h.changeTheme()
@@ -198,8 +287,13 @@ it('updates screen, cursor and selection colors without replacing the terminal o
   colors.color = 'rgb(231, 233, 238)'
   h.changeTheme()
   expect(terminal.options.theme).toEqual({
-    background: colors.backgroundColor, foreground: colors.color, cursor: colors.color, cursorAccent: colors.backgroundColor,
-    selectionBackground: colors.color, selectionForeground: colors.backgroundColor, selectionInactiveBackground: colors.color,
+    background: colors.backgroundColor,
+    foreground: colors.color,
+    cursor: colors.color,
+    cursorAccent: colors.backgroundColor,
+    selectionBackground: colors.color,
+    selectionForeground: colors.backgroundColor,
+    selectionInactiveBackground: colors.color,
   })
   expect(fake.terminals).toEqual([terminal])
   expect(terminal.reset).not.toHaveBeenCalled()
@@ -215,7 +309,9 @@ it('reads the current theme on xterm render and releases the cursor listener on 
   cursor.style.backgroundColor = 'black'
   cursor.style.color = 'cyan'
   const readStyle = window.getComputedStyle.bind(window)
-  vi.spyOn(window, 'getComputedStyle').mockImplementation(element => element === cursor ? readStyle(element) : colors as CSSStyleDeclaration)
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((element) =>
+    element === cursor ? readStyle(element) : (colors as CSSStyleDeclaration),
+  )
   const h = mount({ ...idle, info, phase: 'connected', writable: true })
   const terminal = fake.terminals[0]!
   const screen = terminal.textarea!.parentElement!
@@ -256,7 +352,8 @@ it('fits only visible writable terminals with measurable dimensions and clamps t
   boxWidth = 0
   h.update(state)
   measure?.()
-  boxWidth = 800; boxHeight = 0
+  boxWidth = 800
+  boxHeight = 0
   measure?.()
   h.update({ ...state, info: { ...info, cols: 81 } })
   expect(h.model.resize).not.toHaveBeenCalled()
@@ -267,7 +364,13 @@ it('fits only visible writable terminals with measurable dimensions and clamps t
   fake.dimensions = { cols: 40, rows: 20 }
   measure?.()
   h.update(state)
-  for (const dimensions of [{ cols: 1, rows: 20 }, { cols: 40, rows: 0 }]) { fake.dimensions = dimensions; measure?.() }
+  for (const dimensions of [
+    { cols: 1, rows: 20 },
+    { cols: 40, rows: 0 },
+  ]) {
+    fake.dimensions = dimensions
+    measure?.()
+  }
   expect(h.model.resize).not.toHaveBeenCalled()
 })
 
@@ -289,9 +392,11 @@ it.each(titleSurfaces)('shows saved and attached terminal names in the $name', (
 it.each(titleSurfaces)('renames from the $name pointer target, preserving dragging and isolating editor shortcuts', (surface) => {
   const h = mount({ ...idle, title: 'Saved terminal' })
   const outer = vi.fn()
-  const title = render(<div onPointerDown={outer} onClick={outer} onDoubleClick={outer} onKeyDown={outer}>
-    {surface.wrap(<TerminalTitle {...h.props} />)}
-  </div>)
+  const title = render(
+    <div onPointerDown={outer} onClick={outer} onDoubleClick={outer} onKeyDown={outer}>
+      {surface.wrap(<TerminalTitle {...h.props} />)}
+    </div>,
+  )
   fireEvent.pointerDown(title.getByText('Saved terminal'))
   expect(outer).toHaveBeenCalledOnce()
   outer.mockClear()
@@ -343,9 +448,7 @@ it.each(titleSurfaces)('handles Escape, unchanged names and IME composition whil
 it.each(titleSurfaces)('removes the native $name listener when its title unmounts', (surface) => {
   const h = mount({ ...idle, info })
   const outer = vi.fn()
-  const seat = (shown: boolean) => <div onDoubleClick={outer}>
-    {surface.wrap(shown && <TerminalTitle {...h.props} />)}
-  </div>
+  const seat = (shown: boolean) => <div onDoubleClick={outer}>{surface.wrap(shown && <TerminalTitle {...h.props} />)}</div>
   const title = render(seat(false))
   const chip = title.container.querySelector(surface.selector)!
   const add = vi.spyOn(chip, 'addEventListener')
@@ -364,7 +467,6 @@ it('starts a recovered screen with no local history when environment discovery i
   mount({ ...idle, info, environment: undefined })
   expect(fake.terminals[0]!.options).toHaveProperty('scrollback', 0)
 })
-
 
 it.each([en, zh])('translates known terminal failures while retaining unknown Host diagnostics', (dictionary) => {
   const h = mount(idle, dictionary)

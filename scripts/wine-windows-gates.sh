@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the blocking Windows gates (workspace build, production site) with real
+# Run the blocking Windows package build with real
 # win-x64 Node.js under Wine — the same script the master-only `windows` job
 # in ci-master.yml executes and the optional local gate `pnpm run check:windows-wine`
 # wraps. Owning rationale and fidelity limits:
@@ -211,7 +211,7 @@ if (( provision_failed != 0 )); then exit "$provision_failed"; fi
 node_win="$(cat "$scratch/node-win-path")"
 echo "wine-windows-gates: provisioned in $((SECONDS - start))s (wine $("$wine_bin" --version 2> /dev/null), node $(basename "$(dirname "$node_win")"))"
 
-# ---- resolve entrypoints, lay the vue link, smoke ------------------------
+# ---- resolve entrypoints and smoke ---------------------------------------
 # Node under Wine cannot attach stdio to pipes the caller owns (Socket open
 # EBADF at bootstrap), so every invocation routes stdio through a file.
 wine_node() {
@@ -224,47 +224,29 @@ wine_node() {
 
 cd "$scratch/tree"
 tsc_js='node_modules/typescript/bin/tsc'
-tsdown_js='node_modules/tsdown/dist/run.mjs'
-vitepress_js='node_modules/vitepress/bin/vitepress.js'
-[ -f "$vitepress_js" ] || vitepress_js='website/node_modules/vitepress/bin/vitepress.js'
-for entry in "$tsc_js" "$tsdown_js" "$vitepress_js"; do
+vp_js='node_modules/vite-plus/bin/vp'
+for entry in "$tsc_js" "$vp_js"; do
   [ -f "$entry" ] || { echo "wine-windows-gates: expected entrypoint missing after hoisted install: $entry" >&2; exit 1; }
 done
-# VitePress links vue into the site's node_modules at build time; Wine cannot
-# CREATE Windows symlinks (ENOTSUP) but follows pre-existing Unix ones.
-if [ -d node_modules/vue ] && [ ! -e website/node_modules/vue ]; then
-  mkdir -p website/node_modules
-  ln -s ../../node_modules/vue website/node_modules/vue
-fi
 
 wine_node "$scratch/logs/smoke.log" -p "'smoke: ' + process.platform + ' ' + process.arch + ' ' + process.version"
 cat "$scratch/logs/smoke.log"
 grep -q '^smoke: win32 x64' "$scratch/logs/smoke.log" || { echo 'wine-windows-gates: Windows Node smoke did not report win32 x64' >&2; exit 1; }
 
-# ---- the two blocking surfaces, concurrently ------------------------------
-# The build mirrors the root build:lib:host and build:lib:client scripts:
-# compile and bundle the Host face, bundle apps/desktop from the Host lib/
-# outputs, then compile and bundle the Client face.
-# Both statuses are captured so one failure cannot hide the other's result.
+# ---- the blocking package build ------------------------------------------
+# Mirror build:lib:host and build:lib:client with Vite+ Pack: compile each
+# face, pack it, and bundle Desktop between the Host and Client passes.
 build_gate() {
   wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false || return $?
-  wine_node "$scratch/logs/host-tsdown.log" "$tsdown_js" --env.DSH_BUILD_FACE host || return $?
-  (cd apps/desktop && wine_node "$scratch/logs/desktop-tsdown.log" "../../$tsdown_js") || return $?
+  wine_node "$scratch/logs/host-vp-pack.log" "$vp_js" pack --config-loader native --env.DSH_BUILD_FACE host || return $?
+  (cd apps/desktop && wine_node "$scratch/logs/desktop-vp-pack.log" "../../$vp_js" pack --config-loader native) || return $?
   wine_node "$scratch/logs/client-tsc.log" "$tsc_js" -b tsconfig.client.json --pretty false || return $?
-  wine_node "$scratch/logs/client-tsdown.log" "$tsdown_js" --env.DSH_BUILD_FACE client
-}
-site_gate() {
-  cd website
-  wine_node "$scratch/logs/site.log" "../$vitepress_js" build .
+  wine_node "$scratch/logs/client-vp-pack.log" "$vp_js" pack --config-loader native --env.DSH_BUILD_FACE client
 }
 
 start=$SECONDS
-build_gate & build_pid=$!
-site_gate & site_pid=$!
 build_status=0
-wait "$build_pid" || build_status=$?
-site_status=0
-wait "$site_pid" || site_status=$?
+build_gate || build_status=$?
 elapsed=$((SECONDS - start))
 
 report() {
@@ -277,12 +259,10 @@ report() {
     for log in "$@"; do tail -n 200 "$log" >&2 || true; done
   fi
 }
-report 'build (Host tsc/tsdown, desktop tsdown, Client tsc/tsdown)' "$build_status" \
+report 'build (Host/Client tsc and Vite+ Pack, Desktop bundle)' "$build_status" \
   "$scratch/logs/host-tsc.log" \
-  "$scratch/logs/host-tsdown.log" \
-  "$scratch/logs/desktop-tsdown.log" \
+  "$scratch/logs/host-vp-pack.log" \
+  "$scratch/logs/desktop-vp-pack.log" \
   "$scratch/logs/client-tsc.log" \
-  "$scratch/logs/client-tsdown.log"
-report 'production site (vitepress build)' "$site_status" "$scratch/logs/site.log"
-if (( build_status != 0 )); then exit "$build_status"; fi
-exit "$site_status"
+  "$scratch/logs/client-vp-pack.log"
+exit "$build_status"

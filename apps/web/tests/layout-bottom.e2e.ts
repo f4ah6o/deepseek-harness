@@ -1,7 +1,7 @@
 /** Bottom Slot geometry and lifetime in the shipped Web composition. */
 import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 
 async function geometry(page: Page) {
@@ -14,7 +14,9 @@ async function geometry(page: Page) {
       return { top: box.top, height: box.height, bottom: box.bottom }
     }
     return {
-      bottom: rect(bottom), main: rect(main), sidebar: rect(sidebar),
+      bottom: rect(bottom),
+      main: rect(main),
+      sidebar: rect(sidebar),
       rightbar: rect(document.querySelector('[data-rightbar-col]')!),
       overlay: rect(document.querySelector('[data-shell-overlay]')!),
       handles: [...document.querySelectorAll('[data-side]')].map(rect),
@@ -89,8 +91,15 @@ it('reserves bottom content height without remounting it on main-panel navigatio
       expect(await check(0)).toBeDefined()
       expect(console.pageErrors).toEqual([])
       expect(console.warnings).toEqual([])
-      await compareOrRefreshGolden(fileURLToPath(new URL('./expected/layout-bottom/geometry.expected.md', import.meta.url)),
-        expected.join('\n'), webSnapshotMode())
-    } finally { await browser.close() }
-  } finally { await scaffold.close() }
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL('./expected/layout-bottom/geometry.expected.md', import.meta.url)),
+        expected.join('\n'),
+        webSnapshotMode(),
+      )
+    } finally {
+      await browser.close()
+    }
+  } finally {
+    await scaffold.close()
+  }
 })

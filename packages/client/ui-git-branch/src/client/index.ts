@@ -31,13 +31,17 @@ export const inject = ['slots', 'locale', 'remote', 'remote.workspaceGit']
  */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'ui-git-branch: dictionaries')
-  const getStatus = (sessionId: SessionId, signal: AbortSignal) =>
-    ctx.remote.workspaceGit.status(sessionId, signal)
-  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
-    name: 'conversation.composer.dock',
-    id: 'git-branch',
-    order: -1,
-    locale: NS,
-    inject: sessionId => ({ sessionId, getStatus }),
-  }, GitBranchChip))
+  const getStatus = (sessionId: SessionId, signal: AbortSignal) => ctx.remote.workspaceGit.status(sessionId, signal)
+  ctx.slots.inject('conversation.composer.dock', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.composer.dock',
+        id: 'git-branch',
+        order: -1,
+        locale: NS,
+        inject: (sessionId) => ({ sessionId, getStatus }),
+      },
+      GitBranchChip,
+    ),
+  )
 }

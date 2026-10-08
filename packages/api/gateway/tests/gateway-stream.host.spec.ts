@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { queryObjects } from 'node:v8'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import WebSocket, { type RawData } from 'ws'
 import { Context, symbols } from '@deepseek-ai/cordis'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
@@ -37,10 +37,7 @@ import TypertGatewayService, {
   type TypertRemoteEventOutcome,
 } from '@deepseek-ai/dsh-api-gateway'
 import { z } from 'zod'
-import type {
-  RemoteEventClientId,
-  RemoteEventInvocationFrame,
-} from '../src/stream-protocol.ts'
+import type { RemoteEventClientId, RemoteEventInvocationFrame } from '../src/stream-protocol.ts'
 
 vi.mock('node:crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:crypto')>()
@@ -71,7 +68,14 @@ class FeedService extends TypertRemoteService {
       yield `${label}:ready`
       await new Promise<void>((resolve) => {
         if (signal.aborted) resolve()
-        else signal.addEventListener('abort', () => { resolve() }, { once: true })
+        else
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve()
+            },
+            { once: true },
+          )
       })
     } finally {
       this.returns += 1
@@ -168,10 +172,19 @@ class FeedService extends TypertRemoteService {
   @Remote({ mode: 'stream' })
   async *peek(signal: AbortSignal): RemoteStream<string, string> {
     const iterator = this.invocation().uplink<string>()[Symbol.asyncIterator]()
-    const pending = iterator.next().then(result => result, (error: unknown) => error)
+    const pending = iterator.next().then(
+      (result) => result,
+      (error: unknown) => error,
+    )
     yield 'ready'
     await abortOf(signal)
-    this.peeked.push(await pending, await iterator.next().then(result => result, (error: unknown) => error))
+    this.peeked.push(
+      await pending,
+      await iterator.next().then(
+        (result) => result,
+        (error: unknown) => error,
+      ),
+    )
   }
 
   /** Yields once, then blocks on the uplink until the Gateway closes it. */
@@ -242,7 +255,9 @@ class StartupProbe implements AppReady {
   private readonly listeners = new Set<() => void>()
   lastListener: (() => void) | undefined
 
-  get pending(): number { return this.listeners.size }
+  get pending(): number {
+    return this.listeners.size
+  }
 
   onReady(listener: () => void): () => void {
     this.lastListener = listener
@@ -251,7 +266,9 @@ class StartupProbe implements AppReady {
       return () => {}
     }
     this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
   commit(): void {
@@ -289,7 +306,9 @@ class RemoteEventSourceProbe {
           yield this.dispatches.shift() as TypertRemoteEventDispatch
         }
         if (signal.aborted) return
-        await new Promise<void>((resolve) => { this.wake = resolve })
+        await new Promise<void>((resolve) => {
+          this.wake = resolve
+        })
         this.wake = undefined
       }
     } finally {
@@ -335,7 +354,7 @@ function pendingInvocation(
 
 afterEach(async () => {
   randomUuid.mockClear()
-  await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(roots.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 describe('Typert Remote streams', () => {
@@ -356,7 +375,9 @@ describe('Typert Remote streams', () => {
     const secondClosed = once(second.socket, 'close')
     second.socket.close()
     await secondClosed
-    await vi.waitFor(() => { expect(ctx.typertGateway.hasLiveClient()).toBe(false) })
+    await vi.waitFor(() => {
+      expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+    })
     await unregister()
   })
 
@@ -408,14 +429,20 @@ describe('Typert Remote streams', () => {
     await ctx.fiber.dispose()
     expect(startup.pending).toBe(0)
     // A launcher commit can already hold a copy of the cancelled listener.
-    expect(() => { startup.lastListener?.() }).not.toThrow()
-    expect(() => { startup.commit() }).not.toThrow()
+    expect(() => {
+      startup.lastListener?.()
+    }).not.toThrow()
+    expect(() => {
+      startup.commit()
+    }).not.toThrow()
   })
 
   it('validates the WebSocket heartbeat timer range and the stream inbox bound', () => {
     expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144 })
-    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 }))
-      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })
+    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })).toEqual({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+    })
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }
@@ -447,16 +474,33 @@ describe('Typert Remote streams', () => {
 
   it('delivers uplink items through the in-process carrier and ends on half-close', async () => {
     const { ctx, service } = await setup(false)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'echo', args: { prefix: '> ' }, uplink: toAsync(['a', 'b']),
-    }))).resolves.toEqual(['> a', '> b'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'echo',
+          args: { prefix: '> ' },
+          uplink: toAsync(['a', 'b']),
+        }),
+      ),
+    ).resolves.toEqual(['> a', '> b'])
     expect(service.returns).toBe(1)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'echo', args: { prefix: 'x' },
-    }))).resolves.toEqual([])
-    await expect(ctx.typertGateway.invoke({
-      namespace: 'feed', method: 'echo', args: { prefix: 'x' },
-    })).rejects.toMatchObject({
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'echo',
+          args: { prefix: 'x' },
+        }),
+      ),
+    ).resolves.toEqual([])
+    await expect(
+      ctx.typertGateway.invoke({
+        namespace: 'feed',
+        method: 'echo',
+        args: { prefix: 'x' },
+      }),
+    ).rejects.toMatchObject({
       code: 'gateway/signature-invalid',
       message: 'typert gateway: feed/echo: stream Remote methods must be opened through the stream carrier',
     })
@@ -471,16 +515,28 @@ describe('Typert Remote streams', () => {
         return: returned,
       }),
     }
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'ignore', args: { prefix: 'i' }, uplink: unread,
-    }))).resolves.toEqual(['i:one', 'i:two'])
-    await vi.waitFor(() => { expect(returned).toHaveBeenCalledOnce() })
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'ignore',
+          args: { prefix: 'i' },
+          uplink: unread,
+        }),
+      ),
+    ).resolves.toEqual(['i:one', 'i:two'])
+    await vi.waitFor(() => {
+      expect(returned).toHaveBeenCalledOnce()
+    })
   })
 
   it('fails a stream whose uplink item fails its codec, even when the method swallows the failure', async () => {
     const { ctx, service } = await setup(false)
     const rejected = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'echo', args: { prefix: '' }, uplink: toAsync<unknown>(['ok', 1]),
+      namespace: 'feed',
+      method: 'echo',
+      args: { prefix: '' },
+      uplink: toAsync<unknown>(['ok', 1]),
     })
     const iterator = rejected[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: 'ok' })
@@ -493,32 +549,48 @@ describe('Typert Remote streams', () => {
     expect(remoteErrorOf(signal?.reason)?.code).toBe('gateway/input-invalid')
     expect(service.returns).toBe(1)
 
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'swallow', args: {}, uplink: toAsync<unknown>([1]),
-    }))).rejects.toMatchObject({ code: 'gateway/input-invalid' })
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'swallow',
+          args: {},
+          uplink: toAsync<unknown>([1]),
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'gateway/input-invalid' })
   })
 
   it('ends a pending uplink read on cancellation and reports later reads as cancelled', async () => {
     const { ctx, service } = await setup(false)
     const abort = new AbortController()
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'peek', args: {}, uplink: neverYielding(), signal: abort.signal,
+      namespace: 'feed',
+      method: 'peek',
+      args: {},
+      uplink: neverYielding(),
+      signal: abort.signal,
     })
     const iterator = source[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: 'ready' })
     const pending = iterator.next()
     abort.abort(new Error('fixture cancellation'))
     await expect(pending).rejects.toThrow('Remote invocation "feed/peek" was aborted')
-    await vi.waitFor(() => { expect(service.peeked).toHaveLength(2) })
-    expect(service.peeked.map(outcome => remoteErrorOf(outcome)?.code))
-      .toEqual(['gateway/cancelled', 'gateway/cancelled'])
+    await vi.waitFor(() => {
+      expect(service.peeked).toHaveLength(2)
+    })
+    expect(service.peeked.map((outcome) => remoteErrorOf(outcome)?.code)).toEqual(['gateway/cancelled', 'gateway/cancelled'])
   })
 
   it('drops unread uplink items once the method finishes', async () => {
     const { ctx, service } = await setup(false)
     const abort = new AbortController()
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'hold', args: {}, uplink: toAsync(['unread']), signal: abort.signal,
+      namespace: 'feed',
+      method: 'hold',
+      args: {},
+      uplink: toAsync(['unread']),
+      signal: abort.signal,
     })
     const iterator = source[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: 'held' })
@@ -534,9 +606,16 @@ describe('Typert Remote streams', () => {
 
   it('exposes the call as ctx.invocation, delivers codec-less uplink items as unknown, and hands the uplink out once', async () => {
     const { ctx, service } = await setup(false)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'context', args: { label: 'ctx' }, uplink: toAsync<unknown>([1, { nested: true }]),
-    }))).resolves.toEqual([
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'context',
+          args: { label: 'ctx' },
+          uplink: toAsync<unknown>([1, { nested: true }]),
+        }),
+      ),
+    ).resolves.toEqual([
       'feed/context:feed:{"label":"ctx"}:ctx',
       'raw:1',
       'raw:{"nested":true}',
@@ -544,21 +623,41 @@ describe('Typert Remote streams', () => {
     ])
     expect(service.peers.at(-1)?.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(service.invocationOutsideCall()).toBeUndefined()
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'context', args: { label: 'again' },
-    }))).resolves.toHaveLength(2)
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'context',
+          args: { label: 'again' },
+        }),
+      ),
+    ).resolves.toHaveLength(2)
     expect(service.peers.at(-1)).toBe(service.peers.at(-2))
     await expect(service.peers.at(-1)?.dispose()).resolves.toBeUndefined()
 
     // Items sent to a method that never takes its uplink wait in the carrier and are dropped when the downlink ends.
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'sync', args: { label: 'closed' }, uplink: toAsync(['unread']),
-    }))).resolves.toEqual(['closed:one', 'closed:two'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'sync',
+          args: { label: 'closed' },
+          uplink: toAsync(['unread']),
+        }),
+      ),
+    ).resolves.toEqual(['closed:one', 'closed:two'])
 
     // Without a codec an item still has to be a JSON-safe value.
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'context', args: { label: 'bad' }, uplink: toAsync<unknown>([1n]),
-    }))).rejects.toMatchObject({
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'context',
+          args: { label: 'bad' },
+          uplink: toAsync<unknown>([1n]),
+        }),
+      ),
+    ).rejects.toMatchObject({
       code: 'gateway/input-invalid',
       details: { endpoint: 'feed/context', field: 'uplink' },
     })
@@ -577,20 +676,29 @@ describe('Typert Remote streams', () => {
       }),
     }
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'hold', args: {}, uplink: stuck, signal: abort.signal,
+      namespace: 'feed',
+      method: 'hold',
+      args: {},
+      uplink: stuck,
+      signal: abort.signal,
     })
     const iterator = source[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: 'held' })
     const pending = iterator.next()
     abort.abort(new Error('fixture cancellation'))
     await expect(pending).rejects.toThrow('Remote invocation "feed/hold" was aborted')
-    await vi.waitFor(() => { expect(returned).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(returned).toHaveBeenCalledOnce()
+    })
   })
 
   it('closes the uplink before returning a method blocked on it', async () => {
     const { ctx } = await setup(false)
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'drain', args: {}, uplink: neverYielding(),
+      namespace: 'feed',
+      method: 'drain',
+      args: {},
+      uplink: neverYielding(),
     })
     const iterator = source[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: 'ready' })
@@ -599,14 +707,13 @@ describe('Typert Remote streams', () => {
 
   it('finishes every pending uplink read when the downlink returns', async () => {
     const { ctx, service } = await setup(false)
-    const reads = [
-      Promise.withResolvers<IteratorResult<string>>(),
-      Promise.withResolvers<IteratorResult<string>>(),
-    ]
+    const reads = [Promise.withResolvers<IteratorResult<string>>(), Promise.withResolvers<IteratorResult<string>>()]
     let index = 0
     const returned = vi.fn(async (): Promise<IteratorResult<string>> => ({ done: true, value: undefined }))
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'hold', args: {},
+      namespace: 'feed',
+      method: 'hold',
+      args: {},
       uplink: { [Symbol.asyncIterator]: () => ({ next: () => reads[index++]!.promise, return: returned }) },
     })
     const iterator = source[Symbol.asyncIterator]()
@@ -615,7 +722,13 @@ describe('Typert Remote streams', () => {
     try {
       await expect(iterator.next()).resolves.toEqual({ done: false, value: 'held' })
       const uplink = service.leftover!
-      pending.push(...reads.map(() => uplink.next().then((result) => { completed.push(result) })))
+      pending.push(
+        ...reads.map(() =>
+          uplink.next().then((result) => {
+            completed.push(result)
+          }),
+        ),
+      )
       await iterator.return?.()
       expect(completed).toEqual([
         { done: true, value: undefined },
@@ -636,12 +749,16 @@ describe('Typert Remote streams', () => {
     }
     const { ctx, service } = await setup(false)
     service.source = { [Symbol.iterator]: () => ({ next: () => new ReadResult() }) }
-    const source = await ctx.typertGateway.stream(direction === 'downlink'
-      ? { namespace: 'feed', method: 'items', args: {} }
-      : {
-        namespace: 'feed', method: 'echo', args: { prefix: '' },
-        uplink: { [Symbol.asyncIterator]: () => ({ next: async () => new ReadResult() }) },
-      })
+    const source = await ctx.typertGateway.stream(
+      direction === 'downlink'
+        ? { namespace: 'feed', method: 'items', args: {} }
+        : {
+            namespace: 'feed',
+            method: 'echo',
+            args: { prefix: '' },
+            uplink: { [Symbol.asyncIterator]: () => ({ next: async () => new ReadResult() }) },
+          },
+    )
     const iterator = source[Symbol.asyncIterator]()
     try {
       for (const count of [64, 256]) {
@@ -662,7 +779,10 @@ describe('Typert Remote streams', () => {
     const next = vi.fn((): IteratorResult<string> => ({ done: false, value: 'item' }))
     service.source = { [Symbol.iterator]: () => ({ next }) }
     const source = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'items', args: {}, signal: abort.signal,
+      namespace: 'feed',
+      method: 'items',
+      args: {},
+      signal: abort.signal,
     })
     const iterator = source[Symbol.asyncIterator]()
     try {
@@ -684,12 +804,17 @@ describe('Typert Remote streams', () => {
       throw failure
     }
     service.source = { [Symbol.iterator]: () => ({ next }) }
-    const source = await ctx.typertGateway.stream(direction === 'downlink'
-      ? { namespace: 'feed', method: 'items', args: {}, signal: abort.signal }
-      : {
-        namespace: 'feed', method: 'hold', args: {}, signal: abort.signal,
-        uplink: { [Symbol.asyncIterator]: () => ({ next }) },
-      })
+    const source = await ctx.typertGateway.stream(
+      direction === 'downlink'
+        ? { namespace: 'feed', method: 'items', args: {}, signal: abort.signal }
+        : {
+            namespace: 'feed',
+            method: 'hold',
+            args: {},
+            signal: abort.signal,
+            uplink: { [Symbol.asyncIterator]: () => ({ next }) },
+          },
+    )
     const iterator = source[Symbol.asyncIterator]()
     try {
       if (direction === 'uplink') {
@@ -703,24 +828,45 @@ describe('Typert Remote streams', () => {
 
   it('reports done on every read after the uplink ended', async () => {
     const { ctx } = await setup(false)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'rereads', args: {}, uplink: toAsync(['a', 'b']),
-    }))).resolves.toEqual(['a', 'b', 'done'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'rereads',
+          args: {},
+          uplink: toAsync(['a', 'b']),
+        }),
+      ),
+    ).resolves.toEqual(['a', 'b', 'done'])
   })
 
   it('accepts a top-level undefined uplink item where no codec applies and rejects it where one does', async () => {
     const { ctx } = await setup(false)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'context', args: { label: 'absent' }, uplink: toAsync<unknown>([undefined, 'x']),
-    }))).resolves.toEqual([
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'context',
+          args: { label: 'absent' },
+          uplink: toAsync<unknown>([undefined, 'x']),
+        }),
+      ),
+    ).resolves.toEqual([
       'feed/context:feed:{"label":"absent"}:absent',
       'raw:undefined',
       'raw:"x"',
       'typert gateway: feed/context: invocation.uplink() is available once per call',
     ])
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'echo', args: { prefix: '' }, uplink: toAsync<unknown>([undefined]),
-    }))).rejects.toMatchObject({ code: 'gateway/input-invalid', details: { endpoint: 'feed/echo', field: 'uplink' } })
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'echo',
+          args: { prefix: '' },
+          uplink: toAsync<unknown>([undefined]),
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'gateway/input-invalid', details: { endpoint: 'feed/echo', field: 'uplink' } })
   })
 
   it('releases the uplink when a unary method is opened through the stream carrier', async () => {
@@ -729,24 +875,43 @@ describe('Typert Remote streams', () => {
     const unread: AsyncIterable<string> = {
       [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<string>>(() => {}), return: returned }),
     }
-    await expect(ctx.typertGateway.stream({
-      namespace: 'feed', method: 'unary', args: { label: 'a' }, uplink: unread,
-    })).rejects.toMatchObject({ code: 'gateway/signature-invalid' })
-    await vi.waitFor(() => { expect(returned).toHaveBeenCalledOnce() })
+    await expect(
+      ctx.typertGateway.stream({
+        namespace: 'feed',
+        method: 'unary',
+        args: { label: 'a' },
+        uplink: unread,
+      }),
+    ).rejects.toMatchObject({ code: 'gateway/signature-invalid' })
+    await vi.waitFor(() => {
+      expect(returned).toHaveBeenCalledOnce()
+    })
   })
 
   it('lets a unary method read uplink items while it runs', async () => {
     const { ctx } = await setup(false)
-    await expect(ctx.typertGateway.invoke({
-      namespace: 'feed', method: 'unaryUplink', args: {}, uplink: toAsync(['a', 'b']),
-    })).resolves.toEqual(['a', 'b'])
+    await expect(
+      ctx.typertGateway.invoke({
+        namespace: 'feed',
+        method: 'unaryUplink',
+        args: {},
+        uplink: toAsync(['a', 'b']),
+      }),
+    ).resolves.toEqual(['a', 'b'])
   })
 
   it('derives SRC descriptors whose uplink arrives without a codec', async () => {
     const { ctx } = await setup(false)
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'srcEcho', args: { prefix: 's:' }, uplink: toAsync<unknown>(['a', 2]),
-    }))).resolves.toEqual(['s:a', 's:2'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'srcEcho',
+          args: { prefix: 's:' },
+          uplink: toAsync<unknown>(['a', 2]),
+        }),
+      ),
+    ).resolves.toEqual(['s:a', 's:2'])
   })
 
   it('echoes uplink frames over the WebSocket carrier and fails misused uplinks per stream', async () => {
@@ -756,14 +921,16 @@ describe('Typert Remote streams', () => {
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
 
     sendOpen(socket, 'echo', 'feed/echo', { prefix: '> ' })
     socket.send(JSON.stringify({ type: 'item', streamId: 'echo', value: 'a' }))
     socket.send(JSON.stringify({ type: 'item', streamId: 'echo', value: 'b' }))
     socket.send(JSON.stringify({ type: 'end', streamId: 'echo' }))
     await vi.waitFor(() => {
-      expect(frames.filter(frame => frame.streamId === 'echo')).toEqual([
+      expect(frames.filter((frame) => frame.streamId === 'echo')).toEqual([
         { type: 'item', streamId: 'echo', value: '> a' },
         { type: 'item', streamId: 'echo', value: '> b' },
         { type: 'end', streamId: 'echo' },
@@ -775,7 +942,7 @@ describe('Typert Remote streams', () => {
     sendOpen(socket, 'rejected', 'feed/echo', { prefix: '' })
     socket.send(JSON.stringify({ type: 'item', streamId: 'rejected', value: 1 }))
     await vi.waitFor(() => {
-      expect(frames.find(frame => frame.streamId === 'rejected')).toMatchObject({
+      expect(frames.find((frame) => frame.streamId === 'rejected')).toMatchObject({
         type: 'error',
         error: { code: 'gateway/input-invalid', details: { endpoint: 'feed/echo', field: 'uplink' } },
       })
@@ -789,11 +956,13 @@ describe('Typert Remote streams', () => {
     })
 
     sendOpen(socket, 'late', 'feed/hold', {})
-    await vi.waitFor(() => { expect(frames).toContainEqual({ type: 'item', streamId: 'late', value: 'held' }) })
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'late', value: 'held' })
+    })
     socket.send(JSON.stringify({ type: 'end', streamId: 'late' }))
     socket.send(JSON.stringify({ type: 'item', streamId: 'late', value: 'after end' }))
     await vi.waitFor(() => {
-      expect(frames.find(frame => frame.streamId === 'late' && frame.type === 'error')).toMatchObject({
+      expect(frames.find((frame) => frame.streamId === 'late' && frame.type === 'error')).toMatchObject({
         error: { code: 'gateway/protocol', details: { endpoint: 'feed/hold' } },
       })
     })
@@ -809,13 +978,17 @@ describe('Typert Remote streams', () => {
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
 
     sendOpen(socket, 'big', 'feed/hold', {})
-    await vi.waitFor(() => { expect(frames).toContainEqual({ type: 'item', streamId: 'big', value: 'held' }) })
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'big', value: 'held' })
+    })
     socket.send(JSON.stringify({ type: 'item', streamId: 'big', value: 'x'.repeat(128) }))
     await vi.waitFor(() => {
-      expect(frames.find(frame => frame.streamId === 'big' && frame.type === 'error')).toMatchObject({
+      expect(frames.find((frame) => frame.streamId === 'big' && frame.type === 'error')).toMatchObject({
         error: { code: 'gateway/uplink-overflow', details: { endpoint: 'feed/hold' } },
       })
     })
@@ -840,45 +1013,89 @@ describe('Typert Remote streams', () => {
     expect(service.signals).toEqual([abort.signal])
     expect(service.returns).toBe(1)
 
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'sync', args: { label: 'b' },
-    }))).resolves.toEqual(['b:one', 'b:two'])
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'invalid', args: {},
-    }))).resolves.toEqual([42])
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'nonJson', args: {},
-    }))).resolves.toEqual([1n])
-    await expect(ctx.typertGateway.stream({
-      namespace: 'feed', method: 'missing', args: {},
-    })).rejects.toMatchObject({ code: 'gateway/result-invalid' })
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'sync',
+          args: { label: 'b' },
+        }),
+      ),
+    ).resolves.toEqual(['b:one', 'b:two'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'invalid',
+          args: {},
+        }),
+      ),
+    ).resolves.toEqual([42])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'nonJson',
+          args: {},
+        }),
+      ),
+    ).resolves.toEqual([1n])
+    await expect(
+      ctx.typertGateway.stream({
+        namespace: 'feed',
+        method: 'missing',
+        args: {},
+      }),
+    ).rejects.toMatchObject({ code: 'gateway/result-invalid' })
 
-    await expect(collect(await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'src', args: { label: 'c' },
-    }))).resolves.toEqual(['c:src'])
+    await expect(
+      collect(
+        await ctx.typertGateway.stream({
+          namespace: 'feed',
+          method: 'src',
+          args: { label: 'c' },
+        }),
+      ),
+    ).resolves.toEqual(['c:src'])
 
     const abortedBeforeOpen = new AbortController()
     abortedBeforeOpen.abort(new Error('cancelled before open'))
-    await expect(ctx.typertGateway.stream({
-      namespace: 'feed', method: 'abortBeforeOpen', args: {}, signal: abortedBeforeOpen.signal,
-    })).rejects.toThrow('Remote invocation "feed/abortBeforeOpen" was aborted')
+    await expect(
+      ctx.typertGateway.stream({
+        namespace: 'feed',
+        method: 'abortBeforeOpen',
+        args: {},
+        signal: abortedBeforeOpen.signal,
+      }),
+    ).rejects.toThrow('Remote invocation "feed/abortBeforeOpen" was aborted')
 
     const abortedBeforeIteration = new AbortController()
     abortedBeforeIteration.abort(new Error('cancelled before iteration'))
     const preCancelled = await ctx.typertGateway.stream({
-      namespace: 'feed', method: 'sync', args: { label: 'ignored' }, signal: abortedBeforeIteration.signal,
+      namespace: 'feed',
+      method: 'sync',
+      args: { label: 'ignored' },
+      signal: abortedBeforeIteration.signal,
     })
     await expect(collect(preCancelled)).rejects.toThrow('Remote invocation "feed/sync" was aborted')
   })
 
   it('keeps unary and stream invocation modes distinct', async () => {
     const { ctx } = await setup(false)
-    await expect(ctx.typertGateway.invoke({
-      namespace: 'feed', method: 'sync', args: { label: 'a' },
-    })).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
-    await expect(ctx.typertGateway.stream({
-      namespace: 'feed', method: 'unary', args: { label: 'a' },
-    })).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
+    await expect(
+      ctx.typertGateway.invoke({
+        namespace: 'feed',
+        method: 'sync',
+        args: { label: 'a' },
+      }),
+    ).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
+    await expect(
+      ctx.typertGateway.stream({
+        namespace: 'feed',
+        method: 'unary',
+        args: { label: 'a' },
+      }),
+    ).rejects.toMatchObject({ code: 'gateway/signature-invalid' } satisfies Partial<TypertGatewayError>)
   })
 
   it('uses the configured WebSocket heartbeat interval', { timeout: 1_000 }, async () => {
@@ -901,21 +1118,27 @@ describe('Typert Remote streams', () => {
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
 
     sendOpen(socket, 'a', 'feed/follow', { label: 'a' })
     sendOpen(socket, 'b', 'feed/follow', { label: 'b' })
     await vi.waitFor(() => {
-      expect(frames).toEqual(expect.arrayContaining([
-        { type: 'item', streamId: 'a', value: 'a:ready' },
-        { type: 'item', streamId: 'b', value: 'b:ready' },
-      ]))
+      expect(frames).toEqual(
+        expect.arrayContaining([
+          { type: 'item', streamId: 'a', value: 'a:ready' },
+          { type: 'item', streamId: 'b', value: 'b:ready' },
+        ]),
+      )
     })
-    expect(service.signals.map(signal => signal.aborted)).toEqual([false, false])
+    expect(service.signals.map((signal) => signal.aborted)).toEqual([false, false])
     expect(service.returns).toBe(0)
 
     socket.send(JSON.stringify({ type: 'cancel', streamId: 'a' }))
-    await vi.waitFor(() => { expect(service.returns).toBe(1) })
+    await vi.waitFor(() => {
+      expect(service.returns).toBe(1)
+    })
     expect(service.signals[0]?.aborted).toBe(true)
     expect(service.signals[1]?.aborted).toBe(false)
 
@@ -924,19 +1147,20 @@ describe('Typert Remote streams', () => {
     sendOpen(socket, 'non-json', 'feed/nonJson', {})
     sendOpen(socket, 'rejected', 'feed/reject', {})
     await vi.waitFor(() => {
-      expect(frames.filter(frame => frame.streamId === 'sync')).toEqual([
+      expect(frames.filter((frame) => frame.streamId === 'sync')).toEqual([
         { type: 'item', streamId: 'sync', value: 's:one' },
         { type: 'item', streamId: 'sync', value: 's:two' },
         { type: 'end', streamId: 'sync' },
       ])
-      expect(frames.filter(frame => frame.streamId === 'invalid')).toEqual([
+      expect(frames.filter((frame) => frame.streamId === 'invalid')).toEqual([
         { type: 'item', streamId: 'invalid', value: 42 },
         { type: 'end', streamId: 'invalid' },
       ])
-      expect(frames.find(frame => frame.streamId === 'non-json')).toMatchObject({
-        type: 'error', error: { code: 'gateway/internal' },
+      expect(frames.find((frame) => frame.streamId === 'non-json')).toMatchObject({
+        type: 'error',
+        error: { code: 'gateway/internal' },
       })
-      expect(frames.find(frame => frame.streamId === 'rejected')).toEqual({
+      expect(frames.find((frame) => frame.streamId === 'rejected')).toEqual({
         type: 'error',
         streamId: 'rejected',
         error: {
@@ -952,18 +1176,28 @@ describe('Typert Remote streams', () => {
     const closeEvent = await closed
     expect(closeEvent[0]).toBe(1011)
     expect(String(closeEvent[1])).toBe('Remote stream failure could not be delivered')
-    await vi.waitFor(() => { expect(service.returns).toBe(2) })
+    await vi.waitFor(() => {
+      expect(service.returns).toBe(2)
+    })
     expect(service.signals[1]?.aborted).toBe(true)
   })
 
   it('keeps uplink frames to a Gateway-owned stream out of the bounded inbox', async () => {
     const { ctx } = await setup(true, { streamInboxBytes: 64 })
-    const source = (signal: AbortSignal): AsyncIterable<{ event: string; args: readonly unknown[] }> => (async function *() {
-      await new Promise<void>((resolve) => {
-        if (signal.aborted) resolve()
-        else signal.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-    })()
+    const source = (signal: AbortSignal): AsyncIterable<{ event: string; args: readonly unknown[] }> =>
+      (async function* () {
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve()
+          else
+            signal.addEventListener(
+              'abort',
+              () => {
+                resolve()
+              },
+              { once: true },
+            )
+        })
+      })()
     ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
 
     // An in-process carrier's uplink is returned as soon as the Gateway-owned stream opens.
@@ -972,7 +1206,9 @@ describe('Typert Remote streams', () => {
       [Symbol.asyncIterator]: () => ({ next: () => new Promise<IteratorResult<unknown>>(() => {}), return: returned }),
     }
     const events = await ctx.typertGateway.wireStream.open('$events', { args: {} }, idle, undefined, new AbortController().signal)
-    await vi.waitFor(() => { expect(returned).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(returned).toHaveBeenCalledOnce()
+    })
     await events[Symbol.asyncIterator]().return?.()
 
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
@@ -980,16 +1216,22 @@ describe('Typert Remote streams', () => {
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
     sendOpen(socket, 'events', '$events', {})
-    await vi.waitFor(() => { expect(frames.filter(frame => frame.streamId === 'events')).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(frames.filter((frame) => frame.streamId === 'events')).toHaveLength(1)
+    })
     for (let index = 0; index < 4; index += 1) {
       socket.send(JSON.stringify({ type: 'item', streamId: 'events', value: 'x'.repeat(40) }))
     }
     // A Remote stream opened afterwards on the same socket shows the flood was processed and harmed nothing.
     sendOpen(socket, 'after', 'feed/sync', { label: 'after' })
-    await vi.waitFor(() => { expect(frames).toContainEqual({ type: 'end', streamId: 'after' }) })
-    expect(frames.filter(frame => frame.streamId === 'events').map(frame => frame.type)).toEqual(['item'])
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'end', streamId: 'after' })
+    })
+    expect(frames.filter((frame) => frame.streamId === 'events').map((frame) => frame.type)).toEqual(['item'])
     socket.close()
     await once(socket, 'close')
   })
@@ -1001,13 +1243,20 @@ describe('Typert Remote streams', () => {
     const publish = Promise.withResolvers<undefined>()
     const source = (signal: AbortSignal): AsyncIterable<{ event: string; args: readonly unknown[] }> => {
       sourceSignal = signal
-      return (async function *() {
+      return (async function* () {
         try {
           await publish.promise
           yield { event: 'fixture/changed', args: ['settings'] }
           await new Promise<void>((resolve) => {
             if (signal.aborted) resolve()
-            else signal.addEventListener('abort', () => { resolve() }, { once: true })
+            else
+              signal.addEventListener(
+                'abort',
+                () => {
+                  resolve()
+                },
+                { once: true },
+              )
           })
         } finally {
           sourceClosed()
@@ -1015,36 +1264,47 @@ describe('Typert Remote streams', () => {
       })()
     }
     const unregister = ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
-    expect(() => { ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST) })
-      .toThrow('forwarded Remote event source is already registered')
+    expect(() => {
+      ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
+    }).toThrow('forwarded Remote event source is already registered')
 
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
       headers: { cookie: browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
     sendOpen(socket, 'events', '$events', {})
 
     await vi.waitFor(() => {
-      const eventFrames = frames.filter(frame => frame.streamId === 'events')
+      const eventFrames = frames.filter((frame) => frame.streamId === 'events')
       expect(eventFrames).toHaveLength(1)
       expect(eventFrames[0]).toMatchObject({
-        type: 'item', streamId: 'events', value: { type: 'ready', host: REMOTE_HOST },
+        type: 'item',
+        streamId: 'events',
+        value: { type: 'ready', host: REMOTE_HOST },
       })
       expect(typeof Reflect.get(eventFrames[0]!.value as object, 'clientId')).toBe('string')
     })
     publish.resolve(undefined)
     await vi.waitFor(() => {
-      const eventFrames = frames.filter(frame => frame.streamId === 'events').slice(0, 2)
+      const eventFrames = frames.filter((frame) => frame.streamId === 'events').slice(0, 2)
       expect(eventFrames).toHaveLength(2)
       expect(eventFrames[0]).toMatchObject({
-        type: 'item', streamId: 'events', value: { type: 'ready', host: REMOTE_HOST },
+        type: 'item',
+        streamId: 'events',
+        value: { type: 'ready', host: REMOTE_HOST },
       })
       expect(typeof Reflect.get(eventFrames[0]!.value as object, 'clientId')).toBe('string')
       expect(eventFrames[1]).toEqual({
-        type: 'item', streamId: 'events', value: {
-          type: 'emit', event: 'fixture/changed', args: ['settings'],
+        type: 'item',
+        streamId: 'events',
+        value: {
+          type: 'emit',
+          event: 'fixture/changed',
+          args: ['settings'],
         },
       })
     })
@@ -1059,8 +1319,9 @@ describe('Typert Remote streams', () => {
 
     const unregisterReplacement = ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
     await unregister()
-    expect(() => { ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST) })
-      .toThrow('forwarded Remote event source is already registered')
+    expect(() => {
+      ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
+    }).toThrow('forwarded Remote event source is already registered')
     await unregisterReplacement()
     socket.close()
   })
@@ -1070,14 +1331,13 @@ describe('Typert Remote streams', () => {
     const publish = Promise.withResolvers<undefined>()
     const agent = ctx.extend()
     const pending = pendingInvocation(agent)
-    const source = (): AsyncIterable<TypertRemoteEventDispatch> => (async function* () {
-      await publish.promise
-      yield pending.dispatch
-    })()
+    const source = (): AsyncIterable<TypertRemoteEventDispatch> =>
+      (async function* () {
+        await publish.promise
+        yield pending.dispatch
+      })()
     const unregister = ctx.typertGateway.registerRemoteEvents(source, REMOTE_HOST)
-    const rejected = expect(pending.outcome).rejects.toThrow(
-      'forwarded Remote event source was removed',
-    )
+    const rejected = expect(pending.outcome).rejects.toThrow('forwarded Remote event source was removed')
 
     publish.resolve(undefined)
     await unregister()
@@ -1091,19 +1351,30 @@ describe('Typert Remote streams', () => {
     const { ctx } = await setup(true)
     const agent = ctx.extend()
     const pending = pendingInvocation(agent, undefined, 'ship', agentId('agent-removal'))
-    const rejected = expect(pending.outcome).rejects.toThrow(
-      'forwarded Remote event source was removed',
+    const rejected = expect(pending.outcome).rejects.toThrow('forwarded Remote event source was removed')
+    const unregister = ctx.typertGateway.registerRemoteEvents(
+      (signal) =>
+        (async function* () {
+          yield pending.dispatch
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) resolve()
+            else
+              signal.addEventListener(
+                'abort',
+                () => {
+                  resolve()
+                },
+                { once: true },
+              )
+          })
+          throw new Error('fixture source rejected during removal')
+        })(),
+      REMOTE_HOST,
     )
-    const unregister = ctx.typertGateway.registerRemoteEvents(signal => (async function* () {
-      yield pending.dispatch
-      await new Promise<void>((resolve) => {
-        if (signal.aborted) resolve()
-        else signal.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-      throw new Error('fixture source rejected during removal')
-    })(), REMOTE_HOST)
     const client = await openEventClient(ctx, 'events-removal')
-    await vi.waitFor(() => { expect(deliveredInvocation(client)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(client)).toBeDefined()
+    })
 
     await unregister()
     await rejected
@@ -1122,9 +1393,7 @@ describe('Typert Remote streams', () => {
 
     for (const event of [42, ''] as const) {
       const invalidName = pendingInvocation(ctx)
-      const rejected = expect(invalidName.outcome).rejects.toThrow(
-        'Remote event name must be a nonempty string',
-      )
+      const rejected = expect(invalidName.outcome).rejects.toThrow('Remote event name must be a nonempty string')
       source.push({
         ...invalidName.dispatch,
         event: event as unknown as string,
@@ -1134,16 +1403,12 @@ describe('Typert Remote streams', () => {
 
     let selected = ctx.extend()
     const nonJsonIdentity = pendingInvocation(selected, undefined, 'ship', 1n)
-    const nonJsonRejected = expect(nonJsonIdentity.outcome).rejects.toThrow(
-      'require a non-empty Agent identity',
-    )
+    const nonJsonRejected = expect(nonJsonIdentity.outcome).rejects.toThrow('require a non-empty Agent identity')
     source.push(nonJsonIdentity.dispatch)
     await nonJsonRejected
 
     const invalidRequest = pendingInvocation(selected, undefined, 'ship', agentId('agent-invalid-request'))
-    const invalidRequestRejected = expect(invalidRequest.outcome).rejects.toThrow(
-      'must carry its scoped Agent directly',
-    )
+    const invalidRequestRejected = expect(invalidRequest.outcome).rejects.toThrow('must carry its scoped Agent directly')
     source.push({
       ...invalidRequest.dispatch,
       request: {},
@@ -1187,7 +1452,9 @@ describe('Typert Remote streams', () => {
           yield frame as unknown as TypertRemoteEventDispatch
         })()
       }, REMOTE_HOST)
-      await vi.waitFor(() => { expect(sourceSignal?.aborted).toBe(true) })
+      await vi.waitFor(() => {
+        expect(sourceSignal?.aborted).toBe(true)
+      })
       const reason: unknown = sourceSignal?.reason
       if (!(reason instanceof Error)) throw new Error('Remote event source did not fail with an Error')
       expect(reason.message).toContain('arguments are not lossless JSON data')
@@ -1209,9 +1476,13 @@ describe('Typert Remote streams', () => {
     const second = pendingInvocation(agent, secondAbort.signal, 'second', agentId('agent-collision'))
 
     source.push(first.dispatch)
-    await vi.waitFor(() => { expect(randomUuid).toHaveBeenCalledTimes(1) })
+    await vi.waitFor(() => {
+      expect(randomUuid).toHaveBeenCalledTimes(1)
+    })
     source.push(second.dispatch)
-    await vi.waitFor(() => { expect(randomUuid).toHaveBeenCalledTimes(3) })
+    await vi.waitFor(() => {
+      expect(randomUuid).toHaveBeenCalledTimes(3)
+    })
 
     const firstReason = new Error('cancel first collision fixture')
     const secondReason = new Error('cancel second collision fixture')
@@ -1272,7 +1543,8 @@ describe('Typert Remote streams', () => {
     expect(secondFrame).not.toHaveProperty('deliveryId')
 
     await sendEventResult(second, secondFrame, {
-      kind: 'result', value: 'allowed',
+      kind: 'result',
+      value: 'allowed',
     })
     await expect(pending.outcome).resolves.toEqual({ kind: 'result', value: 'allowed' })
     await vi.waitFor(() => {
@@ -1284,7 +1556,8 @@ describe('Typert Remote streams', () => {
     })
 
     await sendEventResult(first, firstFrame, {
-      kind: 'result', value: 'rejected',
+      kind: 'result',
+      value: 'rejected',
     })
     expect(pending.resolve).toHaveBeenCalledTimes(1)
     expect(pending.reject).not.toHaveBeenCalled()
@@ -1301,7 +1574,9 @@ describe('Typert Remote streams', () => {
     const client = await openEventClient(ctx, 'events-rejected')
     const pending = pendingInvocation(agent, undefined, 'ship', agentId('agent-rejected'))
     source.push(pending.dispatch)
-    await vi.waitFor(() => { expect(deliveredInvocation(client)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(client)).toBeDefined()
+    })
     const frame = deliveredInvocation(client)!
     const rejected = expect(pending.outcome).rejects.toMatchObject({
       name: 'UserQuestionError',
@@ -1362,10 +1637,14 @@ describe('Typert Remote streams', () => {
     const pending = pendingInvocation(agent, undefined, 'before-connect', agentId('agent-late-client'))
 
     source.push(pending.dispatch)
-    await vi.waitFor(() => { expect(randomUuid).toHaveBeenCalledTimes(1) })
+    await vi.waitFor(() => {
+      expect(randomUuid).toHaveBeenCalledTimes(1)
+    })
 
     const client = await openEventClient(ctx, 'events-first-client')
-    await vi.waitFor(() => { expect(deliveredInvocation(client)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(client)).toBeDefined()
+    })
     const frame = deliveredInvocation(client)!
     expect(frame).toMatchObject({
       type: 'waterfall',
@@ -1389,19 +1668,24 @@ describe('Typert Remote streams', () => {
     const original = await openEventClient(ctx, 'events-original')
     const pending = pendingInvocation(agent)
     source.push(pending.dispatch)
-    await vi.waitFor(() => { expect(deliveredInvocation(original)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(original)).toBeDefined()
+    })
     const originalFrame = deliveredInvocation(original)!
     const closed = once(original.socket, 'close')
     original.socket.close()
     await closed
 
     const replacement = await openEventClient(ctx, 'events-replacement')
-    await vi.waitFor(() => { expect(deliveredInvocation(replacement)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(replacement)).toBeDefined()
+    })
     const replayed = deliveredInvocation(replacement)!
     expect(replayed.eventId).toBe(originalFrame.eventId)
     expect(replayed).not.toHaveProperty('deliveryId')
     await sendEventResult(replacement, replayed, {
-      kind: 'result', value: 'allowed',
+      kind: 'result',
+      value: 'allowed',
     })
     await expect(pending.outcome).resolves.toEqual({ kind: 'result', value: 'allowed' })
 
@@ -1422,7 +1706,9 @@ describe('Typert Remote streams', () => {
     const abort = new AbortController()
     const signalPending = pendingInvocation(signalAgent, abort.signal, 'signal', agentId('agent-signal'))
     source.push(signalPending.dispatch)
-    await vi.waitFor(() => { expect(deliveredInvocation(client)).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(deliveredInvocation(client)).toBeDefined()
+    })
     const signalFrame = deliveredInvocation(client)!
     expect(signalFrame).toMatchObject({
       type: 'waterfall',
@@ -1446,12 +1732,15 @@ describe('Typert Remote streams', () => {
     let contextFrame: RemoteEventInvocationFrame | undefined
     await vi.waitFor(() => {
       contextFrame = client.frames
-        .filter(frame => frame.type === 'item' && frame.streamId === client.streamId)
-        .map(frame => frame.value)
-        .find(value => typeof value === 'object'
-          && value !== null
-          && Reflect.get(value, 'event') === 'fixture/approval'
-          && Reflect.get(value, 'eventId') !== signalFrame.eventId) as RemoteEventInvocationFrame | undefined
+        .filter((frame) => frame.type === 'item' && frame.streamId === client.streamId)
+        .map((frame) => frame.value)
+        .find(
+          (value) =>
+            typeof value === 'object' &&
+            value !== null &&
+            Reflect.get(value, 'event') === 'fixture/approval' &&
+            Reflect.get(value, 'eventId') !== signalFrame.eventId,
+        ) as RemoteEventInvocationFrame | undefined
       expect(contextFrame).toBeDefined()
     })
     const contextOutcome = expect(contextPending.outcome).rejects.toThrow('Agent Context was released')
@@ -1476,39 +1765,38 @@ describe('Typert Remote streams', () => {
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+    })
 
     sendOpen(socket, 'missing', '$events', {})
     await vi.waitFor(() => {
-      expect(frames.find(frame => frame.streamId === 'missing')?.type).toBe('error')
+      expect(frames.find((frame) => frame.streamId === 'missing')?.type).toBe('error')
       expect(streamErrorMessage(frames, 'missing')).toContain('source is unavailable')
     })
 
     let sourceCalls = 0
     const unregister = ctx.typertGateway.registerRemoteEvents(() => {
       sourceCalls += 1
-      return (async function *(): AsyncIterable<never> {})()
+      return (async function* (): AsyncIterable<never> {})()
     }, REMOTE_HOST)
-    const invalidPayloads: readonly unknown[] = [
-      null,
-      [],
-      {},
-      { other: {} },
-      { args: null },
-      { args: [] },
-      { args: { extra: true } },
-    ]
+    const invalidPayloads: readonly unknown[] = [null, [], {}, { other: {} }, { args: null }, { args: [] }, { args: { extra: true } }]
     invalidPayloads.forEach((payload, index) => {
-      socket.send(JSON.stringify({
-        type: 'open', streamId: `invalid-${String(index)}`, endpoint: '$events', payload,
-      }))
+      socket.send(
+        JSON.stringify({
+          type: 'open',
+          streamId: `invalid-${String(index)}`,
+          endpoint: '$events',
+          payload,
+        }),
+      )
     })
     await vi.waitFor(() => {
-      expect(frames.filter(frame => String(frame.streamId).startsWith('invalid-'))).toHaveLength(invalidPayloads.length)
+      expect(frames.filter((frame) => String(frame.streamId).startsWith('invalid-'))).toHaveLength(invalidPayloads.length)
     })
     for (const [index] of invalidPayloads.entries()) {
       const streamId = `invalid-${String(index)}`
-      expect(frames.find(frame => frame.streamId === streamId)?.type).toBe('error')
+      expect(frames.find((frame) => frame.streamId === streamId)?.type).toBe('error')
       expect(streamErrorMessage(frames, streamId)).toContain('requires an empty args object')
     }
     expect(sourceCalls).toBe(1)
@@ -1519,10 +1807,7 @@ describe('Typert Remote streams', () => {
 
   it('applies Connection trusted-host policy before accepting the Gateway socket', async () => {
     const { ctx } = await setup(true)
-    const socket = new WebSocket(
-      `ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`,
-      { headers: { host: 'untrusted.example' } },
-    )
+    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, { headers: { host: 'untrusted.example' } })
     socket.on('error', () => {})
     const responseEvent: unknown[] = await once(socket, 'unexpected-response')
     const request = responseEvent[0]
@@ -1580,8 +1865,15 @@ async function acceptsSocket(ctx: Context): Promise<boolean> {
   const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
     headers: { cookie: browserCookie(ctx) },
   })
-  const closed = new Promise<void>((resolve) => { socket.once('close', () => { resolve() }) })
-  const opened = await once(socket, 'open').then(() => true, () => false)
+  const closed = new Promise<void>((resolve) => {
+    socket.once('close', () => {
+      resolve()
+    })
+  })
+  const opened = await once(socket, 'open').then(
+    () => true,
+    () => false,
+  )
   if (opened) socket.close()
   await closed
   return opened
@@ -1666,15 +1958,20 @@ async function openEventClient(ctx: Context, streamId: string): Promise<RemoteEv
   })
   await once(socket, 'open')
   const frames: Record<string, unknown>[] = []
-  socket.on('message', (data) => { frames.push(JSON.parse(rawText(data)) as Record<string, unknown>) })
+  socket.on('message', (data) => {
+    frames.push(JSON.parse(rawText(data)) as Record<string, unknown>)
+  })
   sendOpen(socket, streamId, '$events', {})
   let clientId: RemoteEventClientId | undefined
   await vi.waitFor(() => {
-    const ready = frames.find(frame => frame.type === 'item'
-      && frame.streamId === streamId
-      && typeof frame.value === 'object'
-      && frame.value !== null
-      && Reflect.get(frame.value, 'type') === 'ready')
+    const ready = frames.find(
+      (frame) =>
+        frame.type === 'item' &&
+        frame.streamId === streamId &&
+        typeof frame.value === 'object' &&
+        frame.value !== null &&
+        Reflect.get(frame.value, 'type') === 'ready',
+    )
     const candidate: unknown = ready === undefined ? undefined : Reflect.get(ready.value as object, 'clientId')
     expect(typeof candidate).toBe('string')
     if (typeof candidate === 'string') clientId = candidate as RemoteEventClientId
@@ -1700,14 +1997,14 @@ async function sendEventResult(
     | { readonly kind: 'next' }
     | { readonly kind: 'result'; readonly value?: unknown }
     | {
-      readonly kind: 'rejected'
-      readonly error: {
-        readonly name: string
-        readonly message: string
-        readonly code?: string
-        readonly details?: unknown
-      }
-    },
+        readonly kind: 'rejected'
+        readonly error: {
+          readonly name: string
+          readonly message: string
+          readonly code?: string
+          readonly details?: unknown
+        }
+      },
 ): Promise<void> {
   const rpcId = `remote-event-result-${client.streamId}`
   const response = await fetch(`${client.origin}/api/$events/result`, {
@@ -1723,7 +2020,7 @@ async function sendEventResult(
     }),
   })
   expect(response.status).toBe(200)
-  const body = await response.json() as { readonly result?: { readonly ok?: boolean; readonly error?: { message?: string } } }
+  const body = (await response.json()) as { readonly result?: { readonly ok?: boolean; readonly error?: { message?: string } } }
   if (body.result?.ok !== true) {
     throw new Error(body.result?.error?.message ?? 'Remote event result failed')
   }
@@ -1740,7 +2037,7 @@ function rawText(data: RawData): string {
 }
 
 function streamErrorMessage(frames: readonly Record<string, unknown>[], streamId: string): string | undefined {
-  const error = frames.find(frame => frame.streamId === streamId)?.error
+  const error = frames.find((frame) => frame.streamId === streamId)?.error
   if (typeof error !== 'object' || error === null) return undefined
   const message: unknown = Reflect.get(error, 'message')
   return typeof message === 'string' ? message : undefined
@@ -1752,7 +2049,7 @@ async function collect(source: AsyncIterable<unknown>): Promise<unknown[]> {
   return values
 }
 
-async function *toAsync<T>(values: readonly T[]): AsyncIterable<T> {
+async function* toAsync<T>(values: readonly T[]): AsyncIterable<T> {
   for (const value of values) yield value
 }
 
@@ -1763,6 +2060,13 @@ function neverYielding(): AsyncIterable<string> {
 function abortOf(signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
     if (signal.aborted) resolve()
-    else signal.addEventListener('abort', () => { resolve() }, { once: true })
+    else
+      signal.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
   })
 }

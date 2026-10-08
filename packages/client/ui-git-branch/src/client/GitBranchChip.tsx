@@ -37,19 +37,25 @@ export function GitBranchChip({ getStatus, sessionId, t }: GitBranchChipInjected
       pending?.abort()
       const controller = new AbortController()
       pending = controller
-      void getStatus(sessionId, controller.signal).then((result) => {
-        if (disposed || controller.signal.aborted || current !== generation) return
-        if (!result.ok) return
-        const next = result.value
-        setSnapshot(next)
-        timer = setTimeout(refresh, next.refreshMs)
-      }).catch((_error: unknown) => {
-        // Remote failures leave the last observed repository label in place.
-        // Focus and visibility changes retry; a later successful call restores polling.
-      })
+      void getStatus(sessionId, controller.signal)
+        .then((result) => {
+          if (disposed || controller.signal.aborted || current !== generation) return
+          if (!result.ok) return
+          const next = result.value
+          setSnapshot(next)
+          timer = setTimeout(refresh, next.refreshMs)
+        })
+        .catch((_error: unknown) => {
+          // Remote failures leave the last observed repository label in place.
+          // Focus and visibility changes retry; a later successful call restores polling.
+        })
     }
-    const onVisibility = (): void => { refresh() }
-    const onFocus = (): void => { refresh() }
+    const onVisibility = (): void => {
+      refresh()
+    }
+    const onFocus = (): void => {
+      refresh()
+    }
 
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onFocus)
@@ -66,12 +72,8 @@ export function GitBranchChip({ getStatus, sessionId, t }: GitBranchChipInjected
 
   const state = snapshot?.state
   if (state === undefined || state.kind === 'none') return null
-  const ref = state.kind === 'branch'
-    ? `${state.repository}:${state.branch}`
-    : `${state.repository}@${state.revision}`
-  const aria = state.kind === 'branch'
-    ? t('branch.aria', { ref })
-    : t('detached.aria', { ref })
+  const ref = state.kind === 'branch' ? `${state.repository}:${state.branch}` : `${state.repository}@${state.revision}`
+  const aria = state.kind === 'branch' ? t('branch.aria', { ref }) : t('detached.aria', { ref })
 
   return (
     <span className={css.anchor} data-composer-stat="git-branch" aria-label={aria} title={aria}>

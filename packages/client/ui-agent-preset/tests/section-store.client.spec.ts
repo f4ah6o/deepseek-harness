@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { AgentPresetSectionController } from '../src/client/section-store.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -7,17 +7,29 @@ import { en } from '../src/client/locales.ts'
 
 function fixture() {
   const form = createSnapshotStore<ConfigFormSnapshot<{ selectedDefault: string }>>({
-    status: 'ready', mode: 'host', writable: true, revision: 7, value: { selectedDefault: 'minimal' }, base: {}, user: {},
+    status: 'ready',
+    mode: 'host',
+    writable: true,
+    revision: 7,
+    value: { selectedDefault: 'minimal' },
+    base: {},
+    user: {},
   })
-  const remote = { agentPresets: {
-    list: vi.fn(async (): Promise<{ ok: true; value: { presets: AgentPresetRow[] } }> => ({
-      ok: true, value: { presets: [{ id: 'standard', isDefault: true }] },
-    })),
-    read: vi.fn(async (id: string) => ({ ok: true as const, value: { agentPreset: id, name: 'Standard', content: '- name: fs\n' } })),
-  }, settings: {
-    update: vi.fn(async (_ns: string, _patch: { selectedDefault: string }, _revision?: number) => ({ ok: true as const, value: {} })),
-  } }
-  const controller = new AgentPresetSectionController({ remote, configForms: { get: () => form },
+  const remote = {
+    agentPresets: {
+      list: vi.fn(async (): Promise<{ ok: true; value: { presets: AgentPresetRow[] } }> => ({
+        ok: true,
+        value: { presets: [{ id: 'standard', isDefault: true }] },
+      })),
+      read: vi.fn(async (id: string) => ({ ok: true as const, value: { agentPreset: id, name: 'Standard', content: '- name: fs\n' } })),
+    },
+    settings: {
+      update: vi.fn(async (_ns: string, _patch: { selectedDefault: string }, _revision?: number) => ({ ok: true as const, value: {} })),
+    },
+  }
+  const controller = new AgentPresetSectionController({
+    remote,
+    configForms: { get: () => form },
     locale: { bind: () => (key: keyof typeof en) => en[key] },
   } as never)
   return { remote, controller, form, state: () => controller.store.getSnapshot() }
@@ -91,8 +103,13 @@ describe('the preset roster', () => {
   it('prevents a second default write and reports blank-session synchronization failures', async () => {
     const { controller, remote, state } = fixture()
     let release!: () => void
-    const wait = new Promise<void>((resolve) => { release = resolve })
-    remote.settings.update.mockImplementationOnce(async () => { await wait; return { ok: true, value: {} } })
+    const wait = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    remote.settings.update.mockImplementationOnce(async () => {
+      await wait
+      return { ok: true, value: {} }
+    })
     const pending = controller.makeDefault('standard', async () => 'Session already started')
     await controller.makeDefault('standard')
     expect(remote.settings.update).toHaveBeenCalledOnce()
@@ -122,34 +139,47 @@ describe('Coding Tools default reconciliation', () => {
     ]
     f.remote.agentPresets.list.mockImplementation(async () => ({ ok: true, value: { presets: rows } }))
     f.remote.settings.update.mockImplementation(async (_ns, patch) => {
-      rows = rows.map(row => ({ ...row, isDefault: row.id === patch.selectedDefault }))
+      rows = rows.map((row) => ({ ...row, isDefault: row.id === patch.selectedDefault }))
       return { ok: true, value: {} }
     })
-    return { ...f, rows: () => rows, setRows: (next: AgentPresetRow[]) => { rows = next } }
+    return {
+      ...f,
+      rows: () => rows,
+      setRows: (next: AgentPresetRow[]) => {
+        rows = next
+      },
+    }
   }
 
   it.each(['ptc', 'minimal'])('saves Standard instead of built-in %s with the accepted revision', async (id) => {
     const f = setup(id)
     await f.controller.reconcileCodingTools(() => true)
     expect(f.remote.settings.update).toHaveBeenCalledExactlyOnceWith('agent-preset-registry', { selectedDefault: 'standard' }, 7)
-    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('standard')
+    expect(f.state().rows.find((row) => row.isDefault)?.id).toBe('standard')
     expect(f.state().error).toBeNull()
     await f.controller.reconcileCodingTools(() => true)
     expect(f.remote.settings.update).toHaveBeenCalledOnce()
   })
 
-  it.each([['standard', undefined], ['cordis', undefined], ['custom', 'Custom'], ['ptc', 'My PTC'], ['minimal', 'My Minimal']] as const)(
-    'preserves the allowed default %s (%s)', async (id, name) => {
-      const f = setup(id, name)
-      await f.controller.reconcileCodingTools(() => true)
-      expect(f.remote.settings.update).not.toHaveBeenCalled()
-      expect(f.rows().find(row => row.isDefault)?.id).toBe(id)
-    },
-  )
+  it.each([
+    ['standard', undefined],
+    ['cordis', undefined],
+    ['custom', 'Custom'],
+    ['ptc', 'My PTC'],
+    ['minimal', 'My Minimal'],
+  ] as const)('preserves the allowed default %s (%s)', async (id, name) => {
+    const f = setup(id, name)
+    await f.controller.reconcileCodingTools(() => true)
+    expect(f.remote.settings.update).not.toHaveBeenCalled()
+    expect(f.rows().find((row) => row.isDefault)?.id).toBe(id)
+  })
 
   it.each([
-    { status: 'loading' as const }, { status: 'unavailable' as const },
-    { mode: 'memory' as const }, { writable: false }, { revision: undefined },
+    { status: 'loading' as const },
+    { status: 'unavailable' as const },
+    { mode: 'memory' as const },
+    { writable: false },
+    { revision: undefined },
   ])('does not write without a writable accepted Host form: %j', async (patch) => {
     const f = setup()
     f.form.set({ ...f.form.getSnapshot(), ...patch })
@@ -159,11 +189,17 @@ describe('Coding Tools default reconciliation', () => {
 
   it.each([false, true])('waits for a pending default write and checks the latest toggle (re-enabled: %s)', async (reEnabled) => {
     const f = setup('standard')
-    f.setRows([{ id: 'standard', isDefault: true }, { id: 'minimal', isDefault: false }])
+    f.setRows([
+      { id: 'standard', isDefault: true },
+      { id: 'minimal', isDefault: false },
+    ])
     const reply = Promise.withResolvers<undefined>()
     f.remote.settings.update.mockImplementationOnce(async () => {
       await reply.promise
-      f.setRows([{ id: 'standard', isDefault: false }, { id: 'minimal', isDefault: true }])
+      f.setRows([
+        { id: 'standard', isDefault: false },
+        { id: 'minimal', isDefault: true },
+      ])
       return { ok: true, value: {} }
     })
     const pending = f.controller.makeDefault('minimal')
@@ -174,7 +210,7 @@ describe('Coding Tools default reconciliation', () => {
     reply.resolve(undefined)
     await Promise.all([pending, reconcile])
     expect(f.remote.settings.update).toHaveBeenCalledTimes(reEnabled ? 1 : 2)
-    expect(f.state().rows.find(row => row.isDefault)?.id).toBe(reEnabled ? 'minimal' : 'standard')
+    expect(f.state().rows.find((row) => row.isDefault)?.id).toBe(reEnabled ? 'minimal' : 'standard')
   })
 
   it('rechecks the toggle after a roster read', async () => {
@@ -195,7 +231,7 @@ describe('Coding Tools default reconciliation', () => {
     await f.controller.reconcileCodingTools(() => true)
     expect(f.remote.settings.update).not.toHaveBeenCalled()
     expect(f.state().error).toBe(en.standardUnavailable)
-    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('minimal')
+    expect(f.state().rows.find((row) => row.isDefault)?.id).toBe('minimal')
   })
 
   it('reports one refused reset without hiding the actual default or retrying itself', async () => {
@@ -204,6 +240,6 @@ describe('Coding Tools default reconciliation', () => {
     await f.controller.reconcileCodingTools(() => true)
     expect(f.remote.settings.update).toHaveBeenCalledOnce()
     expect(f.state()).toMatchObject({ saving: false, error: 'Revision changed' })
-    expect(f.state().rows.find(row => row.isDefault)?.id).toBe('minimal')
+    expect(f.state().rows.find((row) => row.isDefault)?.id).toBe('minimal')
   })
 })

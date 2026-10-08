@@ -12,7 +12,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
@@ -38,7 +38,11 @@ describe('two-process write lock (built lib)', () => {
     const holder = spawn(process.execPath, [HOLDER, root, SESSION], {
       stdio: ['ignore', 'pipe', 'inherit'],
     })
-    const exited = new Promise<void>((resolve) => { holder.once('exit', () => { resolve() }) })
+    const exited = new Promise<void>((resolve) => {
+      holder.once('exit', () => {
+        resolve()
+      })
+    })
     try {
       await once(holder.stdout, 'data') // 'holding'
 
@@ -51,7 +55,7 @@ describe('two-process write lock (built lib)', () => {
       await expect(mine.open(SessionId(SESSION), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
       // Reads are unaffected across processes.
       const reader = await mine.open(SessionId(SESSION), 'read')
-      expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
+      expect((await reader.read()).events.map((event) => event.seq)).toEqual([0, 1])
       await reader.close()
 
       // Crash the holder: no release runs, but the kernel drops the lock with
@@ -60,7 +64,7 @@ describe('two-process write lock (built lib)', () => {
       await exited
       const taken = await mine.open(SessionId(SESSION), 'write')
       await taken.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
-      expect((await taken.read()).events.map(event => event.seq)).toEqual([0, 1, 2])
+      expect((await taken.read()).events.map((event) => event.seq)).toEqual([0, 1, 2])
       await taken.close()
     } finally {
       if (holder.exitCode === null) holder.kill('SIGKILL')

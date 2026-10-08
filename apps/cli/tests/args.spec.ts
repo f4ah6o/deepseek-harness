@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { parseDshArgs } from '../src/args.ts'
 
 const parse = (argv: string[], manageDesktopProfile = false) => parseDshArgs(argv, '1.2.3', manageDesktopProfile)
 
 /** Capture the process exit code while muting Commander's output. */
 function exitCode(argv: string[], manageDesktopProfile = false): number {
-  const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+    throw new Error('exit')
+  })
   vi.spyOn(process.stdout, 'write').mockReturnValue(true)
   vi.spyOn(process.stderr, 'write').mockReturnValue(true)
   try {
@@ -18,70 +20,113 @@ function exitCode(argv: string[], manageDesktopProfile = false): number {
   }
 }
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseDshArgs', () => {
   it('routes profile boots and shorthand, handing the rest to the app', () => {
     expect(parse(['--profile', 'tui'])).toEqual({ mode: 'profile', profile: 'tui', patches: [], args: [] })
-    expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--patch', 'b.yml']))
-      .toEqual({ mode: 'profile', profile: 'tui', patches: ['a.yml', 'b.yml'], args: [] })
-    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web']))
-      .toEqual({ mode: 'profile', profile: 'rescue', fromDefaultProfile: 'web', patches: [], args: [] })
+    expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--patch', 'b.yml'])).toEqual({
+      mode: 'profile',
+      profile: 'tui',
+      patches: ['a.yml', 'b.yml'],
+      args: [],
+    })
+    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web'])).toEqual({
+      mode: 'profile',
+      profile: 'rescue',
+      fromDefaultProfile: 'web',
+      patches: [],
+      args: [],
+    })
     expect(parse(['web'])).toEqual({ mode: 'profile', profile: 'web', patches: [], args: [] })
-    expect(parse(['web', '--patch', 'web.yml']))
-      .toEqual({ mode: 'profile', profile: 'web', patches: ['web.yml'], args: [] })
+    expect(parse(['web', '--patch', 'web.yml'])).toEqual({ mode: 'profile', profile: 'web', patches: ['web.yml'], args: [] })
   })
 
   it('ends the launcher flags at the first token it does not own', () => {
     // App flags, including its -h, and positionals reach the app verbatim.
-    expect(parse(['--profile', 'tui', '--resume', 'abc']))
-      .toEqual({ mode: 'profile', profile: 'tui', patches: [], args: ['--resume', 'abc'] })
-    expect(parse(['--profile', 'web', '-h']))
-      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['-h'] })
-    expect(parse(['web', '--host', '127.0.0.1', '--port', '8080', '--no-open', '--future-web-flag']))
-      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['--host', '127.0.0.1', '--port', '8080', '--no-open', '--future-web-flag'] })
-    expect(parse(['--profile', 'headless', 'run', 'the', 'tests']))
-      .toEqual({ mode: 'profile', profile: 'headless', patches: [], args: ['run', 'the', 'tests'] })
+    expect(parse(['--profile', 'tui', '--resume', 'abc'])).toEqual({
+      mode: 'profile',
+      profile: 'tui',
+      patches: [],
+      args: ['--resume', 'abc'],
+    })
+    expect(parse(['--profile', 'web', '-h'])).toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['-h'] })
+    expect(parse(['web', '--host', '127.0.0.1', '--port', '8080', '--no-open', '--future-web-flag'])).toEqual({
+      mode: 'profile',
+      profile: 'web',
+      patches: [],
+      args: ['--host', '127.0.0.1', '--port', '8080', '--no-open', '--future-web-flag'],
+    })
+    expect(parse(['--profile', 'headless', 'run', 'the', 'tests'])).toEqual({
+      mode: 'profile',
+      profile: 'headless',
+      patches: [],
+      args: ['run', 'the', 'tests'],
+    })
     // Launcher flags placed after that boundary belong to the app too.
-    expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--resume', 'b', '--patch', 'late.yml']))
-      .toEqual({ mode: 'profile', profile: 'tui', patches: ['a.yml'], args: ['--resume', 'b', '--patch', 'late.yml'] })
-    expect(parse(['--profile', 'rescue', '--resume', 'abc', '--from-default-profile', 'web']))
-      .toEqual({
-        mode: 'profile',
-        profile: 'rescue',
-        patches: [],
-        args: ['--resume', 'abc', '--from-default-profile', 'web'],
-      })
-    expect(parse(['web', '--from-default-profile', 'web']))
-      .toEqual({ mode: 'profile', profile: 'web', fromDefaultProfile: 'web', patches: [], args: [] })
+    expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--resume', 'b', '--patch', 'late.yml'])).toEqual({
+      mode: 'profile',
+      profile: 'tui',
+      patches: ['a.yml'],
+      args: ['--resume', 'b', '--patch', 'late.yml'],
+    })
+    expect(parse(['--profile', 'rescue', '--resume', 'abc', '--from-default-profile', 'web'])).toEqual({
+      mode: 'profile',
+      profile: 'rescue',
+      patches: [],
+      args: ['--resume', 'abc', '--from-default-profile', 'web'],
+    })
+    expect(parse(['web', '--from-default-profile', 'web'])).toEqual({
+      mode: 'profile',
+      profile: 'web',
+      fromDefaultProfile: 'web',
+      patches: [],
+      args: [],
+    })
   })
 
-  it.each(['web', 'headless', 'sdk', 'sdk-minimal', 'acp', 'tui', 'custom', 'run', 'help'])('expands %s without looking up profiles', (profile) => {
-    for (const args of [
-      [], ['task', 'words'], ['--help'], ['-h'], ['web'],
-      ['--patch', 'a.yml', '--patch', 'b.yml'],
-      ['--from-default-profile', 'web', '--help'],
-      ['--dump-config'], ['--dump-default-config'], ['--dump-config-schema'],
-      ['--patch', 'a.yml', '--resume', 'id', '--patch', 'late.yml'],
-      ['--', '--help'], ['--', '--', 'task'],
-      ['plugin'], ['--', 'plugin'],
-    ]) {
-      expect(parse([profile, ...args])).toEqual(parse(['--profile', profile, ...args]))
-    }
-  })
+  it.each(['web', 'headless', 'sdk', 'sdk-minimal', 'acp', 'tui', 'custom', 'run', 'help'])(
+    'expands %s without looking up profiles',
+    (profile) => {
+      for (const args of [
+        [],
+        ['task', 'words'],
+        ['--help'],
+        ['-h'],
+        ['web'],
+        ['--patch', 'a.yml', '--patch', 'b.yml'],
+        ['--from-default-profile', 'web', '--help'],
+        ['--dump-config'],
+        ['--dump-default-config'],
+        ['--dump-config-schema'],
+        ['--patch', 'a.yml', '--resume', 'id', '--patch', 'late.yml'],
+        ['--', '--help'],
+        ['--', '--', 'task'],
+        ['plugin'],
+        ['--', 'plugin'],
+      ]) {
+        expect(parse([profile, ...args])).toEqual(parse(['--profile', profile, ...args]))
+      }
+    },
+  )
 
   it('reserves leading plugin for management and forwards later command names', () => {
     expect(parse(['--profile', 'plugin'])).toMatchObject({ mode: 'profile', profile: 'plugin' })
-    expect(parse(['--profile', 'x', 'plugin', 'add', 'y']))
-      .toMatchObject({ mode: 'profile', profile: 'x', args: ['plugin', 'add', 'y'] })
+    expect(parse(['--profile', 'x', 'plugin', 'add', 'y'])).toMatchObject({ mode: 'profile', profile: 'x', args: ['plugin', 'add', 'y'] })
     expect(parse(['headless', 'web'])).toMatchObject({ profile: 'headless', args: ['web'] })
     expect(exitCode(['--patch', 'a.yml', 'tui'])).toBe(1)
     expect(exitCode(['--', 'tui'])).toBe(1)
   })
 
   it.each([
-    [''], ['desktop'], ['Desktop'], ['DESKTOP'],
-    ['custom', '--patch='], ['custom', '--from-default-profile='],
+    [''],
+    ['desktop'],
+    ['Desktop'],
+    ['DESKTOP'],
+    ['custom', '--patch='],
+    ['custom', '--from-default-profile='],
     ['custom', '--dump-config', '--dump-default-config'],
     ['custom', '--dump-default-config', '--patch', 'a.yml'],
     ['custom', '--dump-config', 'task'],
@@ -106,69 +151,91 @@ describe('parseDshArgs', () => {
   })
 
   it('forwards late profile options to the application', () => {
-    expect(parse(['web', 'task', '--profile', 'tui']))
-      .toMatchObject({ profile: 'web', args: ['task', '--profile', 'tui'] })
+    expect(parse(['web', 'task', '--profile', 'tui'])).toMatchObject({ profile: 'web', args: ['task', '--profile', 'tui'] })
   })
 
   it('routes the plugin pnpm forwarder', () => {
-    expect(parse(['plugin', '--profile', 'tui', 'add', 'turtle-ui']))
-      .toEqual({ mode: 'plugin', profile: 'tui', args: ['add', 'turtle-ui'] })
-    expect(parse(['plugin', '--profile', 'tui', 'remove', 'turtle-ui']))
-      .toEqual({ mode: 'plugin', profile: 'tui', args: ['remove', 'turtle-ui'] })
-    expect(parse(['plugin', '--profile', 'tui', 'why', '@deepseek-ai/cordis']))
-      .toEqual({ mode: 'plugin', profile: 'tui', args: ['why', '@deepseek-ai/cordis'] })
+    expect(parse(['plugin', '--profile', 'tui', 'add', 'turtle-ui'])).toEqual({
+      mode: 'plugin',
+      profile: 'tui',
+      args: ['add', 'turtle-ui'],
+    })
+    expect(parse(['plugin', '--profile', 'tui', 'remove', 'turtle-ui'])).toEqual({
+      mode: 'plugin',
+      profile: 'tui',
+      args: ['remove', 'turtle-ui'],
+    })
+    expect(parse(['plugin', '--profile', 'tui', 'why', '@deepseek-ai/cordis'])).toEqual({
+      mode: 'plugin',
+      profile: 'tui',
+      args: ['why', '@deepseek-ai/cordis'],
+    })
     // Unknown pnpm flags forward verbatim.
-    expect(parse(['plugin', '--profile', 'tui', 'add', '--save-dev', 'x']))
-      .toEqual({ mode: 'plugin', profile: 'tui', args: ['add', '--save-dev', 'x'] })
+    expect(parse(['plugin', '--profile', 'tui', 'add', '--save-dev', 'x'])).toEqual({
+      mode: 'plugin',
+      profile: 'tui',
+      args: ['add', '--save-dev', 'x'],
+    })
   })
 
   it.each(['desktop', 'Desktop', 'DESKTOP'])('permits installed Desktop plugin commands for %s', (profile) => {
-    expect(parse(['plugin', '--profile', profile, 'add', 'example-plugin'], true))
-      .toEqual({ mode: 'plugin', profile: 'desktop', args: ['add', 'example-plugin'] })
+    expect(parse(['plugin', '--profile', profile, 'add', 'example-plugin'], true)).toEqual({
+      mode: 'plugin',
+      profile: 'desktop',
+      args: ['add', 'example-plugin'],
+    })
     expect(exitCode(['plugin', '--profile', profile, 'add', 'example-plugin'])).toBe(1)
   })
 
   it.each([
-    ['desktop'], ['--profile', 'Desktop'],
-    ['desktop', '--dump-config'], ['DESKTOP', '--dump-default-config'],
+    ['desktop'],
+    ['--profile', 'Desktop'],
+    ['desktop', '--dump-config'],
+    ['DESKTOP', '--dump-default-config'],
     ['desktop', '--dump-config-schema'],
   ])('keeps Desktop boot and inspection reserved in its installed CLI: %j', (...argv: string[]) => {
     expect(exitCode(argv, true)).toBe(1)
   })
 
   it('routes profile and web config dumps', () => {
-    expect(parse(['--profile', 'web', '--dump-config']))
-      .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
-    expect(parse(['--profile', 'web', '--dump-default-config']))
-      .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: true, patches: [] })
-    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web', '--dump-config']))
-      .toEqual({
-        mode: 'dump-config',
-        profile: 'rescue',
-        fromDefaultProfile: 'web',
-        defaultOnly: false,
-        patches: [],
-      })
-    expect(parse(['--profile', 'tui', '--dump-config', '--patch', 'x.yml']))
-      .toEqual({ mode: 'dump-config', profile: 'tui', defaultOnly: false, patches: ['x.yml'] })
-    expect(parse(['web', '--dump-config']))
-      .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
-    expect(parse(['web', '--dump-default-config']))
-      .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: true, patches: [] })
+    expect(parse(['--profile', 'web', '--dump-config'])).toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
+    expect(parse(['--profile', 'web', '--dump-default-config'])).toEqual({
+      mode: 'dump-config',
+      profile: 'web',
+      defaultOnly: true,
+      patches: [],
+    })
+    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web', '--dump-config'])).toEqual({
+      mode: 'dump-config',
+      profile: 'rescue',
+      fromDefaultProfile: 'web',
+      defaultOnly: false,
+      patches: [],
+    })
+    expect(parse(['--profile', 'tui', '--dump-config', '--patch', 'x.yml'])).toEqual({
+      mode: 'dump-config',
+      profile: 'tui',
+      defaultOnly: false,
+      patches: ['x.yml'],
+    })
+    expect(parse(['web', '--dump-config'])).toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
+    expect(parse(['web', '--dump-default-config'])).toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: true, patches: [] })
   })
 
   it('routes schema dumps with ordered overlays and explicit initialization', () => {
-    expect(parse(['--profile', 'web', '--dump-config-schema']))
-      .toEqual({ mode: 'dump-config-schema', profile: 'web', patches: [] })
-    expect(parse(['rescue', '--from-default-profile', 'web', '--patch', 'first.yml', '--dump-config-schema', '--patch', 'second.json']))
-      .toEqual({
-        mode: 'dump-config-schema',
-        profile: 'rescue',
-        fromDefaultProfile: 'web',
-        patches: ['first.yml', 'second.json'],
-      })
-    expect(parse(['web', '--port', '8080', '--dump-config-schema']))
-      .toMatchObject({ mode: 'profile', args: ['--port', '8080', '--dump-config-schema'] })
+    expect(parse(['--profile', 'web', '--dump-config-schema'])).toEqual({ mode: 'dump-config-schema', profile: 'web', patches: [] })
+    expect(
+      parse(['rescue', '--from-default-profile', 'web', '--patch', 'first.yml', '--dump-config-schema', '--patch', 'second.json']),
+    ).toEqual({
+      mode: 'dump-config-schema',
+      profile: 'rescue',
+      fromDefaultProfile: 'web',
+      patches: ['first.yml', 'second.json'],
+    })
+    expect(parse(['web', '--port', '8080', '--dump-config-schema'])).toMatchObject({
+      mode: 'profile',
+      args: ['--port', '8080', '--dump-config-schema'],
+    })
   })
 
   it.each([

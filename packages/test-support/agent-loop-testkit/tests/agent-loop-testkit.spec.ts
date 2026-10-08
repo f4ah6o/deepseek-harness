@@ -1,14 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import {
-  createInboxStub,
-  mountAgentLoopTestDependencies,
-  mountAgentLoopTestHarness,
-  unsupportedInbox,
-} from '../src/index.ts'
+import { createInboxStub, mountAgentLoopTestDependencies, mountAgentLoopTestHarness, unsupportedInbox } from '../src/index.ts'
 
 function message(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -20,7 +15,9 @@ describe('dsh-agent-loop-testkit', () => {
 
     expect(inbox.nextTurn).toEqual([])
     expect(inbox.nextStep).toEqual([])
-    expect(() => { inbox.clear() }).toThrow('this test Agent does not support Inbox mutations')
+    expect(() => {
+      inbox.clear()
+    }).toThrow('this test Agent does not support Inbox mutations')
   })
 
   it('mounts a configurable prerequisite spine and the production AgentLoop', async () => {
@@ -82,21 +79,24 @@ describe('dsh-agent-loop-testkit', () => {
     agent.inbox.append('next-step', step)
 
     expect(inserted).toEqual([turn.id, step.id])
-    expect(() => { agent.inbox.append('next-step', turn) }).toThrow(`message "${turn.id}" is already pending`)
-    const invalid = Session.create(SessionId('invalid-persisted-inbox'), [{
-      type: 'agent/inbox/spliced',
-      seq: SessionSeq(0),
-      time: 1,
-      data: { target: 'next-turn', start: 99, inserted: [] },
-    }])
-    expect(() => ctx.sessionProjections.stateOf(invalid, 'inbox'))
-      .toThrow(/invalid persisted inbox splice/)
+    expect(() => {
+      agent.inbox.append('next-step', turn)
+    }).toThrow(`message "${turn.id}" is already pending`)
+    const invalid = Session.create(SessionId('invalid-persisted-inbox'), [
+      {
+        type: 'agent/inbox/spliced',
+        seq: SessionSeq(0),
+        time: 1,
+        data: { target: 'next-turn', start: 99, inserted: [] },
+      },
+    ])
+    expect(() => ctx.sessionProjections.stateOf(invalid, 'inbox')).toThrow(/invalid persisted inbox splice/)
     expect(harness.claim(agent, 'next-turn', 3)).toEqual([step, turn])
     expect(claimed).toEqual([
       { id: step.id, turn: 3 },
       { id: turn.id, turn: 3 },
     ])
-    expect(agent.session.snapshotEvents().map(event => event.type)).toEqual([
+    expect(agent.session.snapshotEvents().map((event) => event.type)).toEqual([
       'agent/inbox/spliced',
       'agent/inbox/spliced',
       'agent/inbox/spliced',

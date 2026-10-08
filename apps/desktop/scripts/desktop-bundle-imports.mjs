@@ -70,7 +70,7 @@ export function unpackagedImports(imports, policy) {
  * application cannot resolve. The failure names the importing module and every
  * offending specifier, and no output is written.
  * @param {BundleImportPolicy} policy - What this bundle may leave external.
- * @returns {import('tsdown').Rolldown.Plugin} The plugin.
+ * @returns {import('vite-plus/pack').Rolldown.Plugin} The plugin.
  */
 export function packagedImportsPlugin(policy) {
   const allowed = [...policy.packages].join(', ') + (policy.nodeBuiltins ? ', and Node builtins' : '')
@@ -81,9 +81,9 @@ export function packagedImportsPlugin(policy) {
       const offending = unpackagedImports(external, policy)
       if (offending.length === 0) return
       this.error(
-        `desktop bundle: ${relative(process.cwd(), info.id)} imports ${offending.join(', ')}, which the packaged application does not ship. `
-        + `This bundle may leave only ${allowed} as bare imports; anything else must be bundled, `
-        + 'which requires its lib/ output to exist before this bundle runs (pnpm run build:lib:host).',
+        `desktop bundle: ${relative(process.cwd(), info.id)} imports ${offending.join(', ')}, which the packaged application does not ship. ` +
+          `This bundle may leave only ${allowed} as bare imports; anything else must be bundled, ` +
+          'which requires its lib/ output to exist before this bundle runs (pnpm run build:lib:host).',
       )
     },
   }

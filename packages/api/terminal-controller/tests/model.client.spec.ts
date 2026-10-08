@@ -1,6 +1,6 @@
 /** Browser view ownership across slow RPCs, remounts and transport generations. */
 import { setImmediate } from 'node:timers/promises'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { RemoteStream, RemoteStreamCarrierError, type ClientRemote, type RemoteStreamOptions } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -11,18 +11,40 @@ import { TerminalView, type TerminalRemote } from '../src/client/model.ts'
 import type { TerminalEnvironment, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
 const sessionId = 'session' as SessionId
-const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'bash', path: '/bin/bash', args: ['-i'] }, title: 'bash', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
+const info: WebTerminalInfo = {
+  id: 'terminal' as WebTerminalId,
+  shell: { name: 'bash', path: '/bin/bash', args: ['-i'] },
+  title: 'bash',
+  cwd: '/workspace',
+  rows: 24,
+  cols: 80,
+  state: 'running',
+  exitCode: null,
+}
 const environment: TerminalEnvironment = {
-  cwd: info.cwd, maxInputBytes: 1000, maxCols: 200, maxRows: 100, scrollback: 100,
+  cwd: info.cwd,
+  maxInputBytes: 1000,
+  maxCols: 200,
+  maxRows: 100,
+  scrollback: 100,
 }
 const success = <T>(value: T): RemoteResult<T> => ({ ok: true, value })
 const cleanups: (() => void | Promise<void>)[] = []
-afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close() })
+afterEach(async () => {
+  for (const close of cleanups.splice(0).reverse()) await close()
+})
 
 function untilAborted(signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal?.aborted) resolve()
-    else signal?.addEventListener('abort', () => { resolve() }, { once: true })
+    else
+      signal?.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
   })
 }
 
@@ -32,22 +54,36 @@ function failure(message: string): RemoteResult<never> {
 
 function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void) {
   const remote: TerminalRemote = {
-    retain: vi.fn<TerminalRemote['retain']>(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
-      yield { type: 'retained' }
-      await new Promise<void>((resolve) => {
-        if (signal?.aborted) resolve()
-        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-    })),
+    retain: vi.fn<TerminalRemote['retain']>(
+      streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
+        yield { type: 'retained' }
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) resolve()
+          else
+            signal?.addEventListener(
+              'abort',
+              () => {
+                resolve()
+              },
+              { once: true },
+            )
+        })
+      }),
+    ),
     shells: vi.fn<TerminalRemote['shells']>(async () => success([info.shell])),
-    environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
+    environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)),
+    list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_sessionId, request) => success({ ...info, id: request.id })),
-    close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
-    write: vi.fn<TerminalRemote['write']>(async () => success(undefined)), resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
-    follow: vi.fn<TerminalRemote['follow']>(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, attachmentId, signal) {
-      yield { type: 'snapshot', sequence: 0, screen: 'ready', info: { ...info, id, controllerId: attachmentId } }
-      await untilAborted(signal)
-    })),
+    close: vi.fn<TerminalRemote['close']>(async () => success(undefined)),
+    rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
+    write: vi.fn<TerminalRemote['write']>(async () => success(undefined)),
+    resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
+    follow: vi.fn<TerminalRemote['follow']>(
+      streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, attachmentId, signal) {
+        yield { type: 'snapshot', sequence: 0, screen: 'ready', info: { ...info, id, controllerId: attachmentId } }
+        await untilAborted(signal)
+      }),
+    ),
   }
   const options: RemoteStreamOptions<unknown>[] = []
   const streams: { dispose(): Promise<void>; restart(): void }[] = []
@@ -61,7 +97,9 @@ function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void) {
       return stream
     },
   }
-  cleanups.push(async () => { await Promise.all(streams.map(stream => stream.dispose())) })
+  cleanups.push(async () => {
+    await Promise.all(streams.map((stream) => stream.dispose()))
+  })
   const model = new TerminalView(sessionId, remote, gateway, info.id)
   cleanups.push(() => model.dispose())
   return { model, remote, gateway, options, streams, generation }
@@ -98,21 +136,23 @@ it('does not let a late input failure downgrade a newer connection', async () =>
   await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
   model.write('current input')
   input.reject(new Error('old attachment was replaced'))
-  await expect.poll(() => vi.mocked(remote.write).mock.calls.some(call => call[3] === 'current input')).toBe(true)
+  await expect.poll(() => vi.mocked(remote.write).mock.calls.some((call) => call[3] === 'current input')).toBe(true)
   expect(model.state.getSnapshot()).toMatchObject({ phase: 'connected', writable: true, error: undefined })
 })
 
 it('waits for render acknowledgement before publishing subsequent output', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
-    const frames: TerminalFrame[] = [
-      { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } },
-      { type: 'output', sequence: 1, data: 'first' },
-      { type: 'output', sequence: 2, data: 'second' },
-    ]
-    for (const frame of frames) yield frame
-    await untilAborted(signal)
-  }))
+  vi.mocked(remote.follow).mockImplementation(
+    streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
+      const frames: TerminalFrame[] = [
+        { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } },
+        { type: 'output', sequence: 1, data: 'first' },
+        { type: 'output', sequence: 2, data: 'second' },
+      ]
+      for (const frame of frames) yield frame
+      await untilAborted(signal)
+    }),
+  )
   await mount(model)
   await expect.poll(() => model.state.getSnapshot().render?.frame.type).toBe('snapshot')
   acknowledge(model)
@@ -136,7 +176,7 @@ it('serializes input and resizes, clamps geometry, and suppresses unchanged size
   await expect.poll(() => vi.mocked(remote.resize).mock.calls.length).toBe(1)
   const attachmentId = vi.mocked(remote.follow).mock.calls[0]![2]
   const id = model.state.getSnapshot().info!.id
-  expect(vi.mocked(remote.write).mock.calls.map(call => call[3])).toEqual(['first', 'second'])
+  expect(vi.mocked(remote.write).mock.calls.map((call) => call[3])).toEqual(['first', 'second'])
   expect(remote.resize).toHaveBeenCalledWith(sessionId, id, attachmentId, 200, 100)
   model.resize(90, 24)
   await expect.poll(() => vi.mocked(remote.resize).mock.calls.length).toBe(2)
@@ -157,7 +197,7 @@ it('bounds queued input by UTF-8 bytes and releases the byte budget after settle
   await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
   model.write('界界')
   await expect.poll(() => vi.mocked(remote.write).mock.calls.length).toBe(2)
-  expect(vi.mocked(remote.write).mock.calls.map(call => call[3])).toEqual(['界界', '界界'])
+  expect(vi.mocked(remote.write).mock.calls.map((call) => call[3])).toEqual(['界界', '界界'])
 })
 
 it('drops queued commands from a detached attachment and ignores its late resize failure', async () => {
@@ -206,36 +246,65 @@ it('treats carrier loss as disconnected only for the active attachment', async (
 
 it.each([
   ['output before snapshot', [{ type: 'output', sequence: 1, data: 'orphan' }], 'missing its screen snapshot'],
-  ['sequence gap', [{ type: 'snapshot', sequence: 4, screen: '', info }, { type: 'output', sequence: 6, data: 'gap' }], 'sequence has a gap'],
-  ['repeated snapshot', [{ type: 'snapshot', sequence: 4, screen: '', info }, { type: 'snapshot', sequence: 4, screen: '', info }], 'Unexpected terminal screen snapshot'],
-] satisfies readonly (readonly [string, readonly TerminalFrame[], string])[])('refuses a malformed output stream: %s', async (_name, frames, message) => {
-  const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* () { yield* frames }))
-  await mount(model)
-  if (frames[0]?.type === 'snapshot') {
-    await expect.poll(() => model.state.getSnapshot().render).toBeDefined()
-    acknowledge(model)
-  }
-  await expect.poll(() => model.state.getSnapshot().error).toContain(message)
-  expect(model.state.getSnapshot().writable).toBe(false)
-})
+  [
+    'sequence gap',
+    [
+      { type: 'snapshot', sequence: 4, screen: '', info },
+      { type: 'output', sequence: 6, data: 'gap' },
+    ],
+    'sequence has a gap',
+  ],
+  [
+    'repeated snapshot',
+    [
+      { type: 'snapshot', sequence: 4, screen: '', info },
+      { type: 'snapshot', sequence: 4, screen: '', info },
+    ],
+    'Unexpected terminal screen snapshot',
+  ],
+] satisfies readonly (readonly [string, readonly TerminalFrame[], string])[])(
+  'refuses a malformed output stream: %s',
+  async (_name, frames, message) => {
+    const { model, remote } = fixture()
+    vi.mocked(remote.follow).mockImplementation(
+      streamMethod<TerminalRemote['follow']>(async function* () {
+        yield* frames
+      }),
+    )
+    await mount(model)
+    if (frames[0]?.type === 'snapshot') {
+      await expect.poll(() => model.state.getSnapshot().render).toBeDefined()
+      acknowledge(model)
+    }
+    await expect.poll(() => model.state.getSnapshot().error).toContain(message)
+    expect(model.state.getSnapshot().writable).toBe(false)
+  },
+)
 
 it('retains an exited screen and closes controls when its stream ends', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
-    yield { type: 'snapshot', sequence: 0, screen: 'last screen', info: { ...info, id, controllerId } }
-    yield { type: 'state', info: { ...info, id, controllerId, state: 'exited', exitCode: 3 } }
-  }))
+  vi.mocked(remote.follow).mockImplementation(
+    streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
+      yield { type: 'snapshot', sequence: 0, screen: 'last screen', info: { ...info, id, controllerId } }
+      yield { type: 'state', info: { ...info, id, controllerId, state: 'exited', exitCode: 3 } }
+    }),
+  )
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().phase).toBe('closed')
-  expect(model.state.getSnapshot()).toMatchObject({ writable: false, info: { state: 'exited', exitCode: 3 }, render: { frame: { screen: 'last screen' } } })
+  expect(model.state.getSnapshot()).toMatchObject({
+    writable: false,
+    info: { state: 'exited', exitCode: 3 },
+    render: { frame: { screen: 'last screen' } },
+  })
 })
 
 it('reports an attachment ending while the shell is still running and permits manual reconnect', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
-    yield { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } }
-  }))
+  vi.mocked(remote.follow).mockImplementationOnce(
+    streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId) {
+      yield { type: 'snapshot', sequence: 0, screen: '', info: { ...info, id, controllerId } }
+    }),
+  )
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().issue).toBe('attachmentEnded')
   model.connect()
@@ -244,11 +313,13 @@ it('reports an attachment ending while the shell is still running and permits ma
 
 it('publishes remote control transfer without replacing the retained screen', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
-    yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
-    yield { type: 'state', info: { ...info, id } }
-    await untilAborted(signal)
-  }))
+  vi.mocked(remote.follow).mockImplementation(
+    streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
+      yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
+      yield { type: 'state', info: { ...info, id } }
+      await untilAborted(signal)
+    }),
+  )
   await connected(model)
   await expect.poll(() => model.state.getSnapshot().writable).toBe(false)
   expect(model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'retained' })
@@ -275,11 +346,21 @@ function deliveryBarrier() {
           await release.promise
         }
       },
-      async return() { return iterator.return!() },
+      async return() {
+        return iterator.return!()
+      },
     })
   }
-  cleanups.push(() => { release.resolve(undefined) })
-  return { ready: ready.promise, release: () => { release.resolve(undefined) }, prepare }
+  cleanups.push(() => {
+    release.resolve(undefined)
+  })
+  return {
+    ready: ready.promise,
+    release: () => {
+      release.resolve(undefined)
+    },
+    prepare,
+  }
 }
 
 it('ignores an already delivered screen when its attachment is replaced before the model receives it', async () => {
@@ -299,10 +380,12 @@ it('ignores an already delivered screen when its attachment is replaced before t
 it('ignores an already settled stream error after a newer attachment has become writable', async () => {
   const barrier = deliveryBarrier()
   const { model, remote } = fixture(barrier.prepare)
-  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* () {
-    yield* []
-    throw new Error('retired attachment failed')
-  }))
+  vi.mocked(remote.follow).mockImplementationOnce(
+    streamMethod<TerminalRemote['follow']>(async function* () {
+      yield* []
+      throw new Error('retired attachment failed')
+    }),
+  )
   await mount(model)
   await barrier.ready
   model.connect()
@@ -335,49 +418,54 @@ it('does not wait for the DOM callback of a screen whose generation was already 
   expect(model.state.getSnapshot().writable).toBe(true)
 })
 
-it.each(['write', 'resize'] as const)('keeps a fresh attachment writable when a pending %s fails after automatic transport recovery', async (operation) => {
-  const { model, remote, generation } = fixture()
-  generation.set({ id: 1, host: { home: '/home/fixture' } })
-  const disconnected = Promise.withResolvers<undefined>()
-  vi.mocked(remote.follow).mockImplementationOnce(streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
-    yield { type: 'snapshot', sequence: 0, screen: 'before disconnect', info: { ...info, id, controllerId } }
-    await Promise.race([disconnected.promise, untilAborted(signal)])
-    if (signal?.aborted) return
-    throw new RemoteStreamCarrierError('connection lost')
-  }))
-  await connected(model)
-  const pending = Promise.withResolvers<RemoteResult<void>>()
-  if (operation === 'write') {
-    vi.mocked(remote.write).mockReturnValueOnce(pending.promise)
-    model.write('old input')
-  } else {
-    vi.mocked(remote.resize).mockReturnValueOnce(pending.promise)
-    model.resize(100, 30)
-  }
-  await expect.poll(() => vi.mocked(remote[operation]).mock.calls.length).toBe(1)
-  const oldAttachmentId = vi.mocked(remote.follow).mock.calls[0]![2]
-  generation.set(undefined)
-  disconnected.resolve(undefined)
-  await expect.poll(() => model.state.getSnapshot().phase).toBe('disconnected')
-  expect(model.state.getSnapshot().writable).toBe(false)
-  expect(remote.follow).toHaveBeenCalledOnce()
+it.each(['write', 'resize'] as const)(
+  'keeps a fresh attachment writable when a pending %s fails after automatic transport recovery',
+  async (operation) => {
+    const { model, remote, generation } = fixture()
+    generation.set({ id: 1, host: { home: '/home/fixture' } })
+    const disconnected = Promise.withResolvers<undefined>()
+    vi.mocked(remote.follow).mockImplementationOnce(
+      streamMethod<TerminalRemote['follow']>(async function* (_sessionId, id, controllerId, signal) {
+        yield { type: 'snapshot', sequence: 0, screen: 'before disconnect', info: { ...info, id, controllerId } }
+        await Promise.race([disconnected.promise, untilAborted(signal)])
+        if (signal?.aborted) return
+        throw new RemoteStreamCarrierError('connection lost')
+      }),
+    )
+    await connected(model)
+    const pending = Promise.withResolvers<RemoteResult<void>>()
+    if (operation === 'write') {
+      vi.mocked(remote.write).mockReturnValueOnce(pending.promise)
+      model.write('old input')
+    } else {
+      vi.mocked(remote.resize).mockReturnValueOnce(pending.promise)
+      model.resize(100, 30)
+    }
+    await expect.poll(() => vi.mocked(remote[operation]).mock.calls.length).toBe(1)
+    const oldAttachmentId = vi.mocked(remote.follow).mock.calls[0]![2]
+    generation.set(undefined)
+    disconnected.resolve(undefined)
+    await expect.poll(() => model.state.getSnapshot().phase).toBe('disconnected')
+    expect(model.state.getSnapshot().writable).toBe(false)
+    expect(remote.follow).toHaveBeenCalledOnce()
 
-  generation.set({ id: 2, host: { home: '/home/fixture' } })
-  await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
-  expect(remote.follow).toHaveBeenCalledTimes(2)
-  const attachmentId = vi.mocked(remote.follow).mock.calls[1]![2]
-  expect(attachmentId).not.toBe(oldAttachmentId)
-  expect(model.state.getSnapshot().info?.controllerId).toBe(attachmentId)
-  expect(model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'ready' })
+    generation.set({ id: 2, host: { home: '/home/fixture' } })
+    await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
+    expect(remote.follow).toHaveBeenCalledTimes(2)
+    const attachmentId = vi.mocked(remote.follow).mock.calls[1]![2]
+    expect(attachmentId).not.toBe(oldAttachmentId)
+    expect(model.state.getSnapshot().info?.controllerId).toBe(attachmentId)
+    expect(model.state.getSnapshot().render?.frame).toMatchObject({ type: 'snapshot', screen: 'ready' })
 
-  model.write('fresh input')
-  pending.reject(new Error('old attachment was replaced'))
-  await expect.poll(() => vi.mocked(remote.write).mock.calls.some(call => call[3] === 'fresh input')).toBe(true)
-  expect(model.state.getSnapshot()).toMatchObject({ phase: 'connected', writable: true, error: undefined })
-  expect(vi.mocked(remote.write).mock.calls.at(-1)?.[2]).toBe(attachmentId)
-  expect(remote.create).toHaveBeenCalledOnce()
-  expect(remote.close).not.toHaveBeenCalled()
-})
+    model.write('fresh input')
+    pending.reject(new Error('old attachment was replaced'))
+    await expect.poll(() => vi.mocked(remote.write).mock.calls.some((call) => call[3] === 'fresh input')).toBe(true)
+    expect(model.state.getSnapshot()).toMatchObject({ phase: 'connected', writable: true, error: undefined })
+    expect(vi.mocked(remote.write).mock.calls.at(-1)?.[2]).toBe(attachmentId)
+    expect(remote.create).toHaveBeenCalledOnce()
+    expect(remote.close).not.toHaveBeenCalled()
+  },
+)
 
 it('ignores controls before discovery and reconnects an existing process after remount', async () => {
   const { model, remote } = fixture()
@@ -512,57 +600,90 @@ it('does not publish a close result or reconnect after disposal', async () => {
   expect(remote.follow).toHaveBeenCalledOnce()
 })
 
-it.each(['write', 'resize'] as const)('keeps the output connection when %s loses control before its state frame arrives', async (operation) => {
-  const { model, remote } = fixture()
-  const transfer = Promise.withResolvers<undefined>()
-  const response = Promise.withResolvers<RemoteResult<void>>()
-  cleanups.push(() => { transfer.resolve(undefined); response.resolve(success(undefined)) })
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
-    yield { type: 'snapshot', sequence: 0, screen: 'retained screen', info: { ...info, id, controllerId } }
-    await transfer.promise
-    yield { type: 'state', info: { ...info, id } }
-    await untilAborted(signal)
-  }))
-  await connected(model)
-  vi.mocked(remote[operation]).mockReturnValueOnce(response.promise)
-  if (operation === 'write') model.write('before transfer')
-  else model.resize(100, 30)
-  model.write('queued before transfer')
-  await expect.poll(() => vi.mocked(remote[operation]).mock.calls.length).toBe(1)
-  response.resolve({ ok: false, error: new RemoteError('terminal/control-unavailable', 'Another window owns input', { reason: 'read-only' }) })
-  await expect.poll(() => model.state.getSnapshot().writable).toBe(false)
-  expect(model.state.getSnapshot()).toMatchObject({ phase: 'connected', error: undefined, issue: undefined, render: { frame: { screen: 'retained screen' } } })
-  transfer.resolve(undefined)
-  await expect.poll(() => model.state.getSnapshot().info?.controllerId).toBeUndefined()
-  expect(remote.follow).toHaveBeenCalledOnce()
-  expect(vi.mocked(remote.write).mock.calls.some(call => call[3] === 'queued before transfer')).toBe(false)
-})
+it.each(['write', 'resize'] as const)(
+  'keeps the output connection when %s loses control before its state frame arrives',
+  async (operation) => {
+    const { model, remote } = fixture()
+    const transfer = Promise.withResolvers<undefined>()
+    const response = Promise.withResolvers<RemoteResult<void>>()
+    cleanups.push(() => {
+      transfer.resolve(undefined)
+      response.resolve(success(undefined))
+    })
+    vi.mocked(remote.follow).mockImplementation(
+      streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+        yield { type: 'snapshot', sequence: 0, screen: 'retained screen', info: { ...info, id, controllerId } }
+        await transfer.promise
+        yield { type: 'state', info: { ...info, id } }
+        await untilAborted(signal)
+      }),
+    )
+    await connected(model)
+    vi.mocked(remote[operation]).mockReturnValueOnce(response.promise)
+    if (operation === 'write') model.write('before transfer')
+    else model.resize(100, 30)
+    model.write('queued before transfer')
+    await expect.poll(() => vi.mocked(remote[operation]).mock.calls.length).toBe(1)
+    response.resolve({
+      ok: false,
+      error: new RemoteError('terminal/control-unavailable', 'Another window owns input', { reason: 'read-only' }),
+    })
+    await expect.poll(() => model.state.getSnapshot().writable).toBe(false)
+    expect(model.state.getSnapshot()).toMatchObject({
+      phase: 'connected',
+      error: undefined,
+      issue: undefined,
+      render: { frame: { screen: 'retained screen' } },
+    })
+    transfer.resolve(undefined)
+    await expect.poll(() => model.state.getSnapshot().info?.controllerId).toBeUndefined()
+    expect(remote.follow).toHaveBeenCalledOnce()
+    expect(vi.mocked(remote.write).mock.calls.some((call) => call[3] === 'queued before transfer')).toBe(false)
+  },
+)
 
 it('keeps an exited screen when a pending input is refused after the exit state arrives', async () => {
   const { model, remote } = fixture()
   const exit = Promise.withResolvers<undefined>()
   const response = Promise.withResolvers<RemoteResult<void>>()
-  cleanups.push(() => { exit.resolve(undefined); response.resolve(success(undefined)) })
-  vi.mocked(remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
-    yield { type: 'snapshot', sequence: 0, screen: 'final screen', info: { ...info, id, controllerId } }
-    await exit.promise
-    yield { type: 'state', info: { ...info, id, state: 'exited', exitCode: 0 } }
-    await untilAborted(signal)
-  }))
+  cleanups.push(() => {
+    exit.resolve(undefined)
+    response.resolve(success(undefined))
+  })
+  vi.mocked(remote.follow).mockImplementation(
+    streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+      yield { type: 'snapshot', sequence: 0, screen: 'final screen', info: { ...info, id, controllerId } }
+      await exit.promise
+      yield { type: 'state', info: { ...info, id, state: 'exited', exitCode: 0 } }
+      await untilAborted(signal)
+    }),
+  )
   await connected(model)
   vi.mocked(remote.write).mockReturnValueOnce(response.promise)
   model.write('exit race')
   await expect.poll(() => vi.mocked(remote.write).mock.calls.length).toBe(1)
   exit.resolve(undefined)
   await expect.poll(() => model.state.getSnapshot().info?.state).toBe('exited')
-  response.resolve({ ok: false, error: new RemoteError('terminal/control-unavailable', 'Terminal is not running', { reason: 'not-running' }) })
+  response.resolve({
+    ok: false,
+    error: new RemoteError('terminal/control-unavailable', 'Terminal is not running', { reason: 'not-running' }),
+  })
   await setImmediate()
-  expect(model.state.getSnapshot()).toMatchObject({ phase: 'connected', writable: false, error: undefined, issue: undefined, render: { frame: { screen: 'final screen' } } })
+  expect(model.state.getSnapshot()).toMatchObject({
+    phase: 'connected',
+    writable: false,
+    error: undefined,
+    issue: undefined,
+    render: { frame: { screen: 'final screen' } },
+  })
 })
 
 it('exposes a localized quota error and clears it after a successful retry', async () => {
   const { model, remote } = fixture()
-  vi.mocked(remote.create).mockResolvedValueOnce({ ok: false, error: new RemoteError('terminal/limit-reached', 'Session terminal limit reached', { limit: 8 }) })
+  vi.mocked(remote.create).mockResolvedValueOnce({
+    ok: false,
+    error: new RemoteError('terminal/limit-reached', 'Session terminal limit reached', { limit: 8 }),
+  })
   await model.refresh()
   expect(model.state.getSnapshot()).toMatchObject({ phase: 'failed', issue: 'terminalLimit' })
   await connected(model)

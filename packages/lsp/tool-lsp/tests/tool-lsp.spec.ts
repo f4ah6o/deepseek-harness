@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
@@ -27,10 +27,7 @@ function stubProvider(
 }
 
 /** Mount the real tool stack over a real seam plus one stub provider. */
-async function mount(
-  provider?: LspProvider,
-  config: ToolLsp.Config = {},
-): Promise<{ ctx: Context }> {
+async function mount(provider?: LspProvider, config: ToolLsp.Config = {}): Promise<{ ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -53,13 +50,15 @@ function call(ctx: Context, args: unknown, cwd: string | null = workspaceRoot) {
     callId: `c-${++seq}` as never,
     name: 'lsp',
     arguments: args,
-    ...cwd !== null ? { agent: { session: { header: { cwd } } } as never } : {},
+    ...(cwd !== null ? { agent: { session: { header: { cwd } } } as never } : {}),
   })
 }
 
 const okLocations: LspQueryResult = {
   kind: 'locations',
-  locations: [{ uri: pathToFileURL(join(workspaceRoot, 'a.ts')).href, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }],
+  locations: [
+    { uri: pathToFileURL(join(workspaceRoot, 'a.ts')).href, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } },
+  ],
   resolvedWorkspaceUri: pathToFileURL(workspaceRoot).href,
 }
 
@@ -68,7 +67,7 @@ describe('tool-lsp registration', () => {
     const { ctx } = await mount(stubProvider(() => okLocations))
     expect(ctx.tools.get('lsp')).toBeDefined()
     const prompt = await ctx.systemPrompt.assemble()
-    const text = prompt.sections.map(s => s.text).join('\n')
+    const text = prompt.sections.map((s) => s.text).join('\n')
     expect(text).toContain(LSP_PROMPT_TEXT)
   })
 
@@ -78,7 +77,10 @@ describe('tool-lsp registration', () => {
   })
 
   it('honors a configured timeout override', async () => {
-    const { ctx } = await mount(stubProvider(() => okLocations), { timeoutMs: 5000 })
+    const { ctx } = await mount(
+      stubProvider(() => okLocations),
+      { timeoutMs: 5000 },
+    )
     expect(ctx.tools.get('lsp')?.timeoutMs).toBe(5000)
   })
 
@@ -93,12 +95,21 @@ describe('tool-lsp registration', () => {
   })
 
   it('rejects a non-positive config value at load', async () => {
-    await expect(mount(stubProvider(() => okLocations), { maxLocations: 0 })).rejects.toThrow(/maxLocations/)
+    await expect(
+      mount(
+        stubProvider(() => okLocations),
+        { maxLocations: 0 },
+      ),
+    ).rejects.toThrow(/maxLocations/)
   })
 
   it('rejects a timeout above Node timer range at load', async () => {
-    await expect(mount(stubProvider(() => okLocations), { timeoutMs: MAX_TIMER_DELAY_MS + 1 }))
-      .rejects.toThrow(/timeoutMs/)
+    await expect(
+      mount(
+        stubProvider(() => okLocations),
+        { timeoutMs: MAX_TIMER_DELAY_MS + 1 },
+      ),
+    ).rejects.toThrow(/timeoutMs/)
     expect(() => {
       ToolLsp.apply(new Context(), {
         maxLocations: 100,
@@ -133,14 +144,23 @@ describe('tool-lsp execution', () => {
   it('keeps all acquired locations in the canonical value when presentation is capped', async () => {
     const cappedWorkspaceRoot = resolve('/virtual/capped-workspace')
     const locations = [
-      { uri: pathToFileURL(join(cappedWorkspaceRoot, 'a.ts')).href, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } },
-      { uri: pathToFileURL(join(cappedWorkspaceRoot, 'b.ts')).href, range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } } },
+      {
+        uri: pathToFileURL(join(cappedWorkspaceRoot, 'a.ts')).href,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      },
+      {
+        uri: pathToFileURL(join(cappedWorkspaceRoot, 'b.ts')).href,
+        range: { start: { line: 1, character: 2 }, end: { line: 1, character: 3 } },
+      },
     ]
-    const { ctx } = await mount(stubProvider(() => ({
-      kind: 'locations',
-      locations,
-      resolvedWorkspaceUri: pathToFileURL(cappedWorkspaceRoot).href,
-    })), { maxLocations: 1 })
+    const { ctx } = await mount(
+      stubProvider(() => ({
+        kind: 'locations',
+        locations,
+        resolvedWorkspaceUri: pathToFileURL(cappedWorkspaceRoot).href,
+      })),
+      { maxLocations: 1 },
+    )
     const result = await call(ctx, { operation: 'findReferences', file_path: 'a.ts', line: 1, character: 1 }, cappedWorkspaceRoot)
     expect(result.content[0]).toEqual({
       type: 'text',
@@ -157,7 +177,12 @@ describe('tool-lsp execution', () => {
     // Relativizing against the alias would misclassify the location as external.
     const provider = stubProvider(() => ({
       kind: 'locations',
-      locations: [{ uri: pathToFileURL(join(resolvedWorkspaceRoot, 'a.ts')).href, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }],
+      locations: [
+        {
+          uri: pathToFileURL(join(resolvedWorkspaceRoot, 'a.ts')).href,
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        },
+      ],
       resolvedWorkspaceUri,
     }))
     const { ctx } = await mount(provider)

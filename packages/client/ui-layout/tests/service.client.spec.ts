@@ -1,5 +1,5 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { LayoutController } from '../src/client/service.ts'
 import type { MainPanelId, PanelActions } from '../src/client/service.ts'
 
@@ -75,11 +75,13 @@ describe('LayoutController', () => {
   it('rejects an absent main entry without changing selection or cancelling pending navigation', () => {
     const panels = fakePanels()
     const present = new Set(['panel-a'])
-    const service = new LayoutController(panels, id => present.has(id), createSnapshotStore({ activePanelId: null }))
+    const service = new LayoutController(panels, (id) => present.has(id), createSnapshotStore({ activePanelId: null }))
     service.selectPanel('panel-a' as MainPanelId)
     const navigation = service.beginNavigation()
     present.delete('panel-a')
-    expect(() => { service.selectPanel('panel-a' as MainPanelId) }).toThrow('main panel "panel-a" is not registered')
+    expect(() => {
+      service.selectPanel('panel-a' as MainPanelId)
+    }).toThrow('main panel "panel-a" is not registered')
     expect(panels.selectPanel).toHaveBeenCalledOnce()
     expect(navigation.aborted).toBe(false)
     service.selectPanel(null)

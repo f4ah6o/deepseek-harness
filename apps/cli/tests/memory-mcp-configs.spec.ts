@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
@@ -61,7 +61,7 @@ const examples: ExampleContract[] = [
 const liveContexts = new Set<Context>()
 
 afterEach(async () => {
-  await Promise.all([...liveContexts].map(async ctx => ctx.fiber.dispose()))
+  await Promise.all([...liveContexts].map(async (ctx) => ctx.fiber.dispose()))
   liveContexts.clear()
 })
 
@@ -74,9 +74,9 @@ function insertedRow(patches: PatchOptions[]): InsertedRow {
 
 async function waitForTool(ctx: Context, name: string): Promise<void> {
   const deadline = Date.now() + 10_000
-  while (!ctx.tools.schemas().some(schema => schema.name === name)) {
+  while (!ctx.tools.schemas().some((schema) => schema.name === name)) {
     if (Date.now() >= deadline) throw new Error(`timed out waiting for ${name}`)
-    await new Promise(resolveWait => setTimeout(resolveWait, 25))
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
   }
 }
 
@@ -95,38 +95,34 @@ describe('third-party memory MCP example overlays', () => {
     expect(source).not.toContain('DEEPSEEK_API_KEY')
   })
 
-  it.each(examples)('loads $file and discovers a keyless fixture tool', async (contract) => {
-    const patches = loadOverlayPatches(
-      'memory-mcp-config-test',
-      resolve(exampleDir, contract.file),
-    )
-    // The static config gate verifies the checked-in bare package specifier.
-    // The unit test maps it to the source module so a clean checkout needs no
-    // prebuilt `lib/` artifacts before proving the Loader/MCP behavior.
-    insertedRow(patches).name = 'cordis:memory-test-mcp-client'
-    const fixturePatch: PatchOptions = {
-      id: contract.id,
-      config: {
-        serverName: contract.serverName,
-        transport: 'stdio',
-        command: process.execPath,
-        args: [fixtureServer],
-        env: {},
-        cwd: root,
-        toolCallTimeoutMs: 5_000,
-      },
-    }
-    const ctx = await boot(
-      'memory-mcp-config-test',
-      baseConfig,
-      [...patches, fixturePatch],
-      (ctx) => {
+  it.each(examples)(
+    'loads $file and discovers a keyless fixture tool',
+    async (contract) => {
+      const patches = loadOverlayPatches('memory-mcp-config-test', resolve(exampleDir, contract.file))
+      // The static config gate verifies the checked-in bare package specifier.
+      // The unit test maps it to the source module so a clean checkout needs no
+      // prebuilt `lib/` artifacts before proving the Loader/MCP behavior.
+      insertedRow(patches).name = 'cordis:memory-test-mcp-client'
+      const fixturePatch: PatchOptions = {
+        id: contract.id,
+        config: {
+          serverName: contract.serverName,
+          transport: 'stdio',
+          command: process.execPath,
+          args: [fixtureServer],
+          env: {},
+          cwd: root,
+          toolCallTimeoutMs: 5_000,
+        },
+      }
+      const ctx = await boot('memory-mcp-config-test', baseConfig, [...patches, fixturePatch], (ctx) => {
         liveContexts.add(ctx)
         ctx.loader.builtins['memory-test-system-prompt'] = SystemPrompt
         ctx.loader.builtins['memory-test-tools'] = ToolRuntime
         ctx.loader.builtins['memory-test-mcp-client'] = McpClient
-      },
-    )
-    await waitForTool(ctx, `mcp__${contract.serverName}__greet`)
-  }, 15_000)
+      })
+      await waitForTool(ctx, `mcp__${contract.serverName}__greet`)
+    },
+    15_000,
+  )
 })

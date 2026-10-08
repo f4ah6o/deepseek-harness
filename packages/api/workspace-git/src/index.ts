@@ -47,10 +47,13 @@ export class WorkspaceGit extends TypertRemoteService {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'workspaceGit')
     this.config = WorkspaceGit.Config(config)
-    ctx.effect(() => async () => {
-      this.lifetime.abort(new Error('workspace Git service disposed'))
-      await Promise.allSettled(this.active)
-    }, 'workspaceGit: active requests')
+    ctx.effect(
+      () => async () => {
+        this.lifetime.abort(new Error('workspace Git service disposed'))
+        await Promise.allSettled(this.active)
+      },
+      'workspaceGit: active requests',
+    )
   }
 
   /**
@@ -65,12 +68,16 @@ export class WorkspaceGit extends TypertRemoteService {
   status(sessionId: SessionId, signal: AbortSignal): Promise<WorkspaceGitStatus> {
     const request = this.readStatus(sessionId, signal)
     this.active.add(request)
-    return request.finally(() => { this.active.delete(request) })
+    return request.finally(() => {
+      this.active.delete(request)
+    })
   }
 
   private async readStatus(sessionId: SessionId, signal: AbortSignal): Promise<WorkspaceGitStatus> {
     const deadline = new AbortController()
-    const timer = setTimeout(() => { deadline.abort(new Error('workspace Git metadata deadline exceeded')) }, this.config.deadlineMs)
+    const timer = setTimeout(() => {
+      deadline.abort(new Error('workspace Git metadata deadline exceeded'))
+    }, this.config.deadlineMs)
     const deadlineExpired = (): boolean => deadline.signal.aborted
     const requestSignal = AbortSignal.any([signal, deadline.signal, this.lifetime.signal])
     try {
@@ -99,9 +106,7 @@ export class WorkspaceGit extends TypertRemoteService {
   private async sessionDirectory(sessionId: SessionId, signal: AbortSignal): Promise<string | undefined> {
     signal.throwIfAborted()
     const live = this.ctx.sessions.get(sessionId)?.header
-    const stored = live === undefined
-      ? await this.ctx.get('sessionPersistence')?.stat(sessionId, { signal })
-      : undefined
+    const stored = live === undefined ? await this.ctx.get('sessionPersistence')?.stat(sessionId, { signal }) : undefined
     signal.throwIfAborted()
     const header = live ?? stored?.header
     if (header === undefined) return undefined
@@ -111,9 +116,11 @@ export class WorkspaceGit extends TypertRemoteService {
   private async git(cwd: string, args: readonly string[], signal: AbortSignal): Promise<string | undefined> {
     signal.throwIfAborted()
     try {
-      const indexedConfigEnv = Object.fromEntries(Object.keys(process.env)
-        .filter(name => /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/iu.test(name))
-        .map(name => [name, undefined]))
+      const indexedConfigEnv = Object.fromEntries(
+        Object.keys(process.env)
+          .filter((name) => /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/iu.test(name))
+          .map((name) => [name, undefined]),
+      )
       const child = this.ctx.subprocess.spawn({
         argv: ['git', '-C', cwd, ...args],
         cwd,
@@ -188,9 +195,11 @@ function githubPath(remote: string | undefined): string | undefined {
     path = match?.[2]
   }
   if (host !== 'github.com' || path === undefined) return undefined
-  const parts = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').split('/')
-  if (parts.length !== 2 || !/^[A-Za-z0-9-]+$/.test(parts[0] ?? '')
-    || !/^[A-Za-z0-9._-]+$/.test(parts[1] ?? '')) return undefined
+  const parts = path
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\.git$/i, '')
+    .split('/')
+  if (parts.length !== 2 || !/^[A-Za-z0-9-]+$/.test(parts[0] ?? '') || !/^[A-Za-z0-9._-]+$/.test(parts[1] ?? '')) return undefined
   return `${parts[0]}/${parts[1]}`
 }
 

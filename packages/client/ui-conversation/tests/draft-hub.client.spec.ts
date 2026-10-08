@@ -7,7 +7,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { $nodesOfType } from 'lexical'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { DraftSnapshot } from '../src/client/contract/draft-editor.ts'
 import type { InputTriggerController } from '../src/client/contract/input.ts'
 import { ReferenceChipNode } from '../src/client/input/editor/chip-node.tsx'
@@ -19,10 +19,17 @@ import { zh } from '../src/client/locales.ts'
 const mention = '@src/main.ts'
 const saved: DraftSnapshot = {
   text: `/saved ${mention}`,
-  references: [{
-    source: 'reference', ref: mention, label: 'main.ts', appearance: 'file', clipboardText: mention,
-    offset: '/saved '.length, length: mention.length,
-  }],
+  references: [
+    {
+      source: 'reference',
+      ref: mention,
+      label: 'main.ts',
+      appearance: 'file',
+      clipboardText: mention,
+      offset: '/saved '.length,
+      length: mention.length,
+    },
+  ],
 }
 
 async function storedSession(draft: unknown) {
@@ -36,7 +43,9 @@ async function storedSession(draft: unknown) {
   const raw = JSON.stringify({ draft, view: 'trajectory', viewRequest: null })
   localStorage.setItem(key, raw)
   const ctx = new Context()
-  const sessions = new TestSessions(async (operation) => { await operation() }, ctx)
+  const sessions = new TestSessions(async (operation) => {
+    await operation()
+  }, ctx)
   onTestFinished(async () => {
     await sessions.disposeScopes()
     await ctx.fiber.dispose()
@@ -44,7 +53,9 @@ async function storedSession(draft: unknown) {
   ctx.provide('sessions', sessions)
   await sessions.add({ id })
   const reference = sessions.retain(id)
-  onTestFinished(() => { reference.release() })
+  onTestFinished(() => {
+    reference.release()
+  })
   await reference.ready
   const binding = reference.binding
   const hub = new InputHub(ctx, makeTranslate(zh, {}))
@@ -57,7 +68,7 @@ async function fixture(draft: unknown) {
 }
 
 function textReferences(shell: SessionInputShell): string[] {
-  return shell.editor.getEditorState().read(() => $nodesOfType(TextRefNode).map(node => node.getTextContent()))
+  return shell.editor.getEditorState().read(() => $nodesOfType(TextRefNode).map((node) => node.getTextContent()))
 }
 
 function catalog(initial: readonly string[]) {
@@ -80,16 +91,26 @@ function catalog(initial: readonly string[]) {
   }
   return {
     source,
-    set: (names: readonly string[]) => { store.set(new Map([['/', names]])) },
-    get subscribers() { return listeners.size },
-    get subscriptions() { return subscriptions },
-    get releases() { return releases },
+    set: (names: readonly string[]) => {
+      store.set(new Map([['/', names]]))
+    },
+    get subscribers() {
+      return listeners.size
+    },
+    get subscriptions() {
+      return subscriptions
+    },
+    get releases() {
+      return releases
+    },
   }
 }
 
 function controller(lexicon: () => InputTriggerController['lexicon']): InputTriggerController {
   return {
-    get lexicon() { return lexicon() },
+    get lexicon() {
+      return lexicon()
+    },
     launcher: createSnapshotStore<string | null>(null),
     track: () => {},
     arbitrate: () => 'pass',
@@ -102,10 +123,13 @@ function controller(lexicon: () => InputTriggerController['lexicon']): InputTrig
 }
 
 class TriggerProvider extends Service {
-  constructor(ctx: Context, private readonly config: {
-    readonly controller: InputTriggerController
-    readonly initialize?: () => void
-  }) {
+  constructor(
+    ctx: Context,
+    private readonly config: {
+      readonly controller: InputTriggerController
+      readonly initialize?: () => void
+    },
+  ) {
     super(ctx, 'inputTriggers')
   }
 
@@ -127,10 +151,12 @@ it('leaves trigger subscription to lifecycle activation rather than construction
     commandAttachments: {
       serialize: () => Promise.resolve([]),
       release: () => {},
-      unsupportedNotice: token => token,
+      unsupportedNotice: (token) => token,
     },
   })
-  onTestFinished(() => { shell.dispose() })
+  onTestFinished(() => {
+    shell.dispose()
+  })
 
   expect(resolve).not.toHaveBeenCalled()
   shell.setDraft(saved)
@@ -145,7 +171,9 @@ it('reuses one shell during synchronous catalog retention and restores its initi
   const b = await storedSession(saved)
   const source = catalog(['saved'])
   const retained: SessionReference[] = []
-  onTestFinished(() => { for (const reference of retained) reference.release() })
+  onTestFinished(() => {
+    for (const reference of retained) reference.release()
+  })
   const reentered: SessionInputShell[] = []
   let warming = false
   let initialized = false
@@ -165,7 +193,9 @@ it('reuses one shell during synchronous catalog retention and restores its initi
       warming = true
       try {
         retained.push(b.sessions.retain(b.id))
-      } finally { warming = false }
+      } finally {
+        warming = false
+      }
     },
   })
   await provider.await()
@@ -214,9 +244,13 @@ it('imports reference chips on the first Hub shell and preserves them without an
 
 it('subscribes when a provider arrives and disconnects each withdrawn provider', async () => {
   const b = await fixture(saved)
-  expect(b.shell.actions.insertText('/current', {
-    start: 0, end: '/saved'.length, draftRev: b.shell.snapshot.draftRev,
-  })).toBe(true)
+  expect(
+    b.shell.actions.insertText('/current', {
+      start: 0,
+      end: '/saved'.length,
+      draftRev: b.shell.snapshot.draftRev,
+    }),
+  ).toBe(true)
   const current = b.shell.draftSnapshot
   expect(textReferences(b.shell)).toEqual([])
   const first = catalog([])
@@ -228,7 +262,9 @@ it('subscribes when a provider arrives and disconnects each withdrawn provider',
   })
   expect(b.shell.draftSnapshot).toBe(current)
   first.set(['current'])
-  await vi.waitFor(() => { expect(textReferences(b.shell)).toEqual(['/current']) })
+  await vi.waitFor(() => {
+    expect(textReferences(b.shell)).toEqual(['/current'])
+  })
   await firstProvider.dispose()
   await vi.waitFor(() => {
     expect(first.subscribers).toBe(0)
@@ -248,7 +284,9 @@ it('subscribes when a provider arrives and disconnects each withdrawn provider',
   expect(first.subscribers).toBe(0)
   expect(b.shell.draftSnapshot).toBe(current)
   second.set(['current'])
-  await vi.waitFor(() => { expect(textReferences(b.shell)).toEqual(['/current']) })
+  await vi.waitFor(() => {
+    expect(textReferences(b.shell)).toEqual(['/current'])
+  })
   await secondProvider.dispose()
   await vi.waitFor(() => {
     expect(second.subscribers).toBe(0)
@@ -267,7 +305,9 @@ it('reconnects a replacement lexicon source on an explicit subscription refresh'
   let current = first.source
   const provider = b.ctx.plugin(TriggerProvider, { controller: controller(() => current) })
   await provider.await()
-  await vi.waitFor(() => { expect(first.subscribers).toBe(1) })
+  await vi.waitFor(() => {
+    expect(first.subscribers).toBe(1)
+  })
   const draft = b.shell.draftSnapshot
   const subscriptions = first.subscriptions
   b.shell.refreshLexiconSubscription()
@@ -283,7 +323,9 @@ it('reconnects a replacement lexicon source on an explicit subscription refresh'
   })
   expect(first.releases).toBe(first.subscriptions)
   second.set(['saved'])
-  await vi.waitFor(() => { expect(textReferences(b.shell)).toEqual(['/saved']) })
+  await vi.waitFor(() => {
+    expect(textReferences(b.shell)).toEqual(['/saved'])
+  })
   expect(b.shell.draftSnapshot).toBe(draft)
   expect(draft.references).toEqual(saved.references)
 })
@@ -293,7 +335,9 @@ it('unsubscribes the lexicon and refuses the old binding after Session disposal'
   const source = catalog(['saved'])
   const provider = b.ctx.plugin(TriggerProvider, { controller: controller(() => source.source) })
   await provider.await()
-  await vi.waitFor(() => { expect(source.subscribers).toBe(1) })
+  await vi.waitFor(() => {
+    expect(source.subscribers).toBe(1)
+  })
   b.reference.release()
   await b.sessions.disposeScopes()
   expect(source.subscribers).toBe(0)

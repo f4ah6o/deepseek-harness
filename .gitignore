@@ -17,9 +17,8 @@ coverage/
 .coverage-times.json
 .doc-typecheck-*/
 .node-next-types-*/
-.oxlint-contract-*/
-.oxlintrc.contract-*.json
-oxlint-contract-*.ts
+.vp-lint-contract-*/
+vp-lint-contract-*.ts
 .humanize/
 tmp/
 .claude/commands/
@@ -46,3 +45,4 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+.vitest/

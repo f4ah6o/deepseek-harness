@@ -2,7 +2,7 @@
  * Reject Markdown prose paragraphs spanning multiple physical lines. The GFM
  * AST distinguishes paragraphs—including those in lists and blockquotes—from
  * multiline structural nodes. The checker never rewrites; symlinked instruction
- * files are deduped. VitePress frontmatter and custom-container delimiters are
+ * files are deduped. Frontmatter and directive delimiters are
  * masked before parsing. The owning convention is in `docs/AGENTS.md`.
  */
 
@@ -37,7 +37,7 @@ interface Violation {
   text: string
 }
 
-function maskVitePressStructure(source: string): string {
+function maskMarkdownStructure(source: string): string {
   const lines = source.split('\n')
   if (lines[0] === '---') {
     const closing = lines.indexOf('---', 1)
@@ -45,14 +45,14 @@ function maskVitePressStructure(source: string): string {
       for (let index = 0; index <= closing; index++) lines[index] = ''
     }
   }
-  return lines.map(line => line.trimStart().startsWith(':::') ? '' : line).join('\n')
+  return lines.map((line) => (line.trimStart().startsWith(':::') ? '' : line)).join('\n')
 }
 
 /** Find every hard-wrapped prose paragraph in one Markdown file via its AST. */
 function findViolations(absPath: string): Violation[] {
   const file = relative(root, absPath)
   const source = readFileSync(absPath, 'utf8')
-  const parsedSource = maskVitePressStructure(source)
+  const parsedSource = maskMarkdownStructure(source)
   const tree = parseMarkdown(parsedSource)
   const out: Violation[] = []
 
@@ -71,7 +71,7 @@ function findViolations(absPath: string): Violation[] {
 }
 
 const files = uniqueRepoFiles(root, PATTERNS, isArchivedAgentNotePath)
-const all = files.flatMap(file => findViolations(file.abs))
+const all = files.flatMap((file) => findViolations(file.abs))
 const checked = files.length
 
 if (all.length === 0) {

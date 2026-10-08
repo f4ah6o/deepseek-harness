@@ -8,7 +8,7 @@
  * the sequence's ends, plus the seed's timing: a surface starts empty, and the
  * default page arrives with the expansion that would otherwise show nothing.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { LayoutState, PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { dockPaneIds, findTabPane, getPane, getSplit } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { createSidebarRightStore } from '../src/client/stores.ts'
@@ -27,12 +27,14 @@ function harness() {
   const layout = (): LayoutState => surface().layout
   const entries = (): number => surface().history.entries.length
   const guide = (): TabId => {
-    const seeded = Object.values(layout().tabs).find(tab => tab.kind === 'guide')
+    const seeded = Object.values(layout().tabs).find((tab) => tab.kind === 'guide')
     if (seeded === undefined) throw new Error('expected the seeded guide')
     return seeded.id
   }
   // The surface starts empty; expanding seeds the default guide.
-  const expand = (): void => { instance.actions.setExpanded(SESSION, true) }
+  const expand = (): void => {
+    instance.actions.setExpanded(SESSION, true)
+  }
   return { instance, actions: instance.actions, surface, layout, entries, guide, expand }
 }
 
@@ -40,10 +42,16 @@ describe('createSidebarRightStore — the sequence', () => {
   it.each(['left', 'right'] as const)('splits one pane at its %s edge and records the tab move as one reversible intent', (zone) => {
     const { actions, layout, entries, guide, expand } = harness()
     expand()
-    actions.openContent(SESSION, {
-      kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a',
-    }, () => {})
-    const text = Object.values(layout().tabs).find(tab => tab.kind === 'text')
+    actions.openContent(
+      SESSION,
+      {
+        kind: 'text',
+        contentId: 'dsh-resource://file/session/s-test/a.txt',
+        title: 'a',
+      },
+      () => {},
+    )
+    const text = Object.values(layout().tabs).find((tab) => tab.kind === 'text')
     if (text === undefined) throw new Error('expected the text tab')
     const before = layout()
     const home = getPane(before, before.rootId).id
@@ -69,7 +77,7 @@ describe('createSidebarRightStore — the sequence', () => {
     expect(layout()).toEqual(dropped)
   })
 
-  it('splits on a sole tab\'s own edge drop, backfilling the vacated pane with the default page', () => {
+  it("splits on a sole tab's own edge drop, backfilling the vacated pane with the default page", () => {
     const { actions, layout, entries, guide, expand } = harness()
     expand()
     const dragged = guide()
@@ -197,13 +205,15 @@ describe('createSidebarRightStore — the sequence', () => {
   it('closes a tab once: a second close of a record already gone records nothing and throws nothing', () => {
     const { actions, layout, entries } = harness()
     actions.openContent(SESSION, { kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a' }, () => {})
-    const tab = Object.values(layout().tabs).find(record => record.title === 'a')
+    const tab = Object.values(layout().tabs).find((record) => record.title === 'a')
     if (tab === undefined) throw new Error('expected the opened tab')
     actions.closeTab(SESSION, tab.id)
     expect(layout().tabs[tab.id]).toBeUndefined()
     const recorded = entries()
     // A racing callback closing what the user already closed.
-    expect(() => { actions.closeTab(SESSION, tab.id) }).not.toThrow()
+    expect(() => {
+      actions.closeTab(SESSION, tab.id)
+    }).not.toThrow()
     expect(entries()).toBe(recorded)
   })
 
@@ -223,7 +233,7 @@ describe('createSidebarRightStore — the sequence', () => {
 })
 
 describe('createSidebarRightStore — the last docked tab', () => {
-  it('refuses to close the guide standing as the docked surface\'s only tab, recording nothing', () => {
+  it("refuses to close the guide standing as the docked surface's only tab, recording nothing", () => {
     const { actions, surface, layout, entries, guide } = harness()
     actions.setExpanded(SESSION, true)
     const before = surface()
@@ -238,7 +248,7 @@ describe('createSidebarRightStore — the last docked tab', () => {
     const { actions, layout, entries, expand, guide } = harness()
     expand()
     actions.openContent(SESSION, { kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a' }, () => {})
-    const text = Object.values(layout().tabs).find(tab => tab.kind === 'text')
+    const text = Object.values(layout().tabs).find((tab) => tab.kind === 'text')
     if (text === undefined) throw new Error('expected the text tab beside the guide')
     // Two tabs: closing the guide is an ordinary close, and the column stays open.
     actions.closeTab(SESSION, guide())
@@ -275,7 +285,7 @@ describe('createSidebarRightStore — the last docked tab', () => {
     const { actions, layout, guide } = harness()
     actions.setExpanded(SESSION, true)
     actions.openContent(SESSION, { kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a' }, () => {})
-    const text = Object.values(layout().tabs).find(tab => tab.kind === 'text')
+    const text = Object.values(layout().tabs).find((tab) => tab.kind === 'text')
     if (text === undefined) throw new Error('expected the text tab')
     actions.floatTab(SESSION, text.id, { x: 10, y: 20, width: 300, height: 200 })
     // The guide is now the docked surface's only tab; the floating text tab closes freely.
@@ -340,7 +350,7 @@ describe('createSidebarRightStore — floating panels and dividers', () => {
     expect(entries()).toBe(recorded + 1)
   })
 
-  it('records a divider drag as the split\'s new fractions', () => {
+  it("records a divider drag as the split's new fractions", () => {
     const { actions, layout, entries, expand } = harness()
     expand()
     actions.splitPane(SESSION)
@@ -358,7 +368,7 @@ describe('createSidebarRightStore — floating panels and dividers', () => {
     const settled = vi.fn<(paneId: PaneId) => void>()
     const before = dockPaneIds(layout())
     actions.splitPane(SESSION, undefined, settled)
-    const created = dockPaneIds(layout()).filter(id => !before.includes(id))
+    const created = dockPaneIds(layout()).filter((id) => !before.includes(id))
     expect(created).toHaveLength(1)
     expect(settled).toHaveBeenCalledExactlyOnceWith(created[0])
     // A floating pane cannot be split: nothing changes and nothing is reported.
@@ -377,7 +387,7 @@ describe('createSidebarRightStore — focus', () => {
     const { actions, layout, entries, guide, expand } = harness()
     expand()
     actions.openContent(SESSION, { kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a' }, () => {})
-    const text = Object.values(layout().tabs).find(tab => tab.kind === 'text')
+    const text = Object.values(layout().tabs).find((tab) => tab.kind === 'text')
     if (text === undefined) throw new Error('expected the text tab')
     const home = layout().activePaneId
     expect(getPane(layout(), home).activeTabId).toBe(text.id)
@@ -392,7 +402,7 @@ describe('createSidebarRightStore — focus', () => {
     expect(entries()).toBe(recorded + 1)
     // Two panes: the home pane's active tab, focused while the other pane is active, is recorded.
     actions.splitPane(SESSION)
-    const other = dockPaneIds(layout()).find(id => id !== home)
+    const other = dockPaneIds(layout()).find((id) => id !== home)
     if (other === undefined) throw new Error('expected a second pane')
     actions.focusPane(SESSION, other)
     const split = entries()
@@ -424,7 +434,7 @@ describe('createSidebarRightStore — page uniqueness', () => {
     const { actions, layout, expand } = harness()
     expand()
     actions.openContent(SESSION, { kind: 'text', contentId: 'dsh-resource://file/session/s-test/a.txt', title: 'a' }, () => {})
-    const text = Object.values(layout().tabs).find(tab => tab.kind === 'text')
+    const text = Object.values(layout().tabs).find((tab) => tab.kind === 'text')
     if (text === undefined) throw new Error('expected the text tab')
     actions.splitPane(SESSION)
     const [left, right] = dockPaneIds(layout())
@@ -436,7 +446,7 @@ describe('createSidebarRightStore — page uniqueness', () => {
     // Dropped on the left pane's centre: it moves in beside that pane's guide too.
     actions.dropTab(SESSION, text.id, left, 'center')
     expect(getPane(layout(), left).tabs).toContain(text.id)
-    expect(Object.values(layout().tabs).filter(tab => tab.kind === 'guide')).toHaveLength(2)
+    expect(Object.values(layout().tabs).filter((tab) => tab.kind === 'guide')).toHaveLength(2)
   })
 
   it('reorders the guide within its own pane as a plain place', () => {
@@ -447,6 +457,6 @@ describe('createSidebarRightStore — page uniqueness', () => {
     expect(getPane(layout(), pane).tabs[0]).toBe(guide())
     actions.placeTab(SESSION, guide(), pane, 2)
     expect(getPane(layout(), pane).tabs.at(-1)).toBe(guide())
-    expect(Object.values(layout().tabs).filter(tab => tab.kind === 'guide')).toHaveLength(1)
+    expect(Object.values(layout().tabs).filter((tab) => tab.kind === 'guide')).toHaveLength(1)
   })
 })

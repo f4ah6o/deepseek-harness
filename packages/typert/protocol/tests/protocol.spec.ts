@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vite-plus/test'
 import {
   bindTypertRemote,
   TypertRemoteService,
@@ -47,11 +47,7 @@ declare module '@deepseek-ai/cordis' {
      * @param next - delegates to the next listener.
      * @returns the claimed or delegated value.
      */
-    'meta-fixture/waterfall'(
-      this: Context,
-      request: MetaFixtureRequest,
-      next: () => Promise<string>,
-    ): Promise<string>
+    'meta-fixture/waterfall'(this: Context, request: MetaFixtureRequest, next: () => Promise<string>): Promise<string>
     /**
      * Test-only answered event, whose result no one-way delivery can return.
      * @param value - marker payload.
@@ -71,8 +67,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     otherFixture: TypertContext<string>
   }
 
-  interface TypertRemoteEventSelection extends
-    Record<'meta-fixture/forwardable' | 'meta-fixture/waterfall' | 'meta-fixture/absent', true> {}
+  interface TypertRemoteEventSelection extends Record<
+    'meta-fixture/forwardable' | 'meta-fixture/waterfall' | 'meta-fixture/absent',
+    true
+  > {}
 }
 
 describe('typert-protocol Remote declarations', () => {
@@ -144,10 +142,7 @@ describe('typert-protocol Remote declarations', () => {
     }
 
     const initializers: Array<(this: Goals) => void> = []
-    Remote(
-      Reflect.get(Goals.prototype, 'create') as (this: Goals, ...args: unknown[]) => unknown,
-      methodContext('create', initializers),
-    )
+    Remote(Reflect.get(Goals.prototype, 'create') as (this: Goals, ...args: unknown[]) => unknown, methodContext('create', initializers))
     RemoteScope('metaFixture')(
       Reflect.get(Goals.prototype, 'scoped') as (this: Goals, ...args: unknown[]) => unknown,
       methodContext('scoped', initializers),
@@ -162,9 +157,7 @@ describe('typert-protocol Remote declarations', () => {
       { method: 'scoped', invocation: { kind: 'context', context: 'metaFixture' } },
     ])
     expect(Reflect.ownKeys(Goals)).toEqual(['length', 'name', 'prototype'])
-    expect(Reflect.ownKeys(Goals.prototype)).toEqual([
-      'constructor', 'create', 'scoped', REMOTE_METHOD_DESCRIPTOR_KEY,
-    ])
+    expect(Reflect.ownKeys(Goals.prototype)).toEqual(['constructor', 'create', 'scoped', REMOTE_METHOD_DESCRIPTOR_KEY])
     expect(Object.keys(Goals.prototype)).toEqual([])
     expect(Object.getOwnPropertyDescriptor(Goals.prototype, REMOTE_METHOD_DESCRIPTOR_KEY)).toMatchObject({
       configurable: true,
@@ -181,10 +174,7 @@ describe('typert-protocol Remote declarations', () => {
     }
 
     const initializers: Array<(this: Service) => void> = []
-    Remote(
-      Reflect.get(Service.prototype, 'run') as (this: Service, ...args: unknown[]) => unknown,
-      methodContext('run', initializers),
-    )
+    Remote(Reflect.get(Service.prototype, 'run') as (this: Service, ...args: unknown[]) => unknown, methodContext('run', initializers))
 
     const first = new Service()
     const second = new Service()
@@ -248,9 +238,7 @@ describe('typert-protocol Remote declarations', () => {
     Remote({ mode: 'stream' })(Reflect.get(Jobs.prototype, 'follow'), methodContext('follow', initializers))
     const jobs = new Jobs()
     for (const initialize of initializers) initialize.call(jobs)
-    expect(remoteMethods(jobs)).toEqual([
-      { method: 'follow', mode: 'stream', invocation: { kind: 'direct' } },
-    ])
+    expect(remoteMethods(jobs)).toEqual([{ method: 'follow', mode: 'stream', invocation: { kind: 'direct' } }])
   })
 
   it('registers the invocation accessor once per tree, on the root', async () => {
@@ -299,7 +287,9 @@ describe('typert-protocol Remote declarations', () => {
 
   it('rejects malformed decorator calls and targets', () => {
     const method: (this: object) => void = function (this: object): void {}
-    expect(() => { (Remote as unknown as (value: typeof method) => void)(method) }).toThrow('context is missing')
+    expect(() => {
+      ;(Remote as unknown as (value: typeof method) => void)(method)
+    }).toThrow('context is missing')
     expect(() => Remote('bad/name')).toThrow('export name')
     expect(() => Remote('bad#name')).toThrow('export name')
     expect(() => Remote('bad name')).toThrow('export name')
@@ -308,8 +298,7 @@ describe('typert-protocol Remote declarations', () => {
     expect(() => Remote({ mode: 'unary' } as unknown as { mode: 'stream' })).toThrow('exactly mode')
     expect(() => Remote({ mode: 'stream', extra: true } as unknown as { mode: 'stream' })).toThrow('exactly mode')
     const bogusMode: string = 'duplex'
-    expect(() => Remote({ mode: bogusMode } as { mode: 'stream' }))
-      .toThrow('Remote options must contain exactly mode: "stream"')
+    expect(() => Remote({ mode: bogusMode } as { mode: 'stream' })).toThrow('Remote options must contain exactly mode: "stream"')
     expect(() => RemoteScope('' as 'metaFixture')).toThrow('Scope key')
     expect(() => RemoteScope('metaFixture', 'bad/name')).toThrow('export name')
 
@@ -318,8 +307,9 @@ describe('typert-protocol Remote declarations', () => {
       { ...methodContext('run', []), static: true },
       { ...methodContext('run', []), name: Symbol('run') },
     ]) {
-      expect(() => { Remote(method, context) })
-        .toThrow('public instance method')
+      expect(() => {
+        Remote(method, context)
+      }).toThrow('public instance method')
     }
   })
 
@@ -329,63 +319,55 @@ describe('typert-protocol Remote declarations', () => {
     Remote(method, methodContext('run', direct))
     const prototypeLess: object = {}
     Reflect.setPrototypeOf(prototypeLess, null)
-    expect(() => { direct[0]!.call(prototypeLess) }).toThrow('without a prototype')
+    expect(() => {
+      direct[0]!.call(prototypeLess)
+    }).toThrow('without a prototype')
 
     const stream: Array<(this: object) => void> = []
     Remote({ mode: 'stream' })(method, methodContext('run', stream))
     const conflict = Object.create({}) as object
     direct[0]!.call(conflict)
-    expect(() => { stream[0]!.call(conflict) }).toThrow('conflicting invocation markers')
+    expect(() => {
+      stream[0]!.call(conflict)
+    }).toThrow('conflicting invocation markers')
 
     class Service {
       run(): void {}
     }
     const conflicting: Array<(this: Service) => void> = []
-    Remote(
-      Reflect.get(Service.prototype, 'run'),
-      methodContext('run', conflicting),
-    )
-    RemoteScope('metaFixture')(
-      Reflect.get(Service.prototype, 'run'),
-      methodContext('run', conflicting),
-    )
+    Remote(Reflect.get(Service.prototype, 'run'), methodContext('run', conflicting))
+    RemoteScope('metaFixture')(Reflect.get(Service.prototype, 'run'), methodContext('run', conflicting))
     const service = new Service()
     conflicting[0]!.call(service)
-    expect(() => { conflicting[1]!.call(service) }).toThrow('conflicting invocation markers')
+    expect(() => {
+      conflicting[1]!.call(service)
+    }).toThrow('conflicting invocation markers')
 
     class ScopedService {
       run(): void {}
     }
     const firstScope: Array<(this: ScopedService) => void> = []
     const otherScope: Array<(this: ScopedService) => void> = []
-    RemoteScope('metaFixture')(
-      Reflect.get(ScopedService.prototype, 'run'),
-      methodContext('run', firstScope),
-    )
-    RemoteScope('otherFixture')(
-      Reflect.get(ScopedService.prototype, 'run'),
-      methodContext('run', otherScope),
-    )
+    RemoteScope('metaFixture')(Reflect.get(ScopedService.prototype, 'run'), methodContext('run', firstScope))
+    RemoteScope('otherFixture')(Reflect.get(ScopedService.prototype, 'run'), methodContext('run', otherScope))
     const scopedService = new ScopedService()
     firstScope[0]!.call(scopedService)
-    expect(() => { otherScope[0]!.call(scopedService) }).toThrow('conflicting invocation markers')
+    expect(() => {
+      otherScope[0]!.call(scopedService)
+    }).toThrow('conflicting invocation markers')
 
     class ReverseService {
       run(): void {}
     }
     const scopedFirst: Array<(this: ReverseService) => void> = []
     const directSecond: Array<(this: ReverseService) => void> = []
-    RemoteScope('metaFixture')(
-      Reflect.get(ReverseService.prototype, 'run'),
-      methodContext('run', scopedFirst),
-    )
-    Remote(
-      Reflect.get(ReverseService.prototype, 'run'),
-      methodContext('run', directSecond),
-    )
+    RemoteScope('metaFixture')(Reflect.get(ReverseService.prototype, 'run'), methodContext('run', scopedFirst))
+    Remote(Reflect.get(ReverseService.prototype, 'run'), methodContext('run', directSecond))
     const reverseService = new ReverseService()
     scopedFirst[0]!.call(reverseService)
-    expect(() => { directSecond[0]!.call(reverseService) }).toThrow('conflicting invocation markers')
+    expect(() => {
+      directSecond[0]!.call(reverseService)
+    }).toThrow('conflicting invocation markers')
   })
 
   it('rejects ambiguous binding names', () => {
@@ -405,12 +387,9 @@ describe('typert-protocol Remote declarations', () => {
     expectTypeOf<'meta-fixture/scoped'>().not.toExtend<TypertRemoteEvent>()
     expectTypeOf<'meta-fixture/absent'>().not.toExtend<TypertRemoteEvent>()
 
-    expectTypeOf<{ event: 'meta-fixture/forwardable'; mode: 'emit' }>()
-      .toExtend<TypertForwardableEventEntry>()
-    expectTypeOf<{ event: 'meta-fixture/waterfall'; mode: 'waterfall' }>()
-      .toExtend<TypertForwardableEventEntry>()
-    expectTypeOf<{ event: 'meta-fixture/waterfall'; mode: 'emit' }>()
-      .not.toExtend<TypertForwardableEventEntry>()
+    expectTypeOf<{ event: 'meta-fixture/forwardable'; mode: 'emit' }>().toExtend<TypertForwardableEventEntry>()
+    expectTypeOf<{ event: 'meta-fixture/waterfall'; mode: 'waterfall' }>().toExtend<TypertForwardableEventEntry>()
+    expectTypeOf<{ event: 'meta-fixture/waterfall'; mode: 'emit' }>().not.toExtend<TypertForwardableEventEntry>()
   })
 
   it('derives Client Context arguments from the selected Cordis waterfall declaration', () => {
@@ -425,10 +404,8 @@ describe('typert-protocol Remote declarations', () => {
       next: () => Promise<string>,
     ) => Promise<string>
 
-    expectTypeOf<TypertClientEventListener<'meta-fixture/waterfall'>>()
-      .toEqualTypeOf<ExpectedListener>()
-    expectTypeOf<TypertClientEventListener<'meta-fixture/forwardable'>>()
-      .toEqualTypeOf<(value: string) => void>()
+    expectTypeOf<TypertClientEventListener<'meta-fixture/waterfall'>>().toEqualTypeOf<ExpectedListener>()
+    expectTypeOf<TypertClientEventListener<'meta-fixture/forwardable'>>().toEqualTypeOf<(value: string) => void>()
   })
 })
 
@@ -443,9 +420,11 @@ function methodContext<This extends object>(
     private: false,
     metadata: {},
     access: {
-      has: object => name in object,
-      get: object => (object as Record<string, unknown>)[name] as (this: This, ...args: unknown[]) => unknown,
+      has: (object) => name in object,
+      get: (object) => (object as Record<string, unknown>)[name] as (this: This, ...args: unknown[]) => unknown,
     },
-    addInitializer: (initializer) => { initializers.push(initializer) },
+    addInitializer: (initializer) => {
+      initializers.push(initializer)
+    },
   }
 }

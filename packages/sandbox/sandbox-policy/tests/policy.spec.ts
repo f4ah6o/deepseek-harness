@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -29,7 +29,7 @@ function session(id: string, cwd?: string): Session {
     id: sessionId,
     createdAt: 0,
     isSeeded: false,
-    ...cwd === undefined ? {} : { cwd },
+    ...(cwd === undefined ? {} : { cwd }),
   })
 }
 
@@ -38,8 +38,8 @@ function agentFor(activeSession: Session): Agent {
 }
 
 async function policyContext(ctx: Context, activeSession: Session): Promise<string | undefined> {
-  return (await ctx.systemPrompt.assemble({ agent: agentFor(activeSession) }))
-    .contexts.find(context => context.name === 'sandbox:policy')?.text
+  return (await ctx.systemPrompt.assemble({ agent: agentFor(activeSession) })).contexts.find((context) => context.name === 'sandbox:policy')
+    ?.text
 }
 
 describe('SandboxPolicyService', () => {
@@ -59,8 +59,9 @@ describe('SandboxPolicyService', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionProjectionRegistry)
-      await expect(ctx.plugin(SandboxPolicyService, { workspaceRoot: 'relative/workspace' }))
-        .rejects.toThrow('sandbox-policy: workspace root must be an absolute execution-world path')
+      await expect(ctx.plugin(SandboxPolicyService, { workspaceRoot: 'relative/workspace' })).rejects.toThrow(
+        'sandbox-policy: workspace root must be an absolute execution-world path',
+      )
       expect(ctx.get('sandboxPolicy')).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()
@@ -156,12 +157,14 @@ describe('SandboxPolicyService', () => {
     expect(await policyContext(ctx, session('sess-hmr'))).toContain('read-only')
     await fiber.dispose()
     expect(ctx.get('sandboxPolicy')).toBeUndefined()
-    expect((await ctx.systemPrompt.assemble()).contexts.find(context => context.name === 'sandbox:policy')).toBeUndefined()
+    expect((await ctx.systemPrompt.assemble()).contexts.find((context) => context.name === 'sandbox:policy')).toBeUndefined()
   })
 })
 
 describe('sandbox:policy request context', () => {
-  async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
+  async function promptMounted(
+    config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {},
+  ): Promise<Context> {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(SessionProjectionRegistry)
@@ -169,17 +172,22 @@ describe('sandbox:policy request context', () => {
     return ctx
   }
 
-  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('renders the exact %s policy without a capability inventory', async (mode) => {
-    const ctx = await promptMounted({ mode, workspaceRoot: '/fallback' })
-    const workspaceRoot = '/projects/../projects/current'
-    const expected = {
-      'read-only': 'Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode. Do not refuse a required modification from this policy alone: try an available tool normally and follow any denial and escalation guidance it returns.',
-      'workspace-write': `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(workspaceRoot)}. Some platform temporary areas may also be writable.`,
-      'danger-full-access': 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.',
-    } as const
+  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)(
+    'renders the exact %s policy without a capability inventory',
+    async (mode) => {
+      const ctx = await promptMounted({ mode, workspaceRoot: '/fallback' })
+      const workspaceRoot = '/projects/../projects/current'
+      const expected = {
+        'read-only':
+          'Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode. Do not refuse a required modification from this policy alone: try an available tool normally and follow any denial and escalation guidance it returns.',
+        'workspace-write': `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(workspaceRoot)}. Some platform temporary areas may also be writable.`,
+        'danger-full-access':
+          'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.',
+      } as const
 
-    expect(await policyContext(ctx, session(`sess-${mode}`, '/projects/../projects/current'))).toBe(expected[mode])
-  })
+      expect(await policyContext(ctx, session(`sess-${mode}`, '/projects/../projects/current'))).toBe(expected[mode])
+    },
+  )
 
   it('keeps the complete rendered prompt byte-stable across TMPDIR changes', async () => {
     const ctx = await promptMounted({ mode: 'workspace-write' })
@@ -209,11 +217,15 @@ describe('sandbox:policy request context', () => {
 
     setSandboxMode(active, 'danger-full-access')
     const danger = await policyContext(ctx, active)
-    expect(danger).toBe('Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.')
+    expect(danger).toBe(
+      'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.',
+    )
     expect(await policyContext(ctx, active)).toBe(danger)
 
     setSandboxMode(active, 'workspace-write')
-    expect(await policyContext(ctx, active)).toBe(`Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Some platform temporary areas may also be writable.`)
+    expect(await policyContext(ctx, active)).toBe(
+      `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Some platform temporary areas may also be writable.`,
+    )
   })
 
   it('reconstructs resumed policy from the session log and omits diagnostics without an agent', async () => {
@@ -223,7 +235,7 @@ describe('sandbox:policy request context', () => {
     const ctx = await promptMounted({ mode: 'read-only' })
 
     expect(await policyContext(ctx, resumed)).toContain('workspace-write')
-    expect((await ctx.systemPrompt.assemble()).contexts.find(context => context.name === 'sandbox:policy')?.text).toBe('')
+    expect((await ctx.systemPrompt.assemble()).contexts.find((context) => context.name === 'sandbox:policy')?.text).toBe('')
   })
 })
 
@@ -244,7 +256,7 @@ describe('the sandbox/mode session kit', () => {
   it('setSandboxMode appends exactly one sandbox/mode event per switch', () => {
     const session = Session.create(SessionId('sess-write'))
     setSandboxMode(session, 'danger-full-access')
-    const modeEvents = session.snapshotEvents().filter(e => e.type === 'sandbox/mode')
+    const modeEvents = session.snapshotEvents().filter((e) => e.type === 'sandbox/mode')
     expect(modeEvents).toHaveLength(1)
     expect(modeEvents[0]?.data).toEqual({ mode: 'danger-full-access' })
   })

@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * Node-only backend. The Win32 dialog worker builds as its own CJS entry,
@@ -7,6 +7,9 @@ import { defineConfig } from 'tsdown'
  */
 export default defineConfig([
   {
+    deps: {
+      resolveDepSubpath: true,
+    },
     entry: ['lib/types/index.js'],
     outDir: 'lib',
     format: ['esm'],
@@ -17,6 +20,9 @@ export default defineConfig([
     clean: false,
   },
   {
+    deps: {
+      resolveDepSubpath: true,
+    },
     // The artifact is lib/worker.cjs (the ./worker export the workspace
     // constraint keys on), bundled from the descriptive source entry.
     entry: { worker: 'lib/types/win32-dialog-worker.js' },

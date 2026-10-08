@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { DesktopUpdateAttention } from '../src/update-attention.ts'
 import { resolveDesktopLocale } from '../src/locale.ts'
 
@@ -11,27 +11,52 @@ const native = await vi.hoisted(async () => {
     static isSupported = vi.fn(() => true)
     show = vi.fn()
     close = vi.fn()
-    constructor(readonly options: unknown) { super(); notices.push(this) }
+    constructor(readonly options: unknown) {
+      super()
+      notices.push(this)
+    }
   }
   return { notices, Notice, dock: { bounce: vi.fn(() => 17), cancelBounce: vi.fn() } }
 })
 vi.mock('electron', () => ({ Notification: native.Notice, app: { dock: native.dock } }))
 let attention: DesktopUpdateAttention | undefined
-afterEach(() => { attention?.reset(); native.notices.length = 0; vi.clearAllMocks(); native.Notice.isSupported.mockReturnValue(true) })
+afterEach(() => {
+  attention?.reset()
+  native.notices.length = 0
+  vi.clearAllMocks()
+  native.Notice.isSupported.mockReturnValue(true)
+})
 function setup(platform: string) {
   let locale = resolveDesktopLocale('zh')
-  const window = Object.assign(new EventEmitter(), { focused: false, isFocused() { return this.focused },
-    isDestroyed: () => false, flashFrame: vi.fn() })
+  const window = Object.assign(new EventEmitter(), {
+    focused: false,
+    isFocused() {
+      return this.focused
+    },
+    isDestroyed: () => false,
+    flashFrame: vi.fn(),
+  })
   const modal = Object.assign(new EventEmitter(), { isFocused: () => false })
   const returned = vi.fn()
   attention = new DesktopUpdateAttention(() => locale, platform)
-  const ready = () => { attention!.ready('1.0.1-nightly.1', window as unknown as BrowserWindow, modal as unknown as BrowserWindow, returned) }
-  return { window, modal, returned, ready, locale(next: string) { locale = resolveDesktopLocale(next) } }
+  const ready = () => {
+    attention!.ready('1.0.1-nightly.1', window as unknown as BrowserWindow, modal as unknown as BrowserWindow, returned)
+  }
+  return {
+    window,
+    modal,
+    returned,
+    ready,
+    locale(next: string) {
+      locale = resolveDesktopLocale(next)
+    },
+  }
 }
 
 it.each(['win32', 'darwin'])('requests one silent reminder and returns to confirmation without installing: %s', (platform) => {
   const f = setup(platform)
-  f.ready(); f.ready()
+  f.ready()
+  f.ready()
   expect(native.notices).toHaveLength(1)
   expect(native.notices[0]!.options).toEqual({ title: '更新已准备就绪', body: '返回应用确认安装并重启。', silent: true })
   if (platform === 'win32') expect(f.window.flashFrame).toHaveBeenCalledWith(true)
@@ -85,6 +110,9 @@ it('uses the current saved locale when a background reminder is created', () => 
   const f = setup('darwin')
   f.locale('en')
   f.ready()
-  expect(native.notices[0]!.options).toEqual({ title: 'Update ready',
-    body: 'Return to the application to confirm installation and restart.', silent: true })
+  expect(native.notices[0]!.options).toEqual({
+    title: 'Update ready',
+    body: 'Return to the application to confirm installation and restart.',
+    silent: true,
+  })
 })

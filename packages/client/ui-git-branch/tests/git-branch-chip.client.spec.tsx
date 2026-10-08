@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import type {} from '../src/client/index.ts'
 import type { RemoteResult, WorkspaceGitStatus } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -11,7 +11,7 @@ const t = (key: string, params?: Record<string, unknown>): string => {
   const template = en[key as keyof typeof en] ?? key
   return params === undefined
     ? template
-    : template.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+    : template.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match))
 }
 
 const success = (value: WorkspaceGitStatus): RemoteResult<WorkspaceGitStatus> => ({ ok: true, value })
@@ -24,17 +24,23 @@ afterEach(() => {
 describe('GitBranchChip', () => {
   it('shows the sanitized branch label and refreshes on the configured interval', async () => {
     vi.useFakeTimers()
-    const getStatus = vi.fn(async () => success({
-      state: { kind: 'branch', repository: 'shiguredo/zakuro-rs', branch: 'develop' },
-      refreshMs: 5_000,
-    }))
+    const getStatus = vi.fn(async () =>
+      success({
+        state: { kind: 'branch', repository: 'shiguredo/zakuro-rs', branch: 'develop' },
+        refreshMs: 5_000,
+      }),
+    )
     render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
 
-    await act(async () => { await Promise.resolve() })
+    await act(async () => {
+      await Promise.resolve()
+    })
     const chip = screen.getByLabelText('Git branch: shiguredo/zakuro-rs:develop')
     expect(chip.textContent).toContain('shiguredo/zakuro-rs:develop')
     expect(chip.getAttribute('data-composer-stat')).toBe('git-branch')
-    await act(async () => { vi.advanceTimersByTime(5_000) })
+    await act(async () => {
+      vi.advanceTimersByTime(5_000)
+    })
     expect(getStatus).toHaveBeenCalledTimes(2)
   })
 
@@ -55,28 +61,37 @@ describe('GitBranchChip', () => {
     const getStatus = vi.fn((sessionId: SessionId, signal: AbortSignal): Promise<RemoteResult<WorkspaceGitStatus>> => {
       if (sessionId === SessionId('s1')) {
         firstSignal = signal
-        return Promise.resolve(success({
-          state: { kind: 'branch', repository: 'first', branch: 'main' },
-          refreshMs: 5_000,
-        }))
+        return Promise.resolve(
+          success({
+            state: { kind: 'branch', repository: 'first', branch: 'main' },
+            refreshMs: 5_000,
+          }),
+        )
       }
       return new Promise<RemoteResult<WorkspaceGitStatus>>(() => {})
     })
     const view = render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
-    await act(async () => { await Promise.resolve() })
+    await act(async () => {
+      await Promise.resolve()
+    })
     expect(screen.getByLabelText('Git branch: first:main')).toBeTruthy()
 
     view.rerender(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s2')} t={t} />)
-    await act(async () => { await Promise.resolve() })
+    await act(async () => {
+      await Promise.resolve()
+    })
     expect(firstSignal?.aborted).toBe(true)
     expect(screen.queryByLabelText('Git branch: first:main')).toBeNull()
   })
 
   it('keeps only the latest focus refresh and suppresses detached values without a checkout', async () => {
     const pending: Array<{ resolve: (status: RemoteResult<WorkspaceGitStatus>) => void; signal: AbortSignal }> = []
-    const getStatus = vi.fn((_sessionId: SessionId, signal: AbortSignal) => new Promise<RemoteResult<WorkspaceGitStatus>>((resolve) => {
-      pending.push({ resolve, signal })
-    }))
+    const getStatus = vi.fn(
+      (_sessionId: SessionId, signal: AbortSignal) =>
+        new Promise<RemoteResult<WorkspaceGitStatus>>((resolve) => {
+          pending.push({ resolve, signal })
+        }),
+    )
     render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
     expect(pending).toHaveLength(1)
     fireEvent.focus(window)

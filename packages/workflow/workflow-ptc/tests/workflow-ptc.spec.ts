@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -62,31 +62,48 @@ class StubProvider implements SubagentProvider {
   async start(request: SubagentStartRequest): Promise<SubagentRun> {
     const startGate = Promise.withResolvers<undefined>()
     const terminal = Promise.withResolvers<SubagentResult>()
-    terminal.promise.catch(() => { /* provider owns early settlement until publication */ })
+    terminal.promise.catch(() => {
+      /* provider owns early settlement until publication */
+    })
     let published = false
     const controlled: ControlledRun = {
       request,
-      publish: () => { published = true; startGate.resolve(undefined) },
-      rejectStart: (error) => { startGate.reject(error) },
-      settle: (result) => { terminal.resolve(result) },
-      rejectResult: (error) => { terminal.reject(error) },
+      publish: () => {
+        published = true
+        startGate.resolve(undefined)
+      },
+      rejectStart: (error) => {
+        startGate.reject(error)
+      },
+      settle: (result) => {
+        terminal.resolve(result)
+      },
+      rejectResult: (error) => {
+        terminal.reject(error)
+      },
       cancelled: undefined,
       disposed: false,
       disposeCalls: 0,
     }
     this.runs.push(controlled)
     const index = this.runs.length - 1
-    request.signal.addEventListener('abort', () => {
-      controlled.cancelled = String(request.signal.reason ?? 'cancelled')
-      this.onAbortString?.(String(request.signal.reason ?? 'cancelled'), index)
-      this.onSignalAbort?.(request.signal.reason, index)
-      if (published) terminal.resolve({ output: [], stopReason: 'aborted' })
-      else startGate.reject(new Error('child start aborted before publication'))
-    }, { once: true })
+    request.signal.addEventListener(
+      'abort',
+      () => {
+        controlled.cancelled = String(request.signal.reason ?? 'cancelled')
+        this.onAbortString?.(String(request.signal.reason ?? 'cancelled'), index)
+        this.onSignalAbort?.(request.signal.reason, index)
+        if (published) terminal.resolve({ output: [], stopReason: 'aborted' })
+        else startGate.reject(new Error('child start aborted before publication'))
+      },
+      { once: true },
+    )
     if (!this.deferStart) controlled.publish()
     if (this.reply) {
       const reply = this.reply
-      queueMicrotask(() => { terminal.resolve(reply(request, index)) })
+      queueMicrotask(() => {
+        terminal.resolve(reply(request, index))
+      })
     }
     try {
       await startGate.promise
@@ -139,7 +156,7 @@ async function setup(options?: SetupOptions) {
   await ctx.plugin(SubagentRuntime)
   const provider = new StubProvider(
     'stub',
-    options?.manual ? undefined : options?.reply ?? (() => text('stub reply')),
+    options?.manual ? undefined : (options?.reply ?? (() => text('stub reply'))),
     options?.disposeDelayMs ?? 0,
     options?.deferStart ?? false,
     options?.onChildAbortString,
@@ -160,7 +177,7 @@ function scripted(body: string, metaExtra?: Partial<WorkflowMeta>): { script: st
 
 /** Start + await one run, disposing on the way out. */
 async function run(ctx: Context, parent: Agent, source: { script: string; meta: WorkflowMeta }, args?: unknown): Promise<WorkflowResult> {
-  const handle = ctx.workflowEngine.start({ ...source, parent, ...args !== undefined ? { args } : {} })
+  const handle = ctx.workflowEngine.start({ ...source, parent, ...(args !== undefined ? { args } : {}) })
   try {
     return await handle.result
   } finally {
@@ -184,27 +201,46 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       try {
         expect((await handle.result).value).toEqual([1, 3])
         expect(args.values).toEqual([2])
-      } finally { await handle.dispose() }
+      } finally {
+        await handle.dispose()
+      }
     })
 
     it('runs a script end-to-end: agent() text results, phases, log, args, return value, events', async () => {
       const { ctx, parent, provider } = await setup({ reply: (_request, index) => text(`answer-${index}`) })
       const events: [string, unknown[]][] = []
-      for (const name of ['workflow/start', 'workflow/phase', 'workflow/log', 'workflow/agent-start', 'workflow/agent-end', 'workflow/end'] as const) {
-        ctx.on(name, (...payload: unknown[]) => { events.push([name, payload]) })
+      for (const name of [
+        'workflow/start',
+        'workflow/phase',
+        'workflow/log',
+        'workflow/agent-start',
+        'workflow/agent-end',
+        'workflow/end',
+      ] as const) {
+        ctx.on(name, (...payload: unknown[]) => {
+          events.push([name, payload])
+        })
       }
-      const result = await run(ctx, parent, scripted(`
+      const result = await run(
+        ctx,
+        parent,
+        scripted(
+          `
         phase('Scan')
         log('starting with ' + args.files.length + ' files')
         const answers = await pipeline(args.files, (prev, item) => agent('read ' + item))
         phase('Report')
         return { answers, count: args.files.length }
-      `, { phases: [{ title: 'Scan' }, { title: 'Report' }] }), { files: ['a.ts', 'b.ts'] })
+      `,
+          { phases: [{ title: 'Scan' }, { title: 'Report' }] },
+        ),
+        { files: ['a.ts', 'b.ts'] },
+      )
 
       expect(result.stopReason).toBe('completed')
       expect(result.agentsStarted).toBe(2)
       expect(result.value).toEqual({ answers: ['answer-0', 'answer-1'], count: 2 })
-      expect(provider.runs.every(r => r.disposed)).toBe(true)
+      expect(provider.runs.every((r) => r.disposed)).toBe(true)
 
       const names = events.map(([name]) => name)
       expect(names[0]).toBe('workflow/start')
@@ -222,10 +258,14 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       const { ctx, parent, provider } = await setup({
         reply: () => ({ output: [], structured: { files: ['x.ts', 'y.ts'] }, stopReason: 'completed' }),
       })
-      const result = await run(ctx, parent, scripted(`
+      const result = await run(
+        ctx,
+        parent,
+        scripted(`
         const found = await agent('list files', { model: 'deepseek-v4-pro', schema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string' } } }, required: ['files'] } })
         return { first: found.files[0], count: found.files.length }
-      `))
+      `),
+      )
       expect(result.stopReason, result.error?.split('\n')[0]).toBe('completed')
       expect(result.value).toEqual({ first: 'x.ts', count: 2 })
       expect(provider.runs[0]!.request.outputSchema).toEqual({
@@ -268,7 +308,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('rejects invalid start-request provider routes before publishing a run', async () => {
       const { ctx, parent } = await setup()
       let starts = 0
-      ctx.on('workflow/start', () => { starts += 1 })
+      ctx.on('workflow/start', () => {
+        starts += 1
+      })
       const messages: string[] = []
       for (const subagentProvider of ['', 'missing']) {
         let run: WorkflowRun | undefined
@@ -296,7 +338,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('rejects invalid per-run total-agent caps before publishing a run', async () => {
       const { ctx, parent } = await setup({ config: { maxTotalAgents: 2 } })
       let starts = 0
-      ctx.on('workflow/start', () => { starts += 1 })
+      ctx.on('workflow/start', () => {
+        starts += 1
+      })
       const errors: unknown[] = []
       for (const maxTotalAgents of [0, 1.5, Number.NaN, 3]) {
         try {
@@ -311,10 +355,14 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         }
       }
 
-      expect(errors.slice(0, 3)).toEqual(Array(3).fill(expect.objectContaining({
-        code: 'INVALID_ARGUMENT',
-        message: 'workflow maxTotalAgents must be a positive safe integer',
-      })))
+      expect(errors.slice(0, 3)).toEqual(
+        Array(3).fill(
+          expect.objectContaining({
+            code: 'INVALID_ARGUMENT',
+            message: 'workflow maxTotalAgents must be a positive safe integer',
+          }),
+        ),
+      )
       expect(errors[3]).toMatchObject({
         code: 'INVALID_ARGUMENT',
         message: 'workflow maxTotalAgents 3 exceeds the engine ceiling 2',
@@ -360,16 +408,24 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('waits for async provider start before announcing a result that settled early', async () => {
       const { ctx, parent, provider } = await setup({ manual: true, deferStart: true })
       const order: string[] = []
-      ctx.on('workflow/agent-start', (_info, agent) => { order.push(`start:${agent.seq}`) })
-      ctx.on('workflow/agent-end', (_info, agent) => { order.push(`end:${agent.outcome}`) })
-      ctx.on('workflow/end', () => { order.push('run-end') })
+      ctx.on('workflow/agent-start', (_info, agent) => {
+        order.push(`start:${agent.seq}`)
+      })
+      ctx.on('workflow/agent-end', (_info, agent) => {
+        order.push(`end:${agent.outcome}`)
+      })
+      ctx.on('workflow/end', () => {
+        order.push('run-end')
+      })
 
       const handle = ctx.workflowEngine.start({ ...scripted("return await agent('p')"), parent })
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       const early = text('accepted value')
       provider.runs[0]!.settle(early)
       // The provider still owns this early result while start is pending.
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
       expect(order).toEqual([])
 
       provider.runs[0]!.publish()
@@ -383,16 +439,22 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('announces an asynchronously published child before its early result rejection', async () => {
       const { ctx, parent, provider } = await setup({ manual: true, deferStart: true })
       const lifecycle: string[] = []
-      ctx.on('workflow/agent-start', () => { lifecycle.push('start') })
-      ctx.on('workflow/agent-end', (_info, agent) => { lifecycle.push(`end:${agent.outcome}`) })
+      ctx.on('workflow/agent-start', () => {
+        lifecycle.push('start')
+      })
+      ctx.on('workflow/agent-end', (_info, agent) => {
+        lifecycle.push(`end:${agent.outcome}`)
+      })
       const handle = ctx.workflowEngine.start({
         ...scripted("try { await agent('p'); return 'unreachable' } catch (e) { return { code: e.code, message: e.message } }"),
         parent,
       })
 
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       provider.runs[0]!.rejectResult(new Error('backend failed before publication'))
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
       expect(lifecycle).toEqual([])
 
       provider.runs[0]!.publish()
@@ -406,18 +468,24 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('classifies provider start rejection as AGENT_START, drops an early result, and emits no false lifecycle pair', async () => {
       const { ctx, parent, provider } = await setup({ manual: true, deferStart: true })
       const lifecycle: string[] = []
-      ctx.on('workflow/agent-start', () => { lifecycle.push('start') })
-      ctx.on('workflow/agent-end', () => { lifecycle.push('end') })
+      ctx.on('workflow/agent-start', () => {
+        lifecycle.push('start')
+      })
+      ctx.on('workflow/agent-end', () => {
+        lifecycle.push('end')
+      })
 
       const handle = ctx.workflowEngine.start({
         ...scripted("try { await agent('p'); return 'unreachable' } catch (e) { return { code: e.code, message: e.message } }"),
         parent,
       })
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       // ACP-style failure can settle result(error) before its session/publication
       // boundary rejects. Start rejection must dominate that buffered child outcome.
       provider.runs[0]!.settle({ output: [], stopReason: 'error' })
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
       provider.runs[0]!.rejectStart(new Error('publication rolled back'))
 
       const result = await handle.result
@@ -435,11 +503,17 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('aborts a pending provider start once without publishing workflow lifecycle', async () => {
       const { ctx, parent, provider } = await setup({ manual: true, deferStart: true })
       const lifecycle: string[] = []
-      ctx.on('workflow/agent-start', () => { lifecycle.push('start') })
-      ctx.on('workflow/agent-end', () => { lifecycle.push('end') })
+      ctx.on('workflow/agent-start', () => {
+        lifecycle.push('start')
+      })
+      ctx.on('workflow/agent-end', () => {
+        lifecycle.push('end')
+      })
 
       const handle = ctx.workflowEngine.start({ ...scripted("return await agent('pending')"), parent })
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       const disposal = handle.dispose()
       await waitFor(() => {
         expect(provider.runs[0]!.cancelled).toBe('workflow disposed')
@@ -447,7 +521,7 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       })
       // Ensure the host-driven disposal removed the registry entry before the
       // late start rejection; its callback must not invoke dispose again.
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
       provider.runs[0]!.rejectStart(new Error('cancelled before publication'))
 
       const result = await handle.result
@@ -475,20 +549,34 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       }
       ctx.subagents.registerProvider(provider)
       await ctx.plugin(PtcWorkflowEngine, { provider: 'rejecting', maxConcurrentAgents: 2 })
-      const result = await run(ctx, fakeParent(ctx), scripted(`
+      const result = await run(
+        ctx,
+        fakeParent(ctx),
+        scripted(`
         try { await agent('p'); return 'unreachable' } catch (e) { return { name: e.name, code: e.code, fatal: e.fatal, message: e.message } }
-      `))
+      `),
+      )
       expect(result.value).toMatchObject({ name: 'WorkflowError', code: 'AGENT_RESULT', fatal: true })
       expect((result.value as { message: string }).message).toContain('backend exploded')
     })
 
     it('maps a non-JSON ready-child result to fatal AGENT_RESULT instead of wedging the bridge', async () => {
       const { ctx, parent } = await setup({
-        reply: () => ({ output: [], structured: () => { /* deliberately outside lossless JSON */ }, stopReason: 'completed' }),
+        reply: () => ({
+          output: [],
+          structured: () => {
+            /* deliberately outside lossless JSON */
+          },
+          stopReason: 'completed',
+        }),
       })
-      const result = await run(ctx, parent, scripted(`
+      const result = await run(
+        ctx,
+        parent,
+        scripted(`
         try { await agent('p'); return 'unreachable' } catch (e) { return { code: e.code, message: e.message } }
-      `))
+      `),
+      )
       expect(result.value).toMatchObject({ code: 'AGENT_RESULT' })
       expect((result.value as { message: string }).message).toContain('lossless JSON')
     })
@@ -498,7 +586,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       const { ctx, parent } = await setup()
       const invalid = {
         output: [],
-        structured: () => { /* deliberately outside lossless JSON */ },
+        structured: () => {
+          /* deliberately outside lossless JSON */
+        },
         stopReason: 'completed',
       } as unknown as SubagentResult
       const start = vi.spyOn(ctx.subagents, 'start').mockResolvedValue({
@@ -508,14 +598,17 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         dispose: () => Promise.resolve(),
       })
 
-      const result = await run(ctx, parent, scripted(`
+      const result = await run(
+        ctx,
+        parent,
+        scripted(`
         try { await agent('p'); return 'unreachable' } catch (e) { return { code: e.code, message: e.message } }
-      `))
+      `),
+      )
 
       expect(start).toHaveBeenCalledOnce()
       expect(result.value).toMatchObject({ code: 'AGENT_RESULT' })
-      expect((result.value as { message: string }).message)
-        .toContain('lossless JSON')
+      expect((result.value as { message: string }).message).toContain('lossless JSON')
     })
 
     it('a child whose dispose() throws synchronously cannot wedge the script (the host acks anyway)', async () => {
@@ -531,8 +624,12 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
           id: SessionId('bad-dispose-child'),
           localAgent: undefined,
           result: Promise.resolve({ output: [{ type: 'text', text: 'fine' }], stopReason: 'completed' }),
-          cancel: () => { /* settled already */ },
-          dispose: () => { throw new Error('dispose exploded') },
+          cancel: () => {
+            /* settled already */
+          },
+          dispose: () => {
+            throw new Error('dispose exploded')
+          },
         }),
       }
       ctx.subagents.registerProvider(provider)
@@ -555,9 +652,16 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
           id: SessionId('trap-child'),
           localAgent: undefined,
           result: Promise.resolve({ output: [{ type: 'text', text: 'fine' }], stopReason: 'completed' }),
-          cancel: () => { /* settled already */ },
-          // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error rejection IS the scenario under test
-          dispose: () => Promise.reject({ toString: () => { throw new Error('coercion trap') } }),
+          cancel: () => {
+            /* settled already */
+          },
+          dispose: () =>
+            // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error rejection IS the scenario under test
+            Promise.reject({
+              toString: () => {
+                throw new Error('coercion trap')
+              },
+            }),
         }),
       }
       ctx.subagents.registerProvider(provider)
@@ -572,25 +676,43 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('start() throws synchronously for invalid meta data or an unparseable body (host-side pre-checks)', async () => {
       const { ctx, parent } = await setup()
       // Meta is DATA — shape violations reject loud, every one named.
-      expect(() => ctx.workflowEngine.start({ script: 'return 1', meta: { name: '', description: 'd' }, parent })).toThrow(/meta\.name must be a non-empty string/)
-      expect(() => ctx.workflowEngine.start({ script: 'return 1', meta: { name: 'x', description: 'd', extra: 1 } as unknown as WorkflowMeta, parent })).toThrow(/META_INVALID|not a recognized field/)
+      expect(() => ctx.workflowEngine.start({ script: 'return 1', meta: { name: '', description: 'd' }, parent })).toThrow(
+        /meta\.name must be a non-empty string/,
+      )
+      expect(() =>
+        ctx.workflowEngine.start({
+          script: 'return 1',
+          meta: { name: 'x', description: 'd', extra: 1 } as unknown as WorkflowMeta,
+          parent,
+        }),
+      ).toThrow(/META_INVALID|not a recognized field/)
       expect(() => ctx.workflowEngine.start({ ...scripted('return ((('), parent })).toThrow(/does not parse/)
       // The likeliest authoring slip — a Claude Code-style meta header in the
       // body — gets a pointed message, not a bare SyntaxError.
-      expect(() => ctx.workflowEngine.start({ ...scripted("export const meta = { name: 'x', description: 'd' }\nreturn 1"), parent })).toThrow(/meta rides the `meta` request field/)
+      expect(() =>
+        ctx.workflowEngine.start({ ...scripted("export const meta = { name: 'x', description: 'd' }\nreturn 1"), parent }),
+      ).toThrow(/meta rides the `meta` request field/)
     })
 
     it('cancel() aborts in-flight children and settles after their cleanup', async () => {
       const { ctx, parent, provider } = await setup({ manual: true })
       const starts: number[] = []
-      ctx.on('workflow/agent-start', (_info, agent) => { starts.push(agent.seq) })
+      ctx.on('workflow/agent-start', (_info, agent) => {
+        starts.push(agent.seq)
+      })
       const ends: unknown[] = []
-      ctx.on('workflow/agent-end', (_info, agent) => { ends.push(agent) })
+      ctx.on('workflow/agent-end', (_info, agent) => {
+        ends.push(agent)
+      })
       const runEnds: WorkflowResultInfo[] = []
-      ctx.on('workflow/end', (_info, result) => { runEnds.push(result) })
+      ctx.on('workflow/end', (_info, result) => {
+        runEnds.push(result)
+      })
       const handle = ctx.workflowEngine.start({ ...scripted("return await agent('long job')"), parent })
       // Cancellation emits child ends only for starts already observed by the host.
-      await waitFor(() => { expect(starts).toHaveLength(1) })
+      await waitFor(() => {
+        expect(starts).toHaveLength(1)
+      })
       handle.cancel('user stopped it')
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
@@ -608,7 +730,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       const controller = new AbortController()
       controller.abort()
       const logs: string[] = []
-      ctx.on('workflow/log', (_info, message) => { logs.push(message) })
+      ctx.on('workflow/log', (_info, message) => {
+        logs.push(message)
+      })
       const handle = ctx.workflowEngine.start({ ...scripted("log('ran')\nreturn 123"), parent, signal: controller.signal })
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
@@ -631,7 +755,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
 
       const controller = new AbortController()
       const second = ctx.workflowEngine.start({ ...scripted("return await agent('job')"), parent, signal: controller.signal })
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       controller.abort()
       expect((await second.result).stopReason).toBe('cancelled')
       await second.dispose()
@@ -663,7 +789,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         parent: manual.parent,
         signal: teardownController.signal,
       })
-      await waitFor(() => { expect(manual.provider.runs).toHaveLength(1) })
+      await waitFor(() => {
+        expect(manual.provider.runs).toHaveLength(1)
+      })
       const teardownAbort = teardownAdd.mock.calls.find(([type]) => type === 'abort')?.[1]
       expect(typeof teardownAbort).toBe('function')
 
@@ -674,7 +802,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
 
     it('a child-start racing the host cancel is refused: no child starts after cancellation', async () => {
       const { ctx, parent, provider } = await setup({ manual: true })
-      ctx.on('workflow/log', () => { handle.cancel('cancelled from the log listener') })
+      ctx.on('workflow/log', () => {
+        handle.cancel('cancelled from the log listener')
+      })
       const handle = ctx.workflowEngine.start({ ...scripted("log('mark')\nreturn await agent('late')"), parent })
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
@@ -685,8 +815,12 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('post-cancel narration is suppressed host-side, and completion racing a cancel reports cancelled', async () => {
       const { ctx, parent } = await setup()
       const narration: string[] = []
-      ctx.on('workflow/log', (_info, message) => { narration.push(message) })
-      ctx.on('workflow/phase', (_info, title) => { narration.push(`phase:${title}`) })
+      ctx.on('workflow/log', (_info, message) => {
+        narration.push(message)
+      })
+      ctx.on('workflow/phase', (_info, title) => {
+        narration.push(`phase:${title}`)
+      })
       const handle = ctx.workflowEngine.start({
         ...scripted(`
           log('started')
@@ -697,7 +831,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         `),
         parent,
       })
-      await waitFor(() => { expect(narration).toContain('started') })
+      await waitFor(() => {
+        expect(narration).toContain('started')
+      })
       handle.cancel('raced the completion')
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
@@ -709,7 +845,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('cancel() stops a script parked on a promise no hook owns', async () => {
       const { ctx, parent } = await setup({ config: { provider: 'stub' } })
       const runEnds: WorkflowResultInfo[] = []
-      ctx.on('workflow/end', (_info, result) => { runEnds.push(result) })
+      ctx.on('workflow/end', (_info, result) => {
+        runEnds.push(result)
+      })
       const handle = ctx.workflowEngine.start({
         ...scripted("await new Promise(() => {})\nreturn 'unreachable'"),
         parent,
@@ -752,7 +890,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       })
       const result = await handle.result
       expect(result.stopReason).toBe('completed')
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       await handle.dispose()
       // Not a waitFor: by the time dispose() returns, the slow child disposal
       // must already be complete (host-side registry quiescence).
@@ -771,11 +911,17 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         inheritsParentContext: false,
         start: async (request) => {
           let settle!: (result: SubagentResult) => void
-          const result = new Promise<SubagentResult>((resolve) => { settle = resolve })
-          request.signal.addEventListener('abort', () => {
-            aborted.push(String(request.signal.reason))
-            settle({ output: [], stopReason: 'aborted' })
-          }, { once: true })
+          const result = new Promise<SubagentResult>((resolve) => {
+            settle = resolve
+          })
+          request.signal.addEventListener(
+            'abort',
+            () => {
+              aborted.push(String(request.signal.reason))
+              settle({ output: [], stopReason: 'aborted' })
+            },
+            { once: true },
+          )
           return {
             id: SessionId('signal-only-child'),
             localAgent: undefined,
@@ -800,7 +946,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       // is a HOST-PROMPTNESS claim, not a cold-start race — a tight explicit
       // bound (unlike the file default) so a multi-second reap regression
       // cannot pass by outlasting the wait.
-      await waitFor(() => { expect(aborted).toEqual(['workflow settled']) }, 1000)
+      await waitFor(() => {
+        expect(aborted).toEqual(['workflow settled'])
+      }, 1000)
       await handle.dispose()
     })
 
@@ -808,8 +956,12 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       const { ctx, parent, provider } = await setup({ manual: true, deferStart: true })
       const childLifecycle: string[] = []
       let cancellationAtWorkflowEnd: string | undefined
-      ctx.on('workflow/agent-start', () => { childLifecycle.push('start') })
-      ctx.on('workflow/agent-end', () => { childLifecycle.push('end') })
+      ctx.on('workflow/agent-start', () => {
+        childLifecycle.push('start')
+      })
+      ctx.on('workflow/agent-end', () => {
+        childLifecycle.push('end')
+      })
       ctx.on('workflow/end', () => {
         cancellationAtWorkflowEnd = provider.runs[0]?.cancelled
       })
@@ -843,7 +995,9 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
         `),
         parent,
       })
-      await waitFor(() => { expect(provider.runs.length).toBe(1) })
+      await waitFor(() => {
+        expect(provider.runs.length).toBe(1)
+      })
       const handleDispose = handle.dispose()
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
@@ -856,24 +1010,30 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
     it('cancellation emits exactly one agent-end per observed start before workflow/end', async () => {
       const { ctx, parent } = await setup({ manual: true })
       const starts: number[] = []
-      ctx.on('workflow/agent-start', (_info, agent) => { starts.push(agent.seq) })
+      ctx.on('workflow/agent-start', (_info, agent) => {
+        starts.push(agent.seq)
+      })
       const ends: { seq: number; outcome: string }[] = []
       const order: string[] = []
       ctx.on('workflow/agent-end', (_info, agent) => {
         ends.push({ seq: agent.seq, outcome: agent.outcome })
         order.push(`end:${agent.seq}`)
       })
-      ctx.on('workflow/end', () => { order.push('run-end') })
+      ctx.on('workflow/end', () => {
+        order.push('run-end')
+      })
       const handle = ctx.workflowEngine.start({
         ...scripted("await parallel([() => agent('a'), () => agent('b')])\nreturn 'unreachable'"),
         parent,
       })
-      await waitFor(() => { expect(starts).toHaveLength(2) })
+      await waitFor(() => {
+        expect(starts).toHaveLength(2)
+      })
       handle.cancel('user stop')
       const result = await handle.result
       expect(result.stopReason).toBe('cancelled')
-      expect(ends.map(end => end.outcome)).toEqual(['cancelled', 'cancelled'])
-      expect(new Set(ends.map(end => end.seq)).size).toBe(2)
+      expect(ends.map((end) => end.outcome)).toEqual(['cancelled', 'cancelled'])
+      expect(new Set(ends.map((end) => end.seq)).size).toBe(2)
       expect(order.indexOf('run-end')).toBe(order.length - 1)
       await handle.dispose()
     })
@@ -900,19 +1060,28 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
             id: SessionId('late-published-child'),
             localAgent: undefined,
             result: Promise.resolve({ output: [], stopReason: 'aborted' }),
-            dispose: async () => { disposals += 1; await rm(resource) },
+            dispose: async () => {
+              disposals += 1
+              await rm(resource)
+            },
           }
         },
       })
       await ctx.plugin(PtcWorkflowEngine, { provider: 'late-publication' })
       const lifecycle: string[] = []
-      ctx.on('workflow/agent-start', () => { lifecycle.push('start') })
-      ctx.on('workflow/agent-end', () => { lifecycle.push('end') })
+      ctx.on('workflow/agent-start', () => {
+        lifecycle.push('start')
+      })
+      ctx.on('workflow/agent-end', () => {
+        lifecycle.push('end')
+      })
       const handle = ctx.workflowEngine.start({ ...scripted("return await agent('pending')"), parent: fakeParent(ctx) })
       try {
         const request = await Promise.race([
           requested.promise,
-          handle.result.then((result) => { throw new Error(`workflow settled before child startup: ${JSON.stringify(result)}`) }),
+          handle.result.then((result) => {
+            throw new Error(`workflow settled before child startup: ${JSON.stringify(result)}`)
+          }),
         ])
         handle.cancel('cancel pending startup')
         expect(request.signal.aborted).toBe(true)
@@ -936,9 +1105,16 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       const starts: number[] = []
       const ends: number[] = []
       const order: string[] = []
-      ctx.on('workflow/agent-start', (_info, child) => { starts.push(child.seq) })
-      ctx.on('workflow/agent-end', (_info, child) => { ends.push(child.seq); order.push('child-end') })
-      ctx.on('workflow/end', () => { order.push('workflow-end') })
+      ctx.on('workflow/agent-start', (_info, child) => {
+        starts.push(child.seq)
+      })
+      ctx.on('workflow/agent-end', (_info, child) => {
+        ends.push(child.seq)
+        order.push('child-end')
+      })
+      ctx.on('workflow/end', () => {
+        order.push('workflow-end')
+      })
       const handle = ctx.workflowEngine.start({
         ...scripted(`agent('slow')
 await agent('release')
@@ -946,7 +1122,9 @@ globalThis.constructor.constructor('return process')().exit(17)`),
         parent,
       })
       try {
-        await waitFor(() => { expect(starts).toHaveLength(2) })
+        await waitFor(() => {
+          expect(starts).toHaveLength(2)
+        })
         provider.runs[1]!.settle(text('exit now'))
         const result = await handle.result
         expect(result.stopReason).toBe('error')
@@ -954,26 +1132,34 @@ globalThis.constructor.constructor('return process')().exit(17)`),
         expect(ends.sort()).toEqual(starts.sort())
         expect(new Set(ends).size).toBe(2)
         expect(order.at(-1)).toBe('workflow-end')
-        expect(provider.runs.every(child => child.disposed && child.disposeCalls === 1)).toBe(true)
-      } finally { await handle.dispose() }
+        expect(provider.runs.every((child) => child.disposed && child.disposeCalls === 1)).toBe(true)
+      } finally {
+        await handle.dispose()
+      }
     })
 
     it('reports an uncaught Node callback exception as a workflow error', async () => {
       const { ctx, parent } = await setup()
-      const result = await run(ctx, parent, scripted(`
+      const result = await run(
+        ctx,
+        parent,
+        scripted(`
 const proc = globalThis.constructor.constructor('return process')()
 proc.nextTick(() => { throw new Error('workflow process failed') })
-await new Promise(() => {})`))
+await new Promise(() => {})`),
+      )
       expect(result.stopReason).toBe('error')
       expect(result.error).toContain('worker-exit')
     })
   })
 
   describe('service API', () => {
-    it('run ids are unique and lifecycle meta is the run\'s borrowed immutable value', async () => {
+    it("run ids are unique and lifecycle meta is the run's borrowed immutable value", async () => {
       const { ctx, parent } = await setup()
       let eventMeta: WorkflowRunInfo | undefined
-      ctx.on('workflow/start', (info) => { eventMeta = info })
+      ctx.on('workflow/start', (info) => {
+        eventMeta = info
+      })
       const first = ctx.workflowEngine.start({ ...scripted('return 1'), parent })
       const second = ctx.workflowEngine.start({ ...scripted('return 2'), parent })
       expect(first.id).not.toBe(second.id)
@@ -998,9 +1184,14 @@ await new Promise(() => {})`))
     it('keeps a holder-owned run usable when the engine unloads before its child starts', async () => {
       const { ctx, parent, provider, engineFiber } = await setup({ reply: () => text('survived reload') })
       let handle!: ReturnType<typeof ctx.workflowEngine.start>
-      const holder = await ctx.plugin(Object.assign((inner: Context) => {
-        handle = inner.workflowEngine.start({ ...scripted("return await agent('after reload')"), parent })
-      }, { inject: ['workflowEngine'] }))
+      const holder = await ctx.plugin(
+        Object.assign(
+          (inner: Context) => {
+            handle = inner.workflowEngine.start({ ...scripted("return await agent('after reload')"), parent })
+          },
+          { inject: ['workflowEngine'] },
+        ),
+      )
 
       try {
         // The holder retains captured dependencies while the engine reloads.

@@ -14,11 +14,12 @@ pre-commit:
       glob: '.agents/notes/archived/**'
       run: node_modules/.bin/tsx scripts/verify-archived-agent-notes.ts
 
-    - name: lint (staged)
+    - name: format and lint (staged)
       glob: '*.{ts,tsx,mts,cts,mjs}'
       exclude:
         - 'vendor/*/src/**'
-      run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --no-error-on-unmatched-pattern {staged_files}
+        - '**/fixtures/**'
+      run: node_modules/vite-plus/bin/vp fmt --write {staged_files} && node_modules/.bin/tsx scripts/run-vp-lint.ts --staged --fix --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     # Regenerate rather than reject: a dependency edit that forgot the notices

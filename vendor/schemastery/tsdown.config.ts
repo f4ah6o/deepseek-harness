@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * Schemastery publishes dual-format output (package.json: main → lib/index.cjs,
@@ -6,6 +6,9 @@ import { defineConfig } from 'tsdown'
  * pin the bundled extensions explicitly so the package retains both formats.
  */
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: ['lib/types/index.js'],
   outDir: 'lib',
   format: ['esm', 'cjs'],

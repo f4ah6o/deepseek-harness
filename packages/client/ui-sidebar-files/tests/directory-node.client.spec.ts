@@ -1,6 +1,6 @@
 /** Directory-node lifecycle tests with controlled stream delivery and deferred reads. */
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { MockInstance } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
+import type { MockInstance } from 'vite-plus/test'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DirectoryNode } from '../src/client/directory-node.ts'
@@ -21,11 +21,20 @@ function mount(path = ROOT, restore: readonly string[] = []) {
   const script = scriptedList()
   const lifetime = new AbortController()
   const reported = Promise.withResolvers<readonly [string, unknown]>()
-  const failed = vi.fn((path: string, error: unknown) => { reported.resolve([path, error]) })
-  const node = new DirectoryNode(path, async (path, signal) => {
-    const result = await script.list(SESSION, path, signal)
-    return result.ok ? result.value : undefined
-  }, (path, signal) => script.watch(SESSION, path, signal), failed, lifetime.signal, restore)
+  const failed = vi.fn((path: string, error: unknown) => {
+    reported.resolve([path, error])
+  })
+  const node = new DirectoryNode(
+    path,
+    async (path, signal) => {
+      const result = await script.list(SESSION, path, signal)
+      return result.ok ? result.value : undefined
+    },
+    (path, signal) => script.watch(SESSION, path, signal),
+    failed,
+    lifetime.signal,
+    restore,
+  )
   onTestFinished(async () => {
     const closing = node.close()
     lifetime.abort()
@@ -66,7 +75,9 @@ describe('DirectoryNode', () => {
     onTestFinished(() => node.close())
     const reading = node.refresh()
     pending.resolve(EMPTY)
-    queueMicrotask(() => { void node.refresh() })
+    queueMicrotask(() => {
+      void node.refresh()
+    })
     await reading
     expect(load).toHaveBeenCalledTimes(2)
   })
@@ -74,7 +85,7 @@ describe('DirectoryNode', () => {
   it('opens one watch per expanded directory and waits for each ready before its first list', async () => {
     const { node, script } = mount()
     expect(node.open()).toBe(node)
-    expect(script.watches.opened.map(stream => stream.path)).toEqual([ROOT])
+    expect(script.watches.opened.map((stream) => stream.path)).toEqual([ROOT])
     expect(script.list).not.toHaveBeenCalled()
     await listReady(node, script, ROOT_LEVEL)
     expect(node.children.size).toBe(0)
@@ -86,7 +97,7 @@ describe('DirectoryNode', () => {
     expect(script.list).toHaveBeenCalledTimes(1)
     const stream = await listReady(child, script, SRC_LEVEL)
     expect(script.list).toHaveBeenLastCalledWith(SESSION, SRC, stream.signal)
-    expect(script.watches.opened.map(stream => stream.path)).toEqual([ROOT, SRC])
+    expect(script.watches.opened.map((stream) => stream.path)).toEqual([ROOT, SRC])
     expect(child.children.size).toBe(0)
   })
 
@@ -100,7 +111,9 @@ describe('DirectoryNode', () => {
     const childRelease = childStream.holdRelease()
     const grandchildRelease = grandchildStream.holdRelease()
     let collapsed = false
-    const closing = node.collapse(SRC).then(() => { collapsed = true })
+    const closing = node.collapse(SRC).then(() => {
+      collapsed = true
+    })
     expect(node.find(SRC)).toBeUndefined()
     expect(childStream.signal.aborted).toBe(true)
     expect(grandchildStream.signal.aborted).toBe(true)
@@ -124,18 +137,24 @@ describe('DirectoryNode', () => {
     expect(script.outstanding()).toEqual([SRC])
     expect(node.children.size).toBe(0)
     await node.collapse(COMPONENTS)
-    await script.settle({ ok: true, value: {
-      entries: [{ name: 'components', type: 'directory' }, { name: 'components-other', type: 'directory' }],
-      truncated: false,
-    } })
+    await script.settle({
+      ok: true,
+      value: {
+        entries: [
+          { name: 'components', type: 'directory' },
+          { name: 'components-other', type: 'directory' },
+        ],
+        truncated: false,
+      },
+    })
     await read.finished
     expect([...node.children.keys()]).toEqual([sibling])
-    expect(script.watches.opened.map(stream => stream.path)).toEqual([SRC, sibling])
+    expect(script.watches.opened.map((stream) => stream.path)).toEqual([SRC, sibling])
 
     const reopened = node.expand(COMPONENTS)!
     await listReady(reopened, script, { entries: [{ name: 'nested', type: 'directory' }], truncated: false })
     expect(reopened.children.size).toBe(0)
-    expect(script.watches.opened.some(stream => stream.path === descendant)).toBe(false)
+    expect(script.watches.opened.some((stream) => stream.path === descendant)).toBe(false)
   })
 
   it.each(['removed', 'file'] as const)('closes a child subtree when its parent lists it as %s', async (replacement) => {
@@ -145,10 +164,13 @@ describe('DirectoryNode', () => {
     const childStream = await listReady(child, script, SRC_LEVEL)
     const grandchildStream = await listReady(child.expand(COMPONENTS)!, script, EMPTY)
     const read = await watchedRead(node, script, 'change')
-    await script.settle({ ok: true, value: {
-      entries: replacement === 'file' ? [{ name: 'src', type: 'file' }] : [],
-      truncated: false,
-    } })
+    await script.settle({
+      ok: true,
+      value: {
+        entries: replacement === 'file' ? [{ name: 'src', type: 'file' }] : [],
+        truncated: false,
+      },
+    })
     await read.finished
     expect(node.children.size).toBe(0)
     expect(childStream.signal.aborted).toBe(true)
@@ -196,7 +218,7 @@ describe('DirectoryNode', () => {
     await finished
     node.setAutomatic(true)
     expect(script.list).toHaveBeenCalledTimes(4)
-    expect(script.watches.opened.map(stream => stream.path)).toEqual([ROOT, SRC])
+    expect(script.watches.opened.map((stream) => stream.path)).toEqual([ROOT, SRC])
   })
 
   it('manual refresh consumes pending changes without enabling automatic refresh', async () => {
@@ -223,7 +245,9 @@ describe('DirectoryNode', () => {
     const read = await watchedRead(node, script)
     const release = read.stream.holdRelease()
     let closed = false
-    const closing = node.close().then(() => { closed = true })
+    const closing = node.close().then(() => {
+      closed = true
+    })
     expect(read.stream.signal.aborted).toBe(true)
     expect((await script.waitForList(0)).signal.aborted).toBe(true)
     await read.stream.releasing.promise
@@ -235,7 +259,7 @@ describe('DirectoryNode', () => {
     await closing
     expect(node.children.size).toBe(0)
     expect(node.expand(SRC)).toBeUndefined()
-    expect(script.watches.opened.map(stream => stream.path)).toEqual([ROOT])
+    expect(script.watches.opened.map((stream) => stream.path)).toEqual([ROOT])
   })
 
   it('closes a subscription cancelled before ready without listing', async () => {

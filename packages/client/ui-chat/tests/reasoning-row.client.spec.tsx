@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -47,13 +47,22 @@ describe('ReasoningRow', () => {
     const useDisclosure = bindDisclosure(reset)
     const mode = createSnapshotStore<TranscriptViewMode>('standard')
     const usePresentation = bindSnapshotSelector(derivePresentationPolicy(mode))
-    const view = render(<ReasoningRow useDisclosure={useDisclosure}
-      text={'First line\n\nDetailed body'} running={false} usePresentation={usePresentation} t={t} />)
+    const view = render(
+      <ReasoningRow
+        useDisclosure={useDisclosure}
+        text={'First line\n\nDetailed body'}
+        running={false}
+        usePresentation={usePresentation}
+        t={t}
+      />,
+    )
     const root = view.container.querySelector('[data-variant="think"]')!
     const summary = view.getByText('First line')
     const toggle = view.getByRole('button')
     for (const next of ['compact', 'standard', 'detailed', 'verbose', 'compact'] as const) {
-      act(() => { mode.set(next) })
+      act(() => {
+        mode.set(next)
+      })
       expect(view.getByText('First line')).toBe(summary)
       expect(root.hasAttribute('data-preview')).toBe(next !== 'compact')
       expect(root.querySelector('[data-markdown-variant]')).toBeNull()
@@ -61,12 +70,16 @@ describe('ReasoningRow', () => {
     fireEvent.click(toggle)
     const body = view.getByText('Detailed body')
     for (const next of ['standard', 'detailed', 'verbose', 'compact'] as const) {
-      act(() => { mode.set(next) })
+      act(() => {
+        mode.set(next)
+      })
       expect(view.getByText('Detailed body')).toBe(body)
       expect(toggle.getAttribute('aria-expanded')).toBe('true')
       expect(root.hasAttribute('data-preview')).toBe(false)
     }
-    act(() => { reset.set(1) })
+    act(() => {
+      reset.set(1)
+    })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(view.queryByText('Detailed body')).toBeNull()
     expect(view.getByRole('button')).toBe(toggle)
@@ -91,22 +104,37 @@ describe('ReasoningRow', () => {
   ])('starts collapsed and preserves manual expansion when $kind arrives', (nextBlock) => {
     const reasoning = { kind: 'reasoning' as const, text: 'Inspect the session\nCheck persistence' }
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning]} streaming renderMessageImages={renderMessageImages} />,
+        t={t}
+        blocks={[reasoning]}
+        streaming
+        renderMessageImages={renderMessageImages}
+      />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(view.getByText('思考'))
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning, nextBlock]} streaming renderMessageImages={renderMessageImages} />,
+        t={t}
+        blocks={[reasoning, nextBlock]}
+        streaming
+        renderMessageImages={renderMessageImages}
+      />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
-        t={t} blocks={[reasoning, nextBlock]} streaming={false} renderMessageImages={renderMessageImages} />,
+        t={t}
+        blocks={[reasoning, nextBlock]}
+        streaming={false}
+        renderMessageImages={renderMessageImages}
+      />,
     )
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
     expect(view.getByText(/Check persistence/)).toBeTruthy()
@@ -116,7 +144,8 @@ describe('ReasoningRow', () => {
 
   it('advances on completed paragraph first lines, then restores the settled first line', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nDetails\n\nNewest reasoning tokens\n' }]}
@@ -126,25 +155,27 @@ describe('ReasoningRow', () => {
     )
     expect(view.getByText('运行中')).toBeTruthy()
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')?.getAttribute('data-streaming'))
-      .toBe('true')
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')?.getAttribute('data-streaming')).toBe('true')
 
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
-        blocks={[{ kind: 'reasoning', text: 'Inspect the session\nDetails\n\nNewest reasoning tokens\nMore details\n\nChecking boundaries' }]}
+        blocks={[
+          { kind: 'reasoning', text: 'Inspect the session\nDetails\n\nNewest reasoning tokens\nMore details\n\nChecking boundaries' },
+        ]}
         streaming
         renderMessageImages={renderMessageImages}
       />,
     )
-    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')
-      ?.getAttribute('data-streaming')).toBe('true')
+    expect(view.getByText('Newest reasoning tokens').closest('[data-streaming]')?.getAttribute('data-streaming')).toBe('true')
     expect(view.queryByText('Checking boundaries')).toBeNull()
 
     const text = 'Inspect the session\nDetails\n\nNewest reasoning tokens\nMore details\n\nChecking boundaries\n'
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
@@ -156,7 +187,8 @@ describe('ReasoningRow', () => {
     expect(view.queryByText('Newest reasoning tokens')).toBeNull()
 
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
@@ -172,7 +204,8 @@ describe('ReasoningRow', () => {
 
   it('expands from either Think or the reasoning summary', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
@@ -203,7 +236,8 @@ describe('ReasoningRow', () => {
     },
   ])('strips double-asterisk markers from the $label summary and renders body emphasis', ({ text, streaming }) => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
@@ -221,10 +255,11 @@ describe('ReasoningRow', () => {
   })
 
   it('keeps heading syntax in the collapsed summary and renders compact headings when expanded', () => {
-    const text = Array.from({ length: 6 }, (_, index) => `${'#'.repeat(index + 1)} Section ${index + 1}`)
-      .join('\n\n') + '\n\nReasoning body.'
+    const text =
+      Array.from({ length: 6 }, (_, index) => `${'#'.repeat(index + 1)} Section ${index + 1}`).join('\n\n') + '\n\nReasoning body.'
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
@@ -250,7 +285,8 @@ describe('ReasoningRow', () => {
   it('keeps completed reasoning blocks mounted while the open streaming tail grows', () => {
     const first = '## Investigation\n\n**Check persistence**\n\n'
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: first }]}
@@ -263,7 +299,8 @@ describe('ReasoningRow', () => {
     const emphasis = view.getByText('Check persistence')
     const text = first + Array.from({ length: 8 }, (_, index) => `Paragraph ${index}.`).join('\n\n')
     view.rerender(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text }]}
@@ -278,7 +315,8 @@ describe('ReasoningRow', () => {
 
   it('expanded Think drops the inline summary and renders prose without an IN card', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
@@ -295,7 +333,8 @@ describe('ReasoningRow', () => {
 
   it('anchors the sticky-header selector: only an open Think row nests the disclosure row under data-expanded and data-open', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[
@@ -309,10 +348,6 @@ describe('ReasoningRow', () => {
     // Collapsed: no `data-open`, so the sticky rule's gate never matches.
     expect(view.container.querySelector('[data-variant="think"] [data-open]')).toBeNull()
     fireEvent.click(view.getByText('思考'))
-    expect(
-      view.container.querySelector(
-        '[data-variant="think"][data-expanded] [data-open] [data-disclosure-row]',
-      ),
-    ).not.toBeNull()
+    expect(view.container.querySelector('[data-variant="think"][data-expanded] [data-open] [data-disclosure-row]')).not.toBeNull()
   })
 })

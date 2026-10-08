@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
@@ -25,11 +25,13 @@ const projection: SessionMessageProjection<'test/project'> = {
 
 const contexts: Context[] = []
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 function input(session: Session) {
-  return session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'original' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+  return session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'original' }], source: { kind: 'user' } }), {
+    surfaceOp: 'append',
+  })
 }
 
 describe('plugin-owned message projections', () => {
@@ -65,7 +67,9 @@ describe('plugin-owned message projections', () => {
     await ctx.plugin(SessionStore)
     const fiber = await ctx.plugin({
       inject: ['sessions'],
-      apply(owner: Context) { owner.sessions.registerMessageProjection(projection) },
+      apply(owner: Context) {
+        owner.sessions.registerMessageProjection(projection)
+      },
     })
     expect(() => ctx.sessions.registerMessageProjection(projection)).toThrow(/already registered/)
     const live = ctx.sessions.create(SessionId('live'))
@@ -78,8 +82,10 @@ describe('plugin-owned message projections', () => {
     const child = ctx.sessions.fork(live)
     expect(child.deriveMessages()).toEqual(before)
     const restored = ctx.sessions.prepare(SessionId('restore'), {
-      seed: [...live.snapshotEvents()], meta: { ...live.header, id: SessionId('restore') },
-      inheritedEventCount: live.inheritedEventCount, eventState: 'shared-frozen',
+      seed: [...live.snapshotEvents()],
+      meta: { ...live.header, id: SessionId('restore') },
+      inheritedEventCount: live.inheritedEventCount,
+      eventState: 'shared-frozen',
     })
     expect(restored.deriveMessages()).toEqual(before)
     await fiber.dispose()

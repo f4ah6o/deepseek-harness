@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream'
 import os from 'node:os'
 import { syncBuiltinESMExports } from 'node:module'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,13 +37,18 @@ function unmockLazyRequireForIsolatedRuntime(): void {
 
 function spec(command: string, overrides: Partial<SubprocessSpawnSpec> = {}): SubprocessSpawnSpec {
   // Windows has no bash; the suite's simple commands translate to node one-liners.
-  const argv = process.platform === 'win32'
-    ? [process.execPath, '-e', {
-      'echo managed': 'console.log("managed")',
-      'sleep 60': 'setTimeout(() => {}, 60000)',
-      'true': '',
-    }[command] ?? command]
-    : ['bash', '-c', command]
+  const argv =
+    process.platform === 'win32'
+      ? [
+          process.execPath,
+          '-e',
+          {
+            'echo managed': 'console.log("managed")',
+            'sleep 60': 'setTimeout(() => {}, 60000)',
+            true: '',
+          }[command] ?? command,
+        ]
+      : ['bash', '-c', command]
   return {
     argv,
     cwd: process.cwd(),
@@ -61,7 +66,11 @@ describe('LocalSubprocessRuntime', () => {
   it('discovers the platform shell without inventing a missing default and honors cancellation', async () => {
     let loginShell: string | null = '/account/shell'
     const userInfo = vi.spyOn(os, 'userInfo').mockImplementation(() => ({
-      uid: 1, gid: 1, username: 'terminal-user', homedir: '/home/terminal-user', shell: loginShell,
+      uid: 1,
+      gid: 1,
+      username: 'terminal-user',
+      homedir: '/home/terminal-user',
+      shell: loginShell,
     }))
     let fiber: Awaited<ReturnType<Context['plugin']>> | undefined
     let restorePlatform: (() => void) | undefined
@@ -70,15 +79,19 @@ describe('LocalSubprocessRuntime', () => {
       const ctx = new Context()
       fiber = await ctx.plugin(LocalSubprocessRuntime)
       const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-      restorePlatform = () => { platform.mockRestore() }
+      restorePlatform = () => {
+        platform.mockRestore()
+      }
       vi.stubEnv('SHELL', '/environment/shell')
       await expect(ctx.subprocess.terminalEnvironment()).resolves.toEqual({
-        platform: 'posix', defaultShell: '/environment/shell',
+        platform: 'posix',
+        defaultShell: '/environment/shell',
       })
       expect(userInfo).not.toHaveBeenCalled()
       vi.stubEnv('SHELL', undefined)
       await expect(ctx.subprocess.terminalEnvironment()).resolves.toEqual({
-        platform: 'posix', defaultShell: '/account/shell',
+        platform: 'posix',
+        defaultShell: '/account/shell',
       })
       vi.stubEnv('SHELL', '')
       await expect(ctx.subprocess.terminalEnvironment()).resolves.toEqual({ platform: 'posix', defaultShell: '/account/shell' })
@@ -89,7 +102,8 @@ describe('LocalSubprocessRuntime', () => {
       platform.mockReturnValue('win32')
       vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
       await expect(ctx.subprocess.terminalEnvironment()).resolves.toEqual({
-        platform: 'windows', defaultShell: 'C:\\Windows\\System32\\cmd.exe',
+        platform: 'windows',
+        defaultShell: 'C:\\Windows\\System32\\cmd.exe',
       })
       vi.stubEnv('ComSpec', undefined)
       await expect(ctx.subprocess.terminalEnvironment()).resolves.toEqual({ platform: 'windows' })
@@ -117,7 +131,7 @@ describe('LocalSubprocessRuntime', () => {
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
     try {
       const listeners = process.listeners('exit')
-      const finalizer = listeners.find(candidate => !baseline.has(candidate) && candidate !== prior)
+      const finalizer = listeners.find((candidate) => !baseline.has(candidate) && candidate !== prior)
       expect(finalizer).toBeTypeOf('function')
       expect(listeners.indexOf(finalizer!)).toBeLessThan(listeners.indexOf(prior))
     } finally {
@@ -130,31 +144,40 @@ describe('LocalSubprocessRuntime', () => {
     const before = new Set(process.listeners('exit'))
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     expect(listener).toBeTypeOf('function')
 
     let finishExit!: () => void
-    const exited = new Promise<void>((resolve) => { finishExit = resolve })
+    const exited = new Promise<void>((resolve) => {
+      finishExit = resolve
+    })
     const terminate = vi.fn()
     const terminateForHostExit = vi.fn()
-    const live = (ctx.subprocess as unknown as {
-      live: Set<{
-        done: Promise<{ exitCode: number; signal: null }>
-        terminate(): void
-        terminateForHostExit(): void
-        waitForExit(): Promise<boolean>
-      }>
-    }).live
+    const live = (
+      ctx.subprocess as unknown as {
+        live: Set<{
+          done: Promise<{ exitCode: number; signal: null }>
+          terminate(): void
+          terminateForHostExit(): void
+          waitForExit(): Promise<boolean>
+        }>
+      }
+    ).live
     live.add({
       done: Promise.resolve({ exitCode: 0, signal: null }),
       terminate,
       terminateForHostExit,
-      waitForExit: async () => { await exited; return true },
+      waitForExit: async () => {
+        await exited
+        return true
+      },
     })
 
     let disposed = false
-    const disposing = fiber.dispose().then(() => { disposed = true })
-    await new Promise(resolve => setImmediate(resolve))
+    const disposing = fiber.dispose().then(() => {
+      disposed = true
+    })
+    await new Promise((resolve) => setImmediate(resolve))
     expect(disposed).toBe(false)
     expect(live.size).toBe(1)
     listener?.(0)
@@ -171,31 +194,43 @@ describe('LocalSubprocessRuntime', () => {
     const before = new Set(process.listeners('exit'))
     const ctx = new Context()
     const disposalErrors: unknown[] = []
-    ctx.logger.error = ((error: unknown) => { disposalErrors.push(error) }) as typeof ctx.logger.error
+    ctx.logger.error = ((error: unknown) => {
+      disposalErrors.push(error)
+    }) as typeof ctx.logger.error
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     const rangeFailure = new Error('managed range became unreadable')
     const terminate = vi.fn()
     const terminateForHostExit = vi.fn()
-    const live = (ctx.subprocess as unknown as {
-      live: Set<{
-        done: Promise<never>
-        terminate(): void
-        terminateForHostExit(): void
-        waitForExit(): Promise<boolean>
-      }>
-    }).live
+    const live = (
+      ctx.subprocess as unknown as {
+        live: Set<{
+          done: Promise<never>
+          terminate(): void
+          terminateForHostExit(): void
+          waitForExit(): Promise<boolean>
+        }>
+      }
+    ).live
     live.add({
       done: new Promise<never>(() => {}),
       terminate,
       terminateForHostExit,
-      waitForExit: async () => { throw rangeFailure },
+      waitForExit: async () => {
+        throw rangeFailure
+      },
     })
 
-    await expect(Promise.race([
-      fiber.dispose().then(() => 'disposed'),
-      new Promise<string>(resolve => setTimeout(() => { resolve('timeout') }, 100)),
-    ])).resolves.toBe('disposed')
+    await expect(
+      Promise.race([
+        fiber.dispose().then(() => 'disposed'),
+        new Promise<string>((resolve) =>
+          setTimeout(() => {
+            resolve('timeout')
+          }, 100),
+        ),
+      ]),
+    ).resolves.toBe('disposed')
     expect(terminate).toHaveBeenCalledOnce()
     expect(terminateForHostExit).toHaveBeenCalledOnce()
     expect(disposalErrors).toEqual([rangeFailure])
@@ -210,11 +245,15 @@ describe('LocalSubprocessRuntime', () => {
     const before = new Set(process.listeners('exit'))
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     expect(listener).toBeTypeOf('function')
-    const ordinaryFailure = vi.fn(() => { throw new Error('ordinary failed') })
+    const ordinaryFailure = vi.fn(() => {
+      throw new Error('ordinary failed')
+    })
     const ordinarySuccess = vi.fn()
-    const terminalFailure = vi.fn(() => { throw new Error('terminal failed') })
+    const terminalFailure = vi.fn(() => {
+      throw new Error('terminal failed')
+    })
     const terminalSuccess = vi.fn()
     const service = ctx.subprocess as unknown as {
       live: Set<{ terminateForHostExit(): void }>
@@ -225,7 +264,9 @@ describe('LocalSubprocessRuntime', () => {
     service.terminals.add({ terminateForHostExit: terminalFailure })
     service.terminals.add({ terminateForHostExit: terminalSuccess })
 
-    expect(() => { listener?.(0) }).not.toThrow()
+    expect(() => {
+      listener?.(0)
+    }).not.toThrow()
     expect(ordinaryFailure).toHaveBeenCalledOnce()
     expect(ordinarySuccess).toHaveBeenCalledOnce()
     expect(terminalFailure).toHaveBeenCalledOnce()
@@ -240,25 +281,23 @@ describe('LocalSubprocessRuntime', () => {
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
     expect(await ctx.subprocess.resolveExecutable(process.execPath)).toBe(process.execPath)
-    expect(await ctx.subprocess.resolveExecutable(basename(process.execPath), {
-      PATH: dirname(process.execPath),
-    })).toBe(process.execPath)
-    expect(await ctx.subprocess.resolveExecutable(basename(process.execPath), {
-      PATH: relative(process.cwd(), dirname(process.execPath)) || '.',
-    })).toBe(process.execPath)
+    expect(
+      await ctx.subprocess.resolveExecutable(basename(process.execPath), {
+        PATH: dirname(process.execPath),
+      }),
+    ).toBe(process.execPath)
+    expect(
+      await ctx.subprocess.resolveExecutable(basename(process.execPath), {
+        PATH: relative(process.cwd(), dirname(process.execPath)) || '.',
+      }),
+    ).toBe(process.execPath)
     await expect(ctx.subprocess.resolveExecutable('')).rejects.toThrow('must be non-empty')
-    await expect(ctx.subprocess.resolveExecutable('./bin/tsserver'))
-      .rejects.toThrow('is a relative path')
-    await expect(ctx.subprocess.resolveExecutable('node_modules/.bin/server'))
-      .rejects.toThrow('is a relative path')
-    await expect(ctx.subprocess.resolveExecutable('dsh-command-that-does-not-exist', { PATH: '' }))
-      .rejects.toThrow('was not found on PATH')
-    await expect(ctx.subprocess.resolveExecutable('/dsh-absolute-command-that-does-not-exist'))
-      .rejects.toThrow('is not an executable file')
-    await expect(ctx.subprocess.resolveExecutable(process.cwd()))
-      .rejects.toThrow('is not an executable file')
-    await expect(ctx.subprocess.resolveExecutable(process.execPath, {}, AbortSignal.abort('stop')))
-      .rejects.toBe('stop')
+    await expect(ctx.subprocess.resolveExecutable('./bin/tsserver')).rejects.toThrow('is a relative path')
+    await expect(ctx.subprocess.resolveExecutable('node_modules/.bin/server')).rejects.toThrow('is a relative path')
+    await expect(ctx.subprocess.resolveExecutable('dsh-command-that-does-not-exist', { PATH: '' })).rejects.toThrow('was not found on PATH')
+    await expect(ctx.subprocess.resolveExecutable('/dsh-absolute-command-that-does-not-exist')).rejects.toThrow('is not an executable file')
+    await expect(ctx.subprocess.resolveExecutable(process.cwd())).rejects.toThrow('is not an executable file')
+    await expect(ctx.subprocess.resolveExecutable(process.execPath, {}, AbortSignal.abort('stop'))).rejects.toBe('stop')
     await fiber.dispose()
   })
 
@@ -266,22 +305,22 @@ describe('LocalSubprocessRuntime', () => {
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
     const service = ctx.subprocess as LocalSubprocessRuntime
-    const candidates = (service as unknown as {
-      executableCandidates(command: string, env: NodeJS.ProcessEnv): string[]
-    }).executableCandidates.bind(service)
+    const candidates = (
+      service as unknown as {
+        executableCandidates(command: string, env: NodeJS.ProcessEnv): string[]
+      }
+    ).executableCandidates.bind(service)
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
-      expect(Object.keys(childEnv()).filter(key => key.toUpperCase() === 'PATH')).toHaveLength(1)
+      expect(Object.keys(childEnv()).filter((key) => key.toUpperCase() === 'PATH')).toHaveLength(1)
       const explicit = childEnv({ Path: '/bin', PathExt: '.EXE;.CMD' })
-      expect(Object.keys(explicit).filter(key => key.toUpperCase() === 'PATH')).toEqual(['Path'])
-      expect(Object.keys(explicit).filter(key => key.toUpperCase() === 'PATHEXT')).toEqual(['PathExt'])
+      expect(Object.keys(explicit).filter((key) => key.toUpperCase() === 'PATH')).toEqual(['Path'])
+      expect(Object.keys(explicit).filter((key) => key.toUpperCase() === 'PATHEXT')).toEqual(['PathExt'])
       expect(candidates('tool', explicit)).toEqual([resolve('/bin', 'tool.EXE'), resolve('/bin', 'tool.CMD')])
-      expect(candidates('tool', { Path: '/ambient', PATH: '/explicit', PATHEXT: '.EXE' }))
-        .toEqual([resolve('/explicit', 'tool.EXE')])
+      expect(candidates('tool', { Path: '/ambient', PATH: '/explicit', PATHEXT: '.EXE' })).toEqual([resolve('/explicit', 'tool.EXE')])
       expect(candidates('tool.exe', {})).toEqual([resolve(process.cwd(), 'tool.exe')])
       expect(candidates('tool', { PATH: '/bin' })).toHaveLength(4)
-      await expect(ctx.subprocess.resolveExecutable(String.raw`bin\server.exe`))
-        .rejects.toThrow('is a relative path')
+      await expect(ctx.subprocess.resolveExecutable(String.raw`bin\server.exe`)).rejects.toThrow('is a relative path')
     } finally {
       platform.mockRestore()
       await fiber.dispose()
@@ -292,7 +331,12 @@ describe('LocalSubprocessRuntime', () => {
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
     const base: SubprocessTerminalSpawnSpec = {
-      argv: ['bash'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 10,
+      argv: ['bash'],
+      cwd: process.cwd(),
+      rows: 24,
+      cols: 80,
+      terminalType: 'dumb',
+      graceMs: 10,
     }
     await expect(ctx.subprocess.spawnTerminal({ ...base, argv: [] })).rejects.toThrow('must contain a program')
     await expect(ctx.subprocess.spawnTerminal({ ...base, argv: [''] })).rejects.toThrow('must contain a program')
@@ -326,13 +370,15 @@ describe('LocalSubprocessRuntime', () => {
     const before = new Set(process.listeners('exit'))
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     expect(listener).toBeTypeOf('function')
     const service = ctx.subprocess
     const firstFailure = new Error('first cleanup failure')
     const secondFailure = new Error('second cleanup failure')
     const disposalErrors: unknown[] = []
-    ctx.logger.error = ((error: unknown) => { disposalErrors.push(error) }) as typeof ctx.logger.error
+    ctx.logger.error = ((error: unknown) => {
+      disposalErrors.push(error)
+    }) as typeof ctx.logger.error
     const failedTerminal: SubprocessTerminalHandle = {
       pid: 1,
       output: new PassThrough(),
@@ -342,11 +388,15 @@ describe('LocalSubprocessRuntime', () => {
       inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
       inspectForeground: async () => undefined,
       signalForeground: async () => 1,
-      terminate: vi.fn(async () => { throw firstFailure }),
+      terminate: vi.fn(async () => {
+        throw firstFailure
+      }),
     }
     const secondFailedTerminal: SubprocessTerminalHandle = {
       ...failedTerminal,
-      terminate: vi.fn(async () => { throw secondFailure }),
+      terminate: vi.fn(async () => {
+        throw secondFailure
+      }),
     }
     let finishCleanup!: () => void
     const cleanup = new Promise<void>((resolve) => {
@@ -362,8 +412,10 @@ describe('LocalSubprocessRuntime', () => {
     terminals.add(drainingTerminal)
 
     let disposed = false
-    const disposing = fiber.dispose().then(() => { disposed = true })
-    await new Promise(resolve => setImmediate(resolve))
+    const disposing = fiber.dispose().then(() => {
+      disposed = true
+    })
+    await new Promise((resolve) => setImmediate(resolve))
     expect(disposed).toBe(false)
     finishCleanup()
     await disposing
@@ -382,9 +434,11 @@ describe('LocalSubprocessRuntime', () => {
     const ctx = new Context()
     const failure = new Error('single cleanup failure')
     const disposalErrors: unknown[] = []
-    ctx.logger.error = ((error: unknown) => { disposalErrors.push(error) }) as typeof ctx.logger.error
+    ctx.logger.error = ((error: unknown) => {
+      disposalErrors.push(error)
+    }) as typeof ctx.logger.error
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     expect(listener).toBeTypeOf('function')
     const service = ctx.subprocess
     const terminal: SubprocessTerminalHandle = {
@@ -396,7 +450,9 @@ describe('LocalSubprocessRuntime', () => {
       inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
       inspectForeground: async () => undefined,
       signalForeground: async () => 1,
-      terminate: vi.fn(async () => { throw failure }),
+      terminate: vi.fn(async () => {
+        throw failure
+      }),
     }
     const terminals = (service as unknown as { terminals: Set<SubprocessTerminalHandle> }).terminals
     terminals.add(terminal)
@@ -413,14 +469,16 @@ describe('LocalSubprocessRuntime', () => {
     const before = new Set(process.listeners('exit'))
     const ctx = new Context()
     const fiber = await ctx.plugin(LocalSubprocessRuntime)
-    const listener = process.listeners('exit').find(candidate => !before.has(candidate))
+    const listener = process.listeners('exit').find((candidate) => !before.has(candidate))
     expect(listener).toBeTypeOf('function')
     const failure = new Error('cleanup failed')
     const terminateForHostExit = vi.fn(() => {
       expect(process.listeners('exit')).toContain(listener)
     })
     const terminal = {
-      terminate: vi.fn(async () => { throw failure }),
+      terminate: vi.fn(async () => {
+        throw failure
+      }),
       terminateForHostExit,
     }
     const terminals = (ctx.subprocess as unknown as { terminals: Set<typeof terminal> }).terminals
@@ -459,12 +517,12 @@ describe('LocalSubprocessRuntime', () => {
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
     mockNodePtyForIsolatedRuntime(() => terminal)
-    vi.doMock('../src/process-inspector.ts', async importOriginal => ({
-      ...await importOriginal<typeof import('../src/process-inspector.ts')>(),
+    vi.doMock('../src/process-inspector.ts', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/process-inspector.ts')>()),
       createProcessInspector: () => inspector,
     }))
-    vi.doMock('../src/linux-scope.ts', async importOriginal => ({
-      ...await importOriginal<typeof import('../src/linux-scope.ts')>(),
+    vi.doMock('../src/linux-scope.ts', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/linux-scope.ts')>()),
       probeLinuxNative: () => false,
     }))
     try {
@@ -473,7 +531,12 @@ describe('LocalSubprocessRuntime', () => {
       const fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
       const service = ctx.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       const handle = await ctx.subprocess.spawnTerminal({
-        argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 1,
+        argv: ['shell'],
+        cwd: process.cwd(),
+        rows: 24,
+        cols: 80,
+        terminalType: 'dumb',
+        graceMs: 1,
       })
       expect((service as unknown as { terminals: Set<SubprocessTerminalHandle> }).terminals.size).toBe(1)
       exitListener?.({ exitCode: 0 })
@@ -518,7 +581,7 @@ describe('LocalSubprocessRuntime', () => {
     const launcherStates: boolean[] = []
     const bindOwner = vi.fn((direct: { running(): boolean; signal(signal: 'SIGTERM' | 'SIGKILL'): boolean; settled: Promise<unknown> }) => {
       launcherRunning = () => direct.running()
-      launcherSignal = signal => direct.signal(signal)
+      launcherSignal = (signal) => direct.signal(signal)
       launcherSettlement = direct.settled
       launcherStates.push(direct.running())
       return owner
@@ -594,14 +657,22 @@ describe('LocalSubprocessRuntime', () => {
       expect(terminalKill).not.toHaveBeenCalled()
       directProbe.mockImplementationOnce(() => true)
       expect(launcherSignal?.('SIGKILL')).toBe(true)
-      directProbe.mockImplementation(() => { throw Object.assign(new Error('absent'), { code: 'ESRCH' }) })
+      directProbe.mockImplementation(() => {
+        throw Object.assign(new Error('absent'), { code: 'ESRCH' })
+      })
       expect(launcherSignal?.('SIGKILL')).toBe(true)
       expect(directProbe.mock.calls).toEqual([
-        [123, 'SIGTERM'], [123, 0], [123, 'SIGKILL'], [123, 'SIGKILL'], [123, 0],
+        [123, 'SIGTERM'],
+        [123, 0],
+        [123, 'SIGKILL'],
+        [123, 'SIGKILL'],
+        [123, 0],
       ])
       let directSettled = false
-      void launcherSettlement?.then(() => { directSettled = true })
-      await new Promise<void>(resolve => setImmediate(resolve))
+      void launcherSettlement?.then(() => {
+        directSettled = true
+      })
+      await new Promise<void>((resolve) => setImmediate(resolve))
       expect(directSettled).toBe(false)
 
       exitListener?.({ exitCode: 0 })
@@ -609,7 +680,7 @@ describe('LocalSubprocessRuntime', () => {
       await launcherSettlement
       expect(directSettled).toBe(true)
       await handle.done
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(owner.signal).toHaveBeenCalledExactlyOnceWith('SIGTERM')
       expect(owner.waitForExit).toHaveBeenCalledOnce()
     } finally {
@@ -625,7 +696,9 @@ describe('LocalSubprocessRuntime', () => {
   it('cleans the Linux terminal launch protocol when node-pty throws synchronously', async () => {
     const launchFailure = new Error('node-pty launch failed')
     const cleanup = vi.fn()
-    const nodePtySpawn = vi.fn(() => { throw launchFailure })
+    const nodePtySpawn = vi.fn(() => {
+      throw launchFailure
+    })
     const prepareLinuxTerminalScope = vi.fn(() => ({
       command: '/usr/bin/systemd-run',
       args: ['--user', '--scope', '--', 'shell'],
@@ -667,9 +740,16 @@ describe('LocalSubprocessRuntime', () => {
       runtime.internals = { platform: 'linux' }
       runtime.terminalInspector = inspector
 
-      await expect(runtime.spawnTerminal({
-        argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 10,
-      })).rejects.toBe(launchFailure)
+      await expect(
+        runtime.spawnTerminal({
+          argv: ['shell'],
+          cwd: process.cwd(),
+          rows: 24,
+          cols: 80,
+          terminalType: 'dumb',
+          graceMs: 10,
+        }),
+      ).rejects.toBe(launchFailure)
       expect(cleanup).toHaveBeenCalledOnce()
     } finally {
       await fiber?.dispose()
@@ -699,7 +779,9 @@ describe('LocalSubprocessRuntime', () => {
       const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
       const ctx = new Context()
       const disposalErrors: unknown[] = []
-      ctx.logger.error = ((error: unknown) => { disposalErrors.push(error) }) as typeof ctx.logger.error
+      ctx.logger.error = ((error: unknown) => {
+        disposalErrors.push(error)
+      }) as typeof ctx.logger.error
       const fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
       const alive = new Set([124])
       // Pins the containment choice: with the host's native scope a mocked PTY
@@ -709,16 +791,24 @@ describe('LocalSubprocessRuntime', () => {
         foregroundPgid: () => 123,
         isStdinWaiting: () => false,
         snapshot: () => ({
-          tree: () => [{ pid: 123, started: 'shell' }, { pid: 124, started: 'child' }],
+          tree: () => [
+            { pid: 123, started: 'shell' },
+            { pid: 124, started: 'child' },
+          ],
           session: () => [],
-          alive: identity => alive.has(identity.pid),
+          alive: (identity) => alive.has(identity.pid),
         }),
-        isAlive: identity => alive.has(identity.pid),
+        isAlive: (identity) => alive.has(identity.pid),
         signalGroup: () => {},
         signalProcess: () => {},
       }
       const handle = await ctx.subprocess.spawnTerminal({
-        argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 1,
+        argv: ['shell'],
+        cwd: process.cwd(),
+        rows: 24,
+        cols: 80,
+        terminalType: 'dumb',
+        graceMs: 1,
       })
       const terminate = vi.spyOn(handle, 'terminate')
       exitListener?.({ exitCode: 0 })
@@ -755,10 +845,12 @@ describe('LocalSubprocessRuntime', () => {
     const runtime = ctx.subprocess as LocalSubprocessRuntime
     runtime.internals = { spillDir: removedDir }
     try {
-      const handle = runtime.spawn(spec('', {
-        argv: [process.execPath, '-e', 'process.stdout.write("x".repeat(4096))'],
-        stdio: { stdin: 'ignore', stdout: { maxBytes: 16, spill: { maxBytes: 1_000_000 } }, stderr: 'pipe' },
-      }))
+      const handle = runtime.spawn(
+        spec('', {
+          argv: [process.execPath, '-e', 'process.stdout.write("x".repeat(4096))'],
+          stdio: { stdin: 'ignore', stdout: { maxBytes: 16, spill: { maxBytes: 1_000_000 } }, stderr: 'pipe' },
+        }),
+      )
       const result = await handle.done
       expect(result.exitCode).toBe(0)
       const stdout = handle.collected.stdout!.readFrom(0)
@@ -786,9 +878,7 @@ describe('LocalSubprocessRuntime', () => {
       const second = runtime.spawn(spec('true'))
       await Promise.all([first.done, second.done])
       expect(warning).toHaveBeenCalledOnce()
-      expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining('descendants that escape the process group'),
-      )
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining('descendants that escape the process group'))
     } finally {
       warning.mockRestore()
       await fiber.dispose()
@@ -811,9 +901,7 @@ describe('LocalSubprocessRuntime', () => {
       }
       try {
         runtime.warnFallback(platform, kind, selectedReason)
-        expect(warning).toHaveBeenLastCalledWith(
-          expect.stringContaining(reason),
-        )
+        expect(warning).toHaveBeenLastCalledWith(expect.stringContaining(reason))
       } finally {
         warning.mockRestore()
         await fiber.dispose()
@@ -861,13 +949,14 @@ describe('LocalSubprocessRuntime', () => {
       probeLinuxNative,
     }))
     vi.doMock('../src/windows-job.ts', () => ({ launchWindowsJob, probeWindowsJob }))
-    vi.doMock('../src/spawn.ts', async importOriginal => ({
-      ...await importOriginal<typeof import('../src/spawn.ts')>(),
+    vi.doMock('../src/spawn.ts', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/spawn.ts')>()),
       bindManagedProcess,
       spawnSubprocess,
     }))
-    vi.doMock('../src/output.ts', async importOriginal => ({
-      ...await importOriginal<typeof import('../src/output.ts')>(), prepareManagedProcessBinding,
+    vi.doMock('../src/output.ts', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/output.ts')>()),
+      prepareManagedProcessBinding,
     }))
     const fibers: Array<{ dispose(): Promise<void> }> = []
     try {
@@ -878,13 +967,15 @@ describe('LocalSubprocessRuntime', () => {
       const linuxRuntime = linuxContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       linuxRuntime.internals = { platform: 'linux' }
       const preparationFailure = new Error('spill directory unavailable')
-      prepareManagedProcessBinding.mockImplementationOnce(() => { throw preparationFailure })
+      prepareManagedProcessBinding.mockImplementationOnce(() => {
+        throw preparationFailure
+      })
       expect(() => linuxRuntime.spawn(spec('true'))).toThrow(preparationFailure)
       expect(launchLinuxScope).not.toHaveBeenCalled()
       await linuxRuntime.spawn(spec('true')).done
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       await linuxRuntime.spawn(spec('true')).done
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(probeLinuxNative).toHaveBeenCalledOnce()
       expect(probeLinuxManager).toHaveBeenCalledTimes(2)
       expect(launchLinuxScope).toHaveBeenCalledTimes(2)
@@ -895,14 +986,10 @@ describe('LocalSubprocessRuntime', () => {
       const windowsRuntime = windowsContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       windowsRuntime.internals = { platform: 'win32' }
       await windowsRuntime.spawn(spec('true')).done
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(probeWindowsJob).toHaveBeenCalledOnce()
       expect(launchWindowsJob).toHaveBeenCalledOnce()
-      expect(bindManagedProcess.mock.calls.map(([, launch]) => launch)).toEqual([
-        linuxLaunch,
-        linuxLaunch,
-        windowsLaunch,
-      ])
+      expect(bindManagedProcess.mock.calls.map(([, launch]) => launch)).toEqual([linuxLaunch, linuxLaunch, windowsLaunch])
       expect(prepareManagedProcessBinding).toHaveBeenCalledTimes(4)
       expect(spawnSubprocess).not.toHaveBeenCalled()
     } finally {
@@ -917,18 +1004,14 @@ describe('LocalSubprocessRuntime', () => {
   })
 
   it('retries failed Linux deep probes, caches the first success, and rechecks the manager', async () => {
-    const probeLinuxNative = vi.fn()
+    const probeLinuxNative = vi
+      .fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true)
-    const probeLinuxManager = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
-    const probeWindowsJob = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
-      .mockReturnValueOnce(true)
+    const probeLinuxManager = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const probeWindowsJob = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true).mockReturnValueOnce(true)
 
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
@@ -949,9 +1032,11 @@ describe('LocalSubprocessRuntime', () => {
       fibers.push(linuxFiber)
       const linuxRuntime = linuxContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       linuxRuntime.internals = { platform: 'linux' }
-      const linuxSelect = (linuxRuntime as unknown as {
-        selectContainmentMode(kind: 'ordinary' | 'terminal'): 'linux-scope' | 'windows-job' | 'fallback'
-      }).selectContainmentMode.bind(linuxRuntime)
+      const linuxSelect = (
+        linuxRuntime as unknown as {
+          selectContainmentMode(kind: 'ordinary' | 'terminal'): 'linux-scope' | 'windows-job' | 'fallback'
+        }
+      ).selectContainmentMode.bind(linuxRuntime)
 
       expect(linuxSelect('ordinary')).toBe('fallback')
       expect(linuxSelect('ordinary')).toBe('fallback')
@@ -968,9 +1053,11 @@ describe('LocalSubprocessRuntime', () => {
       fibers.push(windowsFiber)
       const windowsRuntime = windowsContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       windowsRuntime.internals = { platform: 'win32' }
-      const windowsSelect = (windowsRuntime as unknown as {
-        selectContainmentMode(kind: 'ordinary' | 'terminal'): 'linux-scope' | 'windows-job' | 'fallback'
-      }).selectContainmentMode.bind(windowsRuntime)
+      const windowsSelect = (
+        windowsRuntime as unknown as {
+          selectContainmentMode(kind: 'ordinary' | 'terminal'): 'linux-scope' | 'windows-job' | 'fallback'
+        }
+      ).selectContainmentMode.bind(windowsRuntime)
 
       expect(windowsSelect('ordinary')).toBe('fallback')
       expect(windowsSelect('ordinary')).toBe('windows-job')
@@ -1010,7 +1097,9 @@ describe('LocalSubprocessRuntime', () => {
     const control = new PassThrough({
       destroy(_error, callback) {
         destroying.resolve(undefined)
-        void finishClose.promise.then(() => { callback(null) })
+        void finishClose.promise.then(() => {
+          callback(null)
+        })
       },
     })
     const terminate = vi.fn()
@@ -1025,8 +1114,8 @@ describe('LocalSubprocessRuntime', () => {
     }
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
-    vi.doMock('../src/spawn.ts', async importOriginal => ({
-      ...await importOriginal<typeof import('../src/spawn.ts')>(),
+    vi.doMock('../src/spawn.ts', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/spawn.ts')>()),
       spawnSubprocess: vi.fn(() => handle),
     }))
     let fiber: { dispose(): Promise<void> } | undefined
@@ -1036,16 +1125,20 @@ describe('LocalSubprocessRuntime', () => {
       fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
       const runtime = ctx.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
       runtime.internals = { platform: 'darwin' }
-      const spawned = runtime.spawn(spec('true', {
-        stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit', control: 'pipe' },
-      }))
+      const spawned = runtime.spawn(
+        spec('true', {
+          stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit', control: 'pipe' },
+        }),
+      )
       await spawned.done
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(waitForExit).toHaveBeenCalledOnce()
       expect(control.destroyed).toBe(false)
 
       let disposed = false
-      const disposal = fiber.dispose().then(() => { disposed = true })
+      const disposal = fiber.dispose().then(() => {
+        disposed = true
+      })
       await destroying.promise
       expect(control.destroyed).toBe(true)
       expect(control.closed).toBe(false)
@@ -1085,7 +1178,7 @@ describe('LocalSubprocessRuntime', () => {
     const handle = ctx.subprocess.spawn(spec('true', { cwd: '/nonexistent-dir-dsh-subprocess-test' }))
     await fiber.dispose()
     const settlement = await handle.done.then(
-      outcome => ({ kind: 'stopped' as const, outcome }),
+      (outcome) => ({ kind: 'stopped' as const, outcome }),
       (error: unknown) => ({ kind: 'failed' as const, error }),
     )
     if (settlement.kind === 'failed') {

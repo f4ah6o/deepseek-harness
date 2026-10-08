@@ -1,7 +1,9 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { readOnboardingApiKeyPresence } from '../src/client/onboarding-credentials.ts'
 
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 it.each([false, true])('uses native login API-key presence (%s)', async (present) => {
   const hasApiKey = vi.fn(async () => present)
@@ -11,7 +13,11 @@ it.each([false, true])('uses native login API-key presence (%s)', async (present
 })
 
 it('preserves a native login read failure instead of reporting absent credentials', async () => {
-  vi.stubGlobal('dshOnboarding', { hasApiKey: async () => { throw new Error('metadata unavailable') } })
+  vi.stubGlobal('dshOnboarding', {
+    hasApiKey: async () => {
+      throw new Error('metadata unavailable')
+    },
+  })
   await expect(readOnboardingApiKeyPresence()).rejects.toThrow('metadata unavailable')
 })
 

@@ -3,10 +3,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -23,8 +29,7 @@ describe('web e2e: Markdown file links', () => {
     scaffold = await launchWebScaffold({})
     await mkdir(join(scaffold.workspaceCwd, 'src'))
     await mkdir(join(scaffold.workspaceCwd, 'other'))
-    await writeFile(join(scaffold.workspaceCwd, 'src/example.txt'),
-      Array.from({ length: 60 }, (_, i) => `source line ${i + 1}\n`).join(''))
+    await writeFile(join(scaffold.workspaceCwd, 'src/example.txt'), Array.from({ length: 60 }, (_, i) => `source line ${i + 1}\n`).join(''))
     await writeFile(join(scaffold.workspaceCwd, 'other/example.txt'), 'other file\n')
     await seedSession(scaffold, await readFile(join(SNAPSHOT_DIR, 'session.v3.jsonl'), 'utf8'), 'markdown-file-links')
     browser = await chromium.launch()
@@ -51,8 +56,7 @@ describe('web e2e: Markdown file links', () => {
     await source.click()
     const column = page.locator('[data-rightbar-col]')
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('source line 24\n')
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
-      .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
     const absolute = page.getByRole('button', { name: 'src/example.txt:30', exact: true })
     await absolute.focus()
     await absolute.press('Enter')
@@ -65,8 +69,7 @@ describe('web e2e: Markdown file links', () => {
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ path: join(artifacts, 'markdown-file-links.png'), animations: 'disabled' })
     await page.getByRole('button', { name: 'other/example.txt', exact: true }).click()
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
-      .toBe(join(scaffold.workspaceCwd, 'other/example.txt'))
+    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'other/example.txt'))
     await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('other file\n')
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt', 'example.txt'])
     const preview = await captureStableAria(page, '[data-textpreview-state="text"]', scaffold.workspaceCwd)

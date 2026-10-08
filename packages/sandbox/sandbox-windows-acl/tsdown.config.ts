@@ -1,10 +1,13 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 // The confinement runner builds as its own entry (path-loaded by
 // dsh-sandbox-local's win32 chain), inlining the sandbox primitives while
 // koffi stays an external native require — the same shape as
 // directory-picker-native's worker entry.
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: { index: 'lib/types/index.js', runner: 'lib/types/runner.js' },
   outDir: 'lib',
   format: ['esm'],

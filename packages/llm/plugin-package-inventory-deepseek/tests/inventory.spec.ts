@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,16 +20,11 @@ const roots: string[] = []
 const SIGNAL = new AbortController().signal
 
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function packagePlugin(
-  root: string,
-  dir: string,
-  manifest: object,
-  source = 'export default () => {}\n',
-): Promise<string> {
+async function packagePlugin(root: string, dir: string, manifest: object, source = 'export default () => {}\n'): Promise<string> {
   const packageDir = join(root, dir)
   await mkdir(packageDir, { recursive: true })
   await writeFile(join(packageDir, 'package.json'), `${JSON.stringify({ type: 'module', ...manifest })}\n`)
@@ -38,7 +33,8 @@ async function packagePlugin(
 }
 
 async function harness(
-  enabled?: boolean, packageService = false,
+  enabled?: boolean,
+  packageService = false,
 ): Promise<{ ctx: Context; root: string; disposeInventory: () => Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-plugin-packages-'))
   roots.push(root)
@@ -52,9 +48,7 @@ async function harness(
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentPresets, { default: 'fixture' })
   await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-  const inventory = enabled === undefined
-    ? ctx.plugin(PluginInventory)
-    : ctx.plugin(PluginInventory, { enabled })
+  const inventory = enabled === undefined ? ctx.plugin(PluginInventory) : ctx.plugin(PluginInventory, { enabled })
   await inventory
   return { ctx, root, disposeInventory: () => inventory.dispose() }
 }
@@ -63,13 +57,15 @@ describe('DeepSeek plugin package inventory', () => {
   it('contributes by default and can be explicitly disabled', async () => {
     const defaultHarness = await harness()
     const defaultFields = await defaultHarness.ctx.deepseekLlmApiExtensions.prepare({
-      body: { messages: [] }, signal: SIGNAL,
+      body: { messages: [] },
+      signal: SIGNAL,
     })
     expect(defaultFields.fields).toHaveProperty('dsh_plugin_packages')
 
     const disabledHarness = await harness(false)
     const disabledFields = await disabledHarness.ctx.deepseekLlmApiExtensions.prepare({
-      body: { messages: [] }, signal: SIGNAL,
+      body: { messages: [] },
+      signal: SIGNAL,
     })
     expect(disabledFields.fields).not.toHaveProperty('dsh_plugin_packages')
   })
@@ -102,16 +98,18 @@ describe('DeepSeek plugin package inventory', () => {
     const { ctx, root } = await harness()
     const bad = await packagePlugin(root, 'bad', { name: 'bad' })
     await ctx.loader.create({ name: bad })
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
-      .rejects.toThrow(/must declare non-empty name and version/)
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).rejects.toThrow(
+      /must declare non-empty name and version/,
+    )
   })
 
   it('omits a loose ESM module whose nearest manifest only marks the module type', async () => {
     const { ctx, root } = await harness()
     const marker = await packagePlugin(root, 'marker-only', {})
     await ctx.loader.create({ name: marker })
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
-      .resolves.toMatchObject({ fields: { dsh_plugin_packages: { version: 1, packages: [] } } })
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).resolves.toMatchObject({
+      fields: { dsh_plugin_packages: { version: 1, packages: [] } },
+    })
   })
 
   it('uses the host inventory when a request has no matching or joined live agent', async () => {
@@ -141,8 +139,10 @@ describe('DeepSeek plugin package inventory', () => {
         if (specifier === 'https://plugins.example/test.mjs') return { default: () => {} }
         // Node ESM on Windows requires a file URL; retain the raw Loader name for package attribution.
         const portableSpecifier = specifier === absolute ? pathToFileURL(specifier).href : specifier
-        return await (internal as never as { import(specifier: string, ...args: unknown[]): Promise<unknown> })
-          .import(portableSpecifier, ...args)
+        return await (internal as never as { import(specifier: string, ...args: unknown[]): Promise<unknown> }).import(
+          portableSpecifier,
+          ...args,
+        )
       },
     } as unknown as NonNullable<typeof ctx.loader.internal>
 
@@ -169,8 +169,9 @@ describe('DeepSeek plugin package inventory', () => {
       import: async () => ({ default: () => {} }),
     } as unknown as NonNullable<typeof ctx.loader.internal>
     await ctx.loader.create({ name: 'missing-package' })
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
-      .rejects.toThrow(/cannot resolve active package/)
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).rejects.toThrow(
+      /cannot resolve active package/,
+    )
   })
 
   it('does not bypass the profile package service for a missing bare package', async () => {
@@ -181,8 +182,9 @@ describe('DeepSeek plugin package inventory', () => {
     } as unknown as NonNullable<typeof ctx.loader.internal>
     await ctx.loader.create({ name: 'missing-profile-package' })
 
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
-      .rejects.toThrow(/cannot resolve active package/)
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).rejects.toThrow(
+      /cannot resolve active package/,
+    )
   })
 
   it('supports a direct embedding whose context has no base URL', async () => {
@@ -201,11 +203,13 @@ describe('DeepSeek plugin package inventory', () => {
   it('uses each ordinary Loader tree base for conflicting bare package versions', async () => {
     const { ctx, root } = await harness()
     await packagePlugin(root, 'node_modules/versioned-plugin', {
-      name: 'versioned-plugin', version: '1.0.0',
+      name: 'versioned-plugin',
+      version: '1.0.0',
     })
     const nestedRoot = join(root, 'nested')
     await packagePlugin(nestedRoot, 'node_modules/versioned-plugin', {
-      name: 'versioned-plugin', version: '2.0.0',
+      name: 'versioned-plugin',
+      version: '2.0.0',
     })
     const composition = join(nestedRoot, 'cordis.yml')
     await writeFile(composition, '- id: nested\n  name: versioned-plugin/plugin.mjs\n')
@@ -228,19 +232,24 @@ describe('DeepSeek plugin package inventory', () => {
     await packagePlugin(nestedRoot, 'node_modules/preset-only', { name: 'preset-only', version: '5.0.0' })
     const composition = join(nestedRoot, 'cordis.yml')
     await writeFile(composition, '- id: nested\n  name: preset-only/plugin.mjs\n')
-    await ctx.agentPresets.register({ id: 'fixture', plugins: [
-      { id: 'preset-only', name: 'preset-only/plugin.mjs' },
-      { id: 'nested', name: 'cordis:include', config: { path: pathToFileURL(composition).href } },
-    ] })
+    await ctx.agentPresets.register({
+      id: 'fixture',
+      plugins: [
+        { id: 'preset-only', name: 'preset-only/plugin.mjs' },
+        { id: 'nested', name: 'cordis:include', config: { path: pathToFileURL(composition).href } },
+      ],
+    })
     const agentScope = createScope(ctx, {})
     await ctx.agentPresets.mount(agentScope.ctx)
     const id = SessionId('preset-agent')
     const agent = { id, ctx: agentScope.ctx, session: { id } } as unknown as Agent
     await ctx.agents.register(agent)
-    const modules = ctx.agentPresets.inspectCompositions(agentScope.ctx)
-      .flatMap(row => row.modules).filter(row => row.moduleName === 'preset-only/plugin.mjs')
-    expect(modules.map(row => row.useHostBase)).toEqual([true, false])
-    expect(modules.map(row => new URL('probe.mjs', row.baseUrl).href)).toEqual([
+    const modules = ctx.agentPresets
+      .inspectCompositions(agentScope.ctx)
+      .flatMap((row) => row.modules)
+      .filter((row) => row.moduleName === 'preset-only/plugin.mjs')
+    expect(modules.map((row) => row.useHostBase)).toEqual([true, false])
+    expect(modules.map((row) => new URL('probe.mjs', row.baseUrl).href)).toEqual([
       new URL('probe.mjs', ctx.baseUrl).href,
       new URL('probe.mjs', pathToFileURL(composition)).href,
     ])
@@ -254,10 +263,12 @@ describe('DeepSeek plugin package inventory', () => {
 
   it('withdraws the inventory field when the contributing plugin reloads', async () => {
     const { ctx, disposeInventory } = await harness()
-    expect((await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).fields)
-      .toHaveProperty('dsh_plugin_packages')
+    expect((await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).fields).toHaveProperty(
+      'dsh_plugin_packages',
+    )
     await disposeInventory()
-    expect((await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).fields)
-      .not.toHaveProperty('dsh_plugin_packages')
+    expect((await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })).fields).not.toHaveProperty(
+      'dsh_plugin_packages',
+    )
   })
 })

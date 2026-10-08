@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { execa } from 'execa'
 import { parseDocument } from 'yaml'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { migrateSessionLogUploadDefaults } from '../src/session-log-upload-migration.ts'
 
 vi.mock('@deepseek-ai/dsh-atomic-write', async (importOriginal) => {
@@ -33,9 +33,14 @@ function makeHome(): string {
 function makeProfile(home: string, name: string, patch: string): string {
   const dir = join(home, 'profiles', name)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({
-    name: `profile-${name}`, private: true, dsh: { profile: { bundles: [] } },
-  }) + '\n')
+  writeFileSync(
+    join(dir, 'package.json'),
+    JSON.stringify({
+      name: `profile-${name}`,
+      private: true,
+      dsh: { profile: { bundles: [] } },
+    }) + '\n',
+  )
   writeFileSync(join(dir, 'cordis.patch.yml'), patch)
   return dir
 }
@@ -44,45 +49,55 @@ async function waitForFile(path: string): Promise<void> {
   const deadline = Date.now() + CHILD_TIMEOUT_MS
   while (!existsSync(path)) {
     if (Date.now() >= deadline) throw new Error(`migration synchronization file did not appear: ${path}`)
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
 }
 
 describe('preboot Session-log upload migration', () => {
   it('resets saved profile, home, and legacy opt-ins while preserving surrounding YAML', async () => {
     const home = makeHome()
-    const profileDir = makeProfile(home, 'web', [
-      '# profile comment',
-      '- id: session-log-deepseek # entry note',
-      '  config:',
-      '    enabled: true # saved profile opt-in',
-      '    keep: !!js "\'expression\'"',
-      '- id: other',
-      '  config: { enabled: true }',
-      '',
-    ].join('\n'))
+    const profileDir = makeProfile(
+      home,
+      'web',
+      [
+        '# profile comment',
+        '- id: session-log-deepseek # entry note',
+        '  config:',
+        '    enabled: true # saved profile opt-in',
+        '    keep: !!js "\'expression\'"',
+        '- id: other',
+        '  config: { enabled: true }',
+        '',
+      ].join('\n'),
+    )
     const homePatch = join(home, 'cordis.patch.yml')
     const legacy = join(home, 'settings.yaml')
-    writeFileSync(homePatch, [
-      '# home comment',
-      '- id: session-log-deepseek',
-      '  config:',
-      '    enabled: true # saved machine opt-in',
-      '    keep: value',
-      '- id: other',
-      '  config: { enabled: true }',
-      '',
-    ].join('\n'))
-    writeFileSync(legacy, [
-      '# legacy comment',
-      'session-log-deepseek:',
-      '  enabled: true # old importer value',
-      '  keep: value',
-      'other:',
-      '  name: preserve',
-      '  expression: !!js "\'legacy expression\'"',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      homePatch,
+      [
+        '# home comment',
+        '- id: session-log-deepseek',
+        '  config:',
+        '    enabled: true # saved machine opt-in',
+        '    keep: value',
+        '- id: other',
+        '  config: { enabled: true }',
+        '',
+      ].join('\n'),
+    )
+    writeFileSync(
+      legacy,
+      [
+        '# legacy comment',
+        'session-log-deepseek:',
+        '  enabled: true # old importer value',
+        '  keep: value',
+        'other:',
+        '  name: preserve',
+        '  expression: !!js "\'legacy expression\'"',
+        '',
+      ].join('\n'),
+    )
 
     await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
 
@@ -100,10 +115,8 @@ describe('preboot Session-log upload migration', () => {
     expect(readFileSync(legacy, 'utf8')).toContain('enabled: false # old importer value')
     expect(readFileSync(legacy, 'utf8')).toContain('name: preserve')
     expect(readFileSync(legacy, 'utf8')).toContain('expression: !!js "\'legacy expression\'"')
-    expect(JSON.parse(readFileSync(join(profileDir, '.dsh-profile-migrations.json'), 'utf8')))
-      .toEqual({ [MIGRATION_KEY]: 1 })
-    expect(JSON.parse(readFileSync(join(home, '.dsh-home-migrations.json'), 'utf8')))
-      .toEqual({ [MIGRATION_KEY]: 1 })
+    expect(JSON.parse(readFileSync(join(profileDir, '.dsh-profile-migrations.json'), 'utf8'))).toEqual({ [MIGRATION_KEY]: 1 })
+    expect(JSON.parse(readFileSync(join(home, '.dsh-home-migrations.json'), 'utf8'))).toEqual({ [MIGRATION_KEY]: 1 })
   })
 
   it('materializes uploader configs in saved insert rows and leaves shared aliases unchanged', async () => {
@@ -132,15 +145,18 @@ describe('preboot Session-log upload migration', () => {
     const home = makeHome()
     const profileDir = makeProfile(home, 'web', '[]\n')
     const homePatch = join(home, 'cordis.patch.yml')
-    writeFileSync(homePatch, [
-      '- insert:',
-      '    - id: shared-value',
-      '      config: { enabled: &enabled true }',
-      '    - id: session-log-deepseek',
-      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
-      '      config: { enabled: *enabled }',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      homePatch,
+      [
+        '- insert:',
+        '    - id: shared-value',
+        '      config: { enabled: &enabled true }',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: { enabled: *enabled }',
+        '',
+      ].join('\n'),
+    )
 
     await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
 
@@ -156,11 +172,7 @@ describe('preboot Session-log upload migration', () => {
     const homePatch = join(home, 'cordis.patch.yml')
     const legacy = join(home, 'settings.yaml')
     writeFileSync(homePatch, '[]\n')
-    writeFileSync(legacy, [
-      'session-log-deepseek: &upload { enabled: true }',
-      'unrelated: *upload',
-      '',
-    ].join('\n'))
+    writeFileSync(legacy, ['session-log-deepseek: &upload { enabled: true }', 'unrelated: *upload', ''].join('\n'))
 
     await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
 
@@ -173,15 +185,18 @@ describe('preboot Session-log upload migration', () => {
     const home = makeHome()
     const profileDir = makeProfile(home, 'web', '[]\n')
     const homePatch = join(home, 'cordis.patch.yml')
-    writeFileSync(homePatch, [
-      '- insert:',
-      '    - id: session-log-deepseek',
-      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
-      '      config: { enabled: &enabled true }',
-      '    - id: unrelated',
-      '      config: { retained: *enabled }',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      homePatch,
+      [
+        '- insert:',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: { enabled: &enabled true }',
+        '    - id: unrelated',
+        '      config: { retained: *enabled }',
+        '',
+      ].join('\n'),
+    )
 
     await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
 
@@ -192,22 +207,29 @@ describe('preboot Session-log upload migration', () => {
 
   it('replaces target enabled expressions without evaluation and preserves unrelated expressions', async () => {
     const home = makeHome()
-    const profileDir = makeProfile(home, 'web', [
-      '- id: session-log-deepseek',
-      '  config:',
-      '    enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
-      '    keep: !!js "\'preserved\'"',
-      '',
-    ].join('\n'))
+    const profileDir = makeProfile(
+      home,
+      'web',
+      [
+        '- id: session-log-deepseek',
+        '  config:',
+        '    enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
+        '    keep: !!js "\'preserved\'"',
+        '',
+      ].join('\n'),
+    )
     const profilePatch = join(profileDir, 'cordis.patch.yml')
     const homePatch = join(home, 'cordis.patch.yml')
     writeFileSync(homePatch, '[]\n')
-    writeFileSync(join(home, 'settings.yaml'), [
-      'session-log-deepseek:',
-      '  enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
-      '  keep: !!js "\'preserved\'"',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      join(home, 'settings.yaml'),
+      [
+        'session-log-deepseek:',
+        '  enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
+        '  keep: !!js "\'preserved\'"',
+        '',
+      ].join('\n'),
+    )
     await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
 
     expect(readFileSync(profilePatch, 'utf8')).toContain('enabled: false')
@@ -223,8 +245,9 @@ describe('preboot Session-log upload migration', () => {
     const homePatch = join(home, 'cordis.patch.yml')
     writeFileSync(homePatch, '[]\n')
 
-    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
-      .rejects.toThrow(/cannot safely inspect the Session-log config expression/)
+    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)).rejects.toThrow(
+      /cannot safely inspect the Session-log config expression/,
+    )
 
     expect(readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')).toBe(profileText)
     expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
@@ -235,17 +258,12 @@ describe('preboot Session-log upload migration', () => {
     const home = makeHome()
     const profileDir = makeProfile(home, 'web', '[]\n')
     const homePatch = join(home, 'cordis.patch.yml')
-    const patchText = [
-      '- insert: &entries',
-      '    - id: recursive-group',
-      '      group: true',
-      '      config: *entries',
-      '',
-    ].join('\n')
+    const patchText = ['- insert: &entries', '    - id: recursive-group', '      group: true', '      config: *entries', ''].join('\n')
     writeFileSync(homePatch, patchText)
 
-    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
-      .rejects.toThrow(/cyclic (Cordis group|YAML anchor)/)
+    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)).rejects.toThrow(
+      /cyclic (Cordis group|YAML anchor)/,
+    )
 
     expect(readFileSync(homePatch, 'utf8')).toBe(patchText)
     expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
@@ -284,23 +302,26 @@ describe('preboot Session-log upload migration', () => {
     expect(readFileSync(profilePatch, 'utf8')).toBe(laterHomeOptIn)
   })
 
-  it.each(['profile patch', 'home patch', 'legacy settings'] as const)('fails before committing edits when %s is malformed', async (broken) => {
-    const home = makeHome()
-    const profileText = '- id: session-log-deepseek\n  config: { enabled: true }\n'
-    const homeText = '- id: session-log-deepseek\n  config: { enabled: true }\n'
-    const profileDir = makeProfile(home, 'web', broken === 'profile patch' ? '- id: [\n' : profileText)
-    const profilePatch = join(profileDir, 'cordis.patch.yml')
-    const homePatch = join(home, 'cordis.patch.yml')
-    writeFileSync(homePatch, broken === 'home patch' ? '- id: [\n' : homeText)
-    if (broken === 'legacy settings') writeFileSync(join(home, 'settings.yaml'), 'session-log-deepseek: [\n')
+  it.each(['profile patch', 'home patch', 'legacy settings'] as const)(
+    'fails before committing edits when %s is malformed',
+    async (broken) => {
+      const home = makeHome()
+      const profileText = '- id: session-log-deepseek\n  config: { enabled: true }\n'
+      const homeText = '- id: session-log-deepseek\n  config: { enabled: true }\n'
+      const profileDir = makeProfile(home, 'web', broken === 'profile patch' ? '- id: [\n' : profileText)
+      const profilePatch = join(profileDir, 'cordis.patch.yml')
+      const homePatch = join(home, 'cordis.patch.yml')
+      writeFileSync(homePatch, broken === 'home patch' ? '- id: [\n' : homeText)
+      if (broken === 'legacy settings') writeFileSync(join(home, 'settings.yaml'), 'session-log-deepseek: [\n')
 
-    await expect(migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)).rejects.toThrow(/invalid YAML/)
+      await expect(migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)).rejects.toThrow(/invalid YAML/)
 
-    expect(readFileSync(profilePatch, 'utf8')).toBe(broken === 'profile patch' ? '- id: [\n' : profileText)
-    expect(readFileSync(homePatch, 'utf8')).toBe(broken === 'home patch' ? '- id: [\n' : homeText)
-    expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
-    expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(false)
-  })
+      expect(readFileSync(profilePatch, 'utf8')).toBe(broken === 'profile patch' ? '- id: [\n' : profileText)
+      expect(readFileSync(homePatch, 'utf8')).toBe(broken === 'home patch' ? '- id: [\n' : homeText)
+      expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
+      expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(false)
+    },
+  )
 
   it('fails closed and leaves migration markers absent when an atomic save fails', async () => {
     const home = makeHome()
@@ -309,7 +330,9 @@ describe('preboot Session-log upload migration', () => {
     const profilePatch = join(profileDir, 'cordis.patch.yml')
     const homePatch = join(home, 'cordis.patch.yml')
     writeFileSync(homePatch, profileText)
-    vi.mocked(writeFileAtomic).mockImplementationOnce(async () => { throw new Error('disk write failed') })
+    vi.mocked(writeFileAtomic).mockImplementationOnce(async () => {
+      throw new Error('disk write failed')
+    })
 
     await expect(migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)).rejects.toThrow('disk write failed')
 
@@ -320,7 +343,8 @@ describe('preboot Session-log upload migration', () => {
   })
 
   it.each(['[]\n', '{"f4ah6o/deepseek-harness/session-log-upload-default-off":0}\n'])(
-    'fails closed when the shared-home migration marker is invalid (%s)', async (marker) => {
+    'fails closed when the shared-home migration marker is invalid (%s)',
+    async (marker) => {
       const home = makeHome()
       const profileText = '- id: session-log-deepseek\n  config: { enabled: true }\n'
       const profileDir = makeProfile(home, 'web', profileText)
@@ -328,8 +352,9 @@ describe('preboot Session-log upload migration', () => {
       writeFileSync(homePatch, profileText)
       writeFileSync(join(home, '.dsh-home-migrations.json'), marker)
 
-      await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
-        .rejects.toThrow(/invalid format/)
+      await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)).rejects.toThrow(
+        /invalid format/,
+      )
 
       expect(readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')).toBe(profileText)
       expect(readFileSync(homePatch, 'utf8')).toBe(profileText)
@@ -338,44 +363,53 @@ describe('preboot Session-log upload migration', () => {
     },
   )
 
-  it('serializes two profile migrations across independent processes', async () => {
-    const home = makeHome()
-    const profileDirs = ['web', 'desktop'].map(name => makeProfile(
-      home, name, '- id: session-log-deepseek\n  config: { enabled: true }\n',
-    ))
-    const homePatch = join(home, 'cordis.patch.yml')
-    writeFileSync(homePatch, '- id: session-log-deepseek\n  config: { enabled: true }\n')
-    writeFileSync(join(home, 'settings.yaml'), 'session-log-deepseek: { enabled: true }\n')
-    const gate = join(home, 'start')
-    const ready = profileDirs.map((_, index) => join(home, `ready-${index}`))
-    const children = profileDirs.map((profileDir, index) => execa(
-      process.execPath,
-      ['--import', tsxLoader, childEntry, home, profileDir, ready[index]!, gate],
-      { reject: false, timeout: CHILD_TIMEOUT_MS },
-    ))
-    let finished = false
-    try {
-      await withFileLock(homePatch, async () => {
-        await Promise.all(ready.map(waitForFile))
-        writeFileSync(gate, 'go\n')
-        await Promise.all(profileDirs.map(profileDir => waitForFile(join(profileDir, 'package.json.lock'))))
-      }, { waitMs: CHILD_TIMEOUT_MS })
-      const results = await Promise.all(children)
-      finished = true
-      expect(results.map(result => result.exitCode)).toEqual([0, 0])
-      for (const profileDir of profileDirs) {
-        expect(readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')).toContain('enabled: false')
-        expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(true)
+  it(
+    'serializes two profile migrations across independent processes',
+    async () => {
+      const home = makeHome()
+      const profileDirs = ['web', 'desktop'].map((name) =>
+        makeProfile(home, name, '- id: session-log-deepseek\n  config: { enabled: true }\n'),
+      )
+      const homePatch = join(home, 'cordis.patch.yml')
+      writeFileSync(homePatch, '- id: session-log-deepseek\n  config: { enabled: true }\n')
+      writeFileSync(join(home, 'settings.yaml'), 'session-log-deepseek: { enabled: true }\n')
+      const gate = join(home, 'start')
+      const ready = profileDirs.map((_, index) => join(home, `ready-${index}`))
+      const children = profileDirs.map((profileDir, index) =>
+        execa(process.execPath, ['--import', tsxLoader, childEntry, home, profileDir, ready[index]!, gate], {
+          reject: false,
+          timeout: CHILD_TIMEOUT_MS,
+        }),
+      )
+      let finished = false
+      try {
+        await withFileLock(
+          homePatch,
+          async () => {
+            await Promise.all(ready.map(waitForFile))
+            writeFileSync(gate, 'go\n')
+            await Promise.all(profileDirs.map((profileDir) => waitForFile(join(profileDir, 'package.json.lock'))))
+          },
+          { waitMs: CHILD_TIMEOUT_MS },
+        )
+        const results = await Promise.all(children)
+        finished = true
+        expect(results.map((result) => result.exitCode)).toEqual([0, 0])
+        for (const profileDir of profileDirs) {
+          expect(readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')).toContain('enabled: false')
+          expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(true)
+        }
+        expect(readFileSync(homePatch, 'utf8')).not.toContain('enabled: true')
+        expect(readFileSync(join(home, 'settings.yaml'), 'utf8')).toContain('enabled: false')
+        expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(true)
+      } finally {
+        if (!finished) {
+          writeFileSync(gate, 'go\n')
+          for (const child of children) child.kill('SIGKILL')
+          await Promise.allSettled(children)
+        }
       }
-      expect(readFileSync(homePatch, 'utf8')).not.toContain('enabled: true')
-      expect(readFileSync(join(home, 'settings.yaml'), 'utf8')).toContain('enabled: false')
-      expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(true)
-    } finally {
-      if (!finished) {
-        writeFileSync(gate, 'go\n')
-        for (const child of children) child.kill('SIGKILL')
-        await Promise.allSettled(children)
-      }
-    }
-  }, CHILD_TIMEOUT_MS + 10_000)
+    },
+    CHILD_TIMEOUT_MS + 10_000,
+  )
 })

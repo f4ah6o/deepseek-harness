@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import {
   assertFixtureInventory,
   captureStableAria,
@@ -60,16 +60,10 @@ async function seedSkills(workspaceCwd: string): Promise<void> {
     const directory = skill.name === 'policy-shared' ? join(workspaceCwd, 'linked-skills', skill.name) : join(root, skill.name)
     await mkdir(directory, { recursive: true })
     const policyLines = skill.frontmatter === '' ? [] : skill.frontmatter.trimEnd().split('\n')
-    await writeFile(join(directory, 'SKILL.md'), [
-      '---',
-      `name: ${skill.name}`,
-      `description: ${skill.description}`,
-      ...policyLines,
-      '---',
-      '',
-      `# ${skill.name}`,
-      '',
-    ].join('\n'))
+    await writeFile(
+      join(directory, 'SKILL.md'),
+      ['---', `name: ${skill.name}`, `description: ${skill.description}`, ...policyLines, '---', '', `# ${skill.name}`, ''].join('\n'),
+    )
     if (skill.name === 'policy-shared') {
       await mkdir(root, { recursive: true })
       await symlink(join(directory, 'SKILL.md'), join(root, `${skill.name}.md`))
@@ -105,10 +99,7 @@ describe('web e2e: skill invocation policy through the real host', () => {
     const input = page.locator('[data-composer-input]').first()
     await input.fill('/policy')
     const menu = page.getByRole('listbox', { name: 'Trigger suggestions' })
-    await expect.poll(
-      () => menu.getByRole('option', { name: /policy-shared/ }).count(),
-      { timeout: 10_000 },
-    ).toBe(1)
+    await expect.poll(() => menu.getByRole('option', { name: /policy-shared/ }).count(), { timeout: 10_000 }).toBe(1)
 
     // The user-only quadrant is invocable here — its only entry point — and
     // wears the user-only marker; both user-disabled quadrants stay hidden.
@@ -165,7 +156,7 @@ describe('web e2e: skill invocation policy through the real host', () => {
     expect(alignment.fileTextTop).toBeCloseTo(alignment.plainTextTop, 0)
     expect(alignment.skillTextTop).toBeCloseTo(alignment.plainTextTop, 0)
     await skill.hover()
-    const skillBackground = await skill.evaluate(el => getComputedStyle(el).backgroundColor)
+    const skillBackground = await skill.evaluate((el) => getComputedStyle(el).backgroundColor)
     expect(skillBackground).not.toBe('rgba(0, 0, 0, 0)')
     await skill.click()
     const preview = page.locator('[data-document-markdown]')
@@ -175,7 +166,12 @@ describe('web e2e: skill invocation policy through the real host', () => {
     const snapshot = await captureStableAria(page, '[data-document-markdown]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'preview.expected.md'), snapshot, MODE)
     await file.hover()
-    expect(await file.locator('span').first().evaluate(el => getComputedStyle(el).backgroundColor)).toBe(skillBackground)
+    expect(
+      await file
+        .locator('span')
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor),
+    ).toBe(skillBackground)
     await file.click()
     await expect.poll(() => preview.textContent()).toContain('Reference preview fixture.')
     expect(await input.textContent()).toBe(draft)
@@ -185,7 +181,7 @@ describe('web e2e: skill invocation policy through the real host', () => {
     await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).not.toBe('')
     expect(await input.textContent()).toBe(draft)
     await skill.hover()
-    await expect.poll(() => skill.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(skillBackground)
+    await expect.poll(() => skill.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(skillBackground)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     // Establish the deletion caret before the key event; Chromium delivers

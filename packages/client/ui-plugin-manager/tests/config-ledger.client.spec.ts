@@ -1,6 +1,6 @@
 /** The projection of the plugins carrying configuration: what it reads from the ledgers and when it moves. */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { configLedgerSource, rowConfigKey } from '../src/client/config-ledger.ts'
 
 interface Registration {
@@ -22,14 +22,18 @@ function bench() {
         const set = listeners.get(name) ?? new Set<() => void>()
         set.add(listener)
         listeners.set(name, set)
-        return () => { set.delete(listener) }
+        return () => {
+          set.delete(listener)
+        }
       },
     },
     locale: {
       getSnapshot: () => ({ revision }),
       subscribe: (listener: () => void) => {
         localeListeners.add(listener)
-        return () => { localeListeners.delete(listener) }
+        return () => {
+          localeListeners.delete(listener)
+        }
       },
     },
   }
@@ -61,7 +65,10 @@ describe('configLedgerSource', () => {
     b.register('plugins.row.config', { key: rowConfigKey('dsh-x', 'row') })
 
     expect(source.getSnapshot()).toEqual({
-      items: [{ id: 'bash', label: 'Shell' }, { id: 'loop', label: 'Agent loop' }],
+      items: [
+        { id: 'bash', label: 'Shell' },
+        { id: 'loop', label: 'Agent loop' },
+      ],
       bundles: new Set(['dsh-x']),
       rows: new Set(['dsh-x#row']),
     })

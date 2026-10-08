@@ -5,14 +5,20 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -41,7 +47,7 @@ async function liveAgent(scaffold: WebScaffold, sessionId: SessionId): Promise<A
     const found = scaffold.ctx.agents.get(sessionId)
     if (found !== undefined) return found
     if (Date.now() > deadline) throw new Error(`opening session "${sessionId}" published no live Agent`)
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
 
@@ -94,7 +100,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       arguments: { command: COMMAND, description: 'Hold a background slot open', run_in_background: true },
       agent,
     })
-    const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
+    const reported = started.content.map((block) => (block.type === 'text' ? block.text : '')).join('')
     const matched = /\bbash-\d+\b/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
     const jobId = JobId(matched[0])
@@ -123,10 +129,9 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     const idle = page.getByRole('button', { name: '1 background job', exact: true })
     await idle.waitFor({ timeout: 20_000 })
     // The unclaimed report's reason lands in the settled row's detail.
-    await expect.poll(
-      () => page.getByRole('list', { name: 'Background jobs' }).textContent(),
-      { timeout: 15_000 },
-    ).toContain('cancelled by the user')
+    await expect
+      .poll(() => page.getByRole('list', { name: 'Background jobs' }).textContent(), { timeout: 15_000 })
+      .toContain('cancelled by the user')
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('killed')
 
     const settled = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)

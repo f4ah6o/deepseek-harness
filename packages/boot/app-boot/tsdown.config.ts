@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * Embed Include while keeping Loader external so the built include tree and
@@ -15,6 +15,7 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: {
+      resolveDepSubpath: true,
       alwaysBundle: ['@deepseek-ai/cordis-plugin-include'],
     },
   },
@@ -28,6 +29,7 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: {
+      resolveDepSubpath: true,
       alwaysBundle: ['resolve.exports'],
     },
   },

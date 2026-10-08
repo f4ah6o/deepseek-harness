@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
@@ -22,7 +22,11 @@ function claim(session: Session): void {
 /** Log a cancellation of one pending message, as `Inbox.clear()` does. */
 function cancelPending(session: Session): void {
   session.append('agent/inbox/spliced', {
-    target: 'next-turn', start: 0, removedCount: 1, inserted: [], outcome: 'canceled',
+    target: 'next-turn',
+    start: 0,
+    removedCount: 1,
+    inserted: [],
+    outcome: 'canceled',
   })
 }
 
@@ -48,8 +52,7 @@ describe('foldConsumedWork', () => {
     steppedTurn(session, 1, { kind: 'completed' })
     steppedTurn(session, 2, { kind: 'max-tokens' })
 
-    expect(foldConsumedWork(session.snapshotEvents()).end?.data)
-      .toEqual({ turn: 2, reason: { kind: 'max-tokens' } })
+    expect(foldConsumedWork(session.snapshotEvents()).end?.data).toEqual({ turn: 2, reason: { kind: 'max-tokens' } })
   })
 
   it('reports a turn that claimed its input and then failed before any step', () => {
@@ -131,7 +134,7 @@ describe('foldConsumedWork', () => {
 
     // No turn opened over it, so only the cancellation says the work was cut short.
     expect(foldConsumedWork(session.snapshotEvents())).toEqual({
-      end: session.snapshotEvents().find(event => event.type === 'turn/end'),
+      end: session.snapshotEvents().find((event) => event.type === 'turn/end'),
       droppedUnrun: true,
     })
   })
@@ -140,7 +143,11 @@ describe('foldConsumedWork', () => {
     const session = Session.create(SessionId('replaced'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('agent/inbox/spliced', {
-      target: 'next-turn', start: 0, removedCount: 1, inserted: [message('rewritten')], outcome: 'canceled',
+      target: 'next-turn',
+      start: 0,
+      removedCount: 1,
+      inserted: [message('rewritten')],
+      outcome: 'canceled',
     })
 
     expect(foldConsumedWork(session.snapshotEvents()).droppedUnrun).toBe(false)
@@ -153,7 +160,7 @@ describe('foldConsumedWork', () => {
     steppedTurn(session, 2, { kind: 'completed' })
 
     expect(foldConsumedWork(session.snapshotEvents())).toEqual({
-      end: session.snapshotEvents().findLast(event => event.type === 'turn/end'),
+      end: session.snapshotEvents().findLast((event) => event.type === 'turn/end'),
       droppedUnrun: false,
     })
   })

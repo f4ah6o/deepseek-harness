@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { act, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '../src/client/bind.ts'
 import type { HostObservable as ObservableSnapshot, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
@@ -8,9 +8,12 @@ import type { HostObservable as ObservableSnapshot, SnapshotSelectorHook } from 
 // Keep equality local: this suite asserts the eq parameter contract without
 // adding a reverse dependency from the UI renderer to runtime.
 const shallowEqual = (a: Record<string, unknown>, b: Record<string, unknown>): boolean =>
-  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => Object.is(a[k], b[k]))
+  Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => Object.is(a[k], b[k]))
 
-interface Snap { a: number; b: number }
+interface Snap {
+  a: number
+  b: number
+}
 
 /** Hand-rolled observable source so subscription counting is exact. */
 function makeSource(initial: Snap) {
@@ -22,7 +25,9 @@ function makeSource(initial: Snap) {
     subscribe: (fn) => {
       subscribeCalls += 1
       listeners.add(fn)
-      return () => { listeners.delete(fn) }
+      return () => {
+        listeners.delete(fn)
+      }
     },
   }
   return {
@@ -31,11 +36,23 @@ function makeSource(initial: Snap) {
       state = next
       for (const fn of [...listeners]) fn()
     },
-    stats: { get subscribeCalls() { return subscribeCalls }, get active() { return listeners.size } },
+    stats: {
+      get subscribeCalls() {
+        return subscribeCalls
+      },
+      get active() {
+        return listeners.size
+      },
+    },
   }
 }
 
-function Harness<S>({ useSelector, sel, eq, probe }: {
+function Harness<S>({
+  useSelector,
+  sel,
+  eq,
+  probe,
+}: {
   useSelector: SnapshotSelectorHook<Snap>
   sel: (s: Snap) => S
   eq?: (a: S, b: S) => boolean
@@ -51,12 +68,16 @@ describe('bindSnapshotSelector', () => {
     const { source, set } = makeSource({ a: 1, b: 10 })
     const useSelector = bindSnapshotSelector(source)
     const probe = { renders: 0, value: undefined as number | undefined }
-    render(<Harness useSelector={useSelector} sel={s => s.a} probe={probe} />)
+    render(<Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />)
     expect(probe.value).toBe(1)
     const before = probe.renders
-    act(() => { set({ a: 1, b: 11 }) })   // unrelated field: Object.is bail
+    act(() => {
+      set({ a: 1, b: 11 })
+    }) // unrelated field: Object.is bail
     expect(probe.renders).toBe(before)
-    act(() => { set({ a: 2, b: 11 }) })
+    act(() => {
+      set({ a: 2, b: 11 })
+    })
     expect(probe.renders).toBe(before + 1)
     expect(probe.value).toBe(2)
   })
@@ -65,11 +86,15 @@ describe('bindSnapshotSelector', () => {
     const { source, set } = makeSource({ a: 1, b: 10 })
     const useSelector = bindSnapshotSelector(source)
     const probe = { renders: 0, value: undefined as { a: number } | undefined }
-    render(<Harness useSelector={useSelector} sel={s => ({ a: s.a })} eq={shallowEqual} probe={probe} />)
+    render(<Harness useSelector={useSelector} sel={(s) => ({ a: s.a })} eq={shallowEqual} probe={probe} />)
     const before = probe.renders
-    act(() => { set({ a: 1, b: 99 }) })   // fresh object, shallow-equal slice
+    act(() => {
+      set({ a: 1, b: 99 })
+    }) // fresh object, shallow-equal slice
     expect(probe.renders).toBe(before)
-    act(() => { set({ a: 5, b: 99 }) })
+    act(() => {
+      set({ a: 5, b: 99 })
+    })
     expect(probe.renders).toBe(before + 1)
     expect(probe.value).toEqual({ a: 5 })
   })
@@ -78,11 +103,13 @@ describe('bindSnapshotSelector', () => {
     const { source, set, stats } = makeSource({ a: 1, b: 10 })
     const useSelector = bindSnapshotSelector(source)
     const probe = { renders: 0, value: undefined as number | undefined }
-    const { rerender } = render(<Harness useSelector={useSelector} sel={s => s.a} probe={probe} />)
+    const { rerender } = render(<Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />)
     const after = stats.subscribeCalls
-    rerender(<Harness useSelector={useSelector} sel={s => s.a} probe={probe} />)
-    act(() => { set({ a: 2, b: 10 }) })
-    rerender(<Harness useSelector={useSelector} sel={s => s.a} probe={probe} />)
+    rerender(<Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />)
+    act(() => {
+      set({ a: 2, b: 10 })
+    })
+    rerender(<Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />)
     expect(stats.subscribeCalls).toBe(after)
   })
 
@@ -92,7 +119,7 @@ describe('bindSnapshotSelector', () => {
     const probe = { renders: 0, value: undefined as number | undefined }
     const view = render(
       <StrictMode>
-        <Harness useSelector={useSelector} sel={s => s.a} probe={probe} />
+        <Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />
       </StrictMode>,
     )
     expect(probe.value).toBe(1)
@@ -104,15 +131,19 @@ describe('bindSnapshotSelector', () => {
     class MethodSource implements ObservableSnapshot<Snap> {
       private state: Snap = { a: 7, b: 0 }
       private listeners = new Set<() => void>()
-      getSnapshot(): Snap { return this.state }
+      getSnapshot(): Snap {
+        return this.state
+      }
       subscribe(fn: () => void): () => void {
         this.listeners.add(fn)
-        return () => { this.listeners.delete(fn) }
+        return () => {
+          this.listeners.delete(fn)
+        }
       }
     }
     const useSelector = bindSnapshotSelector(new MethodSource())
     const probe = { renders: 0, value: undefined as number | undefined }
-    render(<Harness useSelector={useSelector} sel={s => s.a} probe={probe} />)
+    render(<Harness useSelector={useSelector} sel={(s) => s.a} probe={probe} />)
     expect(probe.value).toBe(7)
   })
 

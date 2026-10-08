@@ -1,7 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import {
-  abbreviateHomePath, fileAddressFor, isAbsoluteWorkspacePath, parseFileAddress, pathPartsOf, relativizeToCwd,
-  resolveWorkspacePath, workspaceTitleOf,
+  abbreviateHomePath,
+  fileAddressFor,
+  isAbsoluteWorkspacePath,
+  parseFileAddress,
+  pathPartsOf,
+  relativizeToCwd,
+  resolveWorkspacePath,
+  workspaceTitleOf,
 } from '@deepseek-ai/dsh-util-workspace-path'
 
 describe('Workspace path helpers', () => {
@@ -57,8 +63,7 @@ describe('Workspace path helpers', () => {
     expect(abbreviateHomePath('/Users/u/a.ts', '')).toBe('/Users/u/a.ts')
     expect(abbreviateHomePath('/etc/hosts', '/')).toBe('/etc/hosts')
     expect(abbreviateHomePath('C:\\Users\\u\\project', 'C:\\Users\\u')).toBe('C:\\Users\\u\\project')
-    expect(abbreviateHomePath('\\\\server\\share\\u', '\\\\server\\share\\u'))
-      .toBe('\\\\server\\share\\u')
+    expect(abbreviateHomePath('\\\\server\\share\\u', '\\\\server\\share\\u')).toBe('\\\\server\\share\\u')
   })
 
   it('reads the final path segment on both path styles', () => {

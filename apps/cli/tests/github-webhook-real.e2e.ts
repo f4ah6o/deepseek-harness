@@ -11,15 +11,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import WebSocket from 'ws'
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 const BUILT_BIN = join(REPO_ROOT, 'apps/cli/lib/bin.js')
-const OVERLAY = fileURLToPath(new URL(
-  './fixtures/github-webhook/cordis.yml',
-  import.meta.url,
-))
+const OVERLAY = fileURLToPath(new URL('./fixtures/github-webhook/cordis.yml', import.meta.url))
 const SECRET = 'github-webhook-real-e2e-secret'
 const DELIVERY = 'github-webhook-real-e2e-delivery'
 const MARKER = 'DSH_GITHUB_WEBHOOK_REAL_E2E_OK'
@@ -143,7 +140,7 @@ async function remoteRpc<T>(baseUrl: string, endpoint: string, args: object): Pr
   if (!response.ok) {
     throw new Error(`${endpoint} returned HTTP ${String(response.status)}: ${await response.text()}`)
   }
-  const envelope = await response.json() as {
+  const envelope = (await response.json()) as {
     result: { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
   }
   if (!envelope.result.ok) {
@@ -188,7 +185,9 @@ async function openingStreamItem(
       socket.addEventListener('close', closed)
     })
     return await new Promise<Record<string, unknown>>((resolve, reject) => {
-      const timer = setTimeout(() => { finish(new Error(`${endpoint} did not publish its opening item`)) }, 10_000)
+      const timer = setTimeout(() => {
+        finish(new Error(`${endpoint} did not publish its opening item`))
+      }, 10_000)
       const cleanup = (): void => {
         clearTimeout(timer)
         socket.removeEventListener('message', message)
@@ -203,9 +202,7 @@ async function openingStreamItem(
       }
       const message = (event: WebSocket.MessageEvent): void => {
         try {
-          const text = typeof event.data === 'string'
-            ? event.data
-            : Buffer.isBuffer(event.data) ? event.data.toString('utf8') : undefined
+          const text = typeof event.data === 'string' ? event.data : Buffer.isBuffer(event.data) ? event.data.toString('utf8') : undefined
           if (text === undefined) throw new Error(`${endpoint} published a non-text frame`)
           const frame: unknown = JSON.parse(text)
           if (!isRecord(frame) || frame.streamId !== streamId) return
@@ -224,8 +221,12 @@ async function openingStreamItem(
           finish(error instanceof Error ? error : new Error(String(error)))
         }
       }
-      const failed = (): void => { finish(new Error(`${endpoint} carrier failed before its opening item`)) }
-      const closed = (): void => { finish(new Error(`${endpoint} carrier closed before its opening item`)) }
+      const failed = (): void => {
+        finish(new Error(`${endpoint} carrier failed before its opening item`))
+      }
+      const closed = (): void => {
+        finish(new Error(`${endpoint} carrier closed before its opening item`))
+      }
       socket.addEventListener('message', message)
       socket.addEventListener('error', failed)
       socket.addEventListener('close', closed)
@@ -242,7 +243,7 @@ async function workspaceBaseline(baseUrl: string): Promise<WorkspaceBaseline> {
     baseUrl,
     'workspace/follow',
     {},
-    value => isRecord(value) && value.type === 'baseline' && isRecord(value.value),
+    (value) => isRecord(value) && value.type === 'baseline' && isRecord(value.value),
   )
   return frame.value as WorkspaceBaseline
 }
@@ -253,10 +254,7 @@ async function history(baseUrl: string, sessionId: string): Promise<HistoryPage>
     baseUrl,
     'session/follow',
     { request: { address: { kind: 'session', sessionId }, maxMessages: 100 } },
-    value => isRecord(value)
-      && value.type === 'snapshot'
-      && Array.isArray(value.records)
-      && typeof value.hasMore === 'boolean',
+    (value) => isRecord(value) && value.type === 'snapshot' && Array.isArray(value.records) && typeof value.hasMore === 'boolean',
   )
   return { records: frame.records as HistoryPage['records'], hasMore: frame.hasMore as boolean }
 }
@@ -286,8 +284,8 @@ async function eventually<T>(
     await delay(300)
   }
   throw new Error(
-    `timed out waiting for ${label}; last value=${JSON.stringify(lastValue)}; `
-    + `last error=${String(lastError)}; process output:\n${processOutput()}`,
+    `timed out waiting for ${label}; last value=${JSON.stringify(lastValue)}; ` +
+      `last error=${String(lastError)}; process output:\n${processOutput()}`,
   )
 }
 
@@ -307,14 +305,16 @@ function assistantText(page: HistoryPage): string {
 
 /** Read scalar v2 history records for assertions over the public event stream. */
 function historyEvents(page: HistoryPage): HistoryEvent[] {
-  return page.records.map(record => record.event)
+  return page.records.map((record) => record.event)
 }
 
 /** Stop the spawned CLI through its normal signal path, escalating only on a stuck teardown. */
 async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null) return
   let resolveClosed!: () => void
-  const closed = new Promise<void>((resolve) => { resolveClosed = resolve })
+  const closed = new Promise<void>((resolve) => {
+    resolveClosed = resolve
+  })
   child.once('close', resolveClosed)
   child.kill('SIGTERM')
   if (await Promise.race([closed.then(() => true), delay(10_000, false, { ref: false })])) return
@@ -358,14 +358,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('GitHub webhook through the real 
     await mkdir(workspacePath)
     const canonicalWorkspacePath = await realpath(workspacePath)
     const webhookPort = await freePort()
-    const child = spawn(process.execPath, [
-      BUILT_BIN,
-      'web',
-      '--patch', OVERLAY,
-      '--no-open',
-      '--host', '127.0.0.1',
-      '--port', '0',
-    ], {
+    const child = spawn(process.execPath, [BUILT_BIN, 'web', '--patch', OVERLAY, '--no-open', '--host', '127.0.0.1', '--port', '0'], {
       cwd: root,
       env: {
         ...process.env,
@@ -394,16 +387,15 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('GitHub webhook through the real 
         observation.text,
         'one Workspace-attached Session',
         async () => await workspaceBaseline(baseUrl),
-        value => value.items.some(workspace =>
-          workspace.path === canonicalWorkspacePath && workspace.sessionIds.length === 1),
+        (value) => value.items.some((workspace) => workspace.path === canonicalWorkspacePath && workspace.sessionIds.length === 1),
         30_000,
       )
-      const workspace = workspaces.items.find(item => item.path === canonicalWorkspacePath)
+      const workspace = workspaces.items.find((item) => item.path === canonicalWorkspacePath)
       const sessionId = workspace?.sessionIds[0]
       if (sessionId === undefined) throw new Error('workspace/follow did not expose the webhook Session')
 
       const sessions = await remoteRpc<SessionList>(baseUrl, 'session/list', { _request: {} })
-      expect(sessions.items.find(session => session.sessionId === sessionId)).toMatchObject({
+      expect(sessions.items.find((session) => session.sessionId === sessionId)).toMatchObject({
         blank: false,
         cwd: canonicalWorkspacePath,
         projections: { values: { agentPreset: 'minimal' } },
@@ -416,29 +408,30 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('GitHub webhook through the real 
         async () => await history(baseUrl, sessionId),
         (page) => {
           const events = historyEvents(page)
-          const title = events.find(event => event.type === 'session/title')
-          const permission = events.find(event =>
-            event.type === 'permission/preset'
-            && isRecord(event.data)
-            && event.data.preset === 'read-only')
-          const message = events.find(event =>
-            event.type === 'user/message'
-            && isRecord(event.data)
-            && isRecord(event.data.source)
-            && event.data.source.kind === 'webhook')
-          return isRecord(title?.data) && title.data.title === TITLE
-            && permission !== undefined
-            && isRecord(message?.data) && isRecord(message.data.source)
-            && message.data.source.provider === 'github'
-            && message.data.source.deliveryId === DELIVERY
+          const title = events.find((event) => event.type === 'session/title')
+          const permission = events.find(
+            (event) => event.type === 'permission/preset' && isRecord(event.data) && event.data.preset === 'read-only',
+          )
+          const message = events.find(
+            (event) =>
+              event.type === 'user/message' && isRecord(event.data) && isRecord(event.data.source) && event.data.source.kind === 'webhook',
+          )
+          return (
+            isRecord(title?.data) &&
+            title.data.title === TITLE &&
+            permission !== undefined &&
+            isRecord(message?.data) &&
+            isRecord(message.data.source) &&
+            message.data.source.provider === 'github' &&
+            message.data.source.deliveryId === DELIVERY
+          )
         },
         30_000,
       )
-      const webhookMessage = historyEvents(admitted)
-        .find(event => event.type === 'user/message'
-          && isRecord(event.data)
-          && isRecord(event.data.source)
-          && event.data.source.kind === 'webhook')
+      const webhookMessage = historyEvents(admitted).find(
+        (event) =>
+          event.type === 'user/message' && isRecord(event.data) && isRecord(event.data.source) && event.data.source.kind === 'webhook',
+      )
       expect(webhookMessage?.data).toMatchObject({
         content: [{ type: 'text', text: `Reply with exactly ${MARKER} and no other text. Do not call tools.` }],
         source: {
@@ -455,7 +448,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('GitHub webhook through the real 
         observation.text,
         'a real DeepSeek assistant response',
         async () => await history(baseUrl, sessionId),
-        page => assistantText(page).includes(MARKER),
+        (page) => assistantText(page).includes(MARKER),
         150_000,
       )
       expect(assistantText(completed)).toContain(MARKER)

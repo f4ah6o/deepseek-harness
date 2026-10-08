@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { ChatViewport } from '../src/client/chat/use-chat-viewport.ts'
 import { ScrollFollow, scrollMetrics } from '../src/client/chat/use-scroll-follow.ts'
 
@@ -41,11 +41,18 @@ function fixture() {
     element.dataset.chatPagingAnchor = ''
     element.dataset.chatTurn = '1'
     parent.append(element)
-    vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() =>
-      new DOMRect(0, top + prependedHeight - column.scrollTop, 500, 60))
+    vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, top + prependedHeight - column.scrollTop, 500, 60))
     return element
   }
-  return { column, viewport, group, row, prepend: (height: number) => { prependedHeight += height } }
+  return {
+    column,
+    viewport,
+    group,
+    row,
+    prepend: (height: number) => {
+      prependedHeight += height
+    },
+  }
 }
 
 it.each([64, 4096])('locates the reading Turn with logarithmic outer-row measurements (%s rows)', (count) => {
@@ -55,9 +62,14 @@ it.each([64, 4096])('locates the reading Turn with logarithmic outer-row measure
     row.dataset.chatTurn = String(index + 1)
     return row
   })
-  h.viewport.updateTurns(rows.map((row, index) => ({
-    turn: index + 1, anchorKey: row.dataset.chatAnchorKey!, prompt: '', response: '',
-  })))
+  h.viewport.updateTurns(
+    rows.map((row, index) => ({
+      turn: index + 1,
+      anchorKey: row.dataset.chatAnchorKey!,
+      prompt: '',
+      response: '',
+    })),
+  )
   const selected = Math.floor(count * 0.73)
   h.column.scrollTop = selected * 100 + 10
   const hitTest = vi.fn(() => [])
@@ -80,7 +92,9 @@ it('uses outer group geometry and keeps the preceding Turn in a gap', () => {
   const body = document.createElement('div')
   group.append(body)
   const member = h.row(body, 'member', -500)
-  vi.spyOn(member, 'getBoundingClientRect').mockImplementation(() => { throw new Error('measured inside a group') })
+  vi.spyOn(member, 'getBoundingClientRect').mockImplementation(() => {
+    throw new Error('measured inside a group')
+  })
   const empty = h.row(h.column, 'empty', 180)
   empty.textContent = ''
   empty.dataset.chatTurn = '2'
@@ -91,7 +105,7 @@ it('uses outer group geometry and keeps the preceding Turn in a gap', () => {
   vi.spyOn(hidden, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 180 - h.column.scrollTop, 500, 0))
   const next = h.row(h.column, 'next', 300)
   next.dataset.chatTurn = '3'
-  h.viewport.updateTurns([1, 2, 3].map(turn => ({ turn, anchorKey: String(turn), prompt: '', response: '' })))
+  h.viewport.updateTurns([1, 2, 3].map((turn) => ({ turn, anchorKey: String(turn), prompt: '', response: '' })))
 
   for (const collapsed of [false, true]) {
     body.toggleAttribute('hidden', collapsed)
@@ -115,9 +129,12 @@ it('reads only the supplied column and reuses a known Turn landing', () => {
   const list = document.createElement('div')
   h.column.replaceWith(list)
   list.append(h.column)
-  onTestFinished(() => { list.remove() })
+  onTestFinished(() => {
+    list.remove()
+  })
   Object.defineProperties(list, {
-    clientHeight: { value: 300 }, scrollHeight: { value: 2_000 },
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 2_000 },
   })
   vi.spyOn(list, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 500, 300))
   h.viewport.attach(list, h.column)
@@ -126,7 +143,9 @@ it('reads only the supplied column and reuses a known Turn landing', () => {
   row.dataset.chatTurn = '7'
   const rail = document.createElement('nav')
   list.prepend(rail)
-  vi.spyOn(rail, 'getBoundingClientRect').mockImplementation(() => { throw new Error('measured the rail') })
+  vi.spyOn(rail, 'getBoundingClientRect').mockImplementation(() => {
+    throw new Error('measured the rail')
+  })
   expect(h.viewport.readVisibleTurn()).toBe(7)
   expect(h.viewport.scrollToTurn(7)?.turn).toBe(7)
   vi.spyOn(row, 'getBoundingClientRect').mockClear()
@@ -143,9 +162,13 @@ it.each([1, 1000])('selects the first paging marker without measuring other rows
   const first = h.row(h.column, 'first', -100)
   const later = Array.from({ length: count }, (_, index) => h.row(h.column, `later-${index}`, 10 + index * 60))
   for (const row of [unmarked, ...later]) {
-    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => { throw new Error('measured an unselected row') })
+    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => {
+      throw new Error('measured an unselected row')
+    })
   }
-  const hitTest = vi.fn(() => { throw new Error('paging used a visual hit test') })
+  const hitTest = vi.fn(() => {
+    throw new Error('paging used a visual hit test')
+  })
   Object.defineProperty(document, 'elementsFromPoint', { configurable: true, value: hitTest })
   const candidates = vi.spyOn(h.column, 'querySelectorAll')
 
@@ -169,7 +192,9 @@ it('skips hidden and empty paging markers without reading their geometry', () =>
   empty.textContent = ''
   const visible = h.row(h.column, 'visible', 60)
   for (const row of [hidden, child, empty]) {
-    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => { throw new Error('measured an ineligible row') })
+    vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => {
+      throw new Error('measured an ineligible row')
+    })
   }
 
   h.viewport.beginPaging()
@@ -278,8 +303,7 @@ it('navigates by Node identity while retaining a distinct visible part anchor', 
   const landing = h.viewport.scrollToTurn(1)
   expect(landing?.metrics.top).toBe(176)
   expect(landing?.position?.anchorKey).toBe(response.dataset.chatAnchorKey)
-  expect(h.viewport.restore({ anchorKey: response.dataset.chatAnchorKey!, anchorTop: 8, scrollTop: 0 })?.metrics.top)
-    .toBe(192)
+  expect(h.viewport.restore({ anchorKey: response.dataset.chatAnchorKey!, anchorTop: 8, scrollTop: 0 })?.metrics.top).toBe(192)
 })
 
 it('excludes empty rows, hidden ancestors, and transparent group shells from fallback sampling', () => {
@@ -358,7 +382,9 @@ function nestedFixture(height: number, cap: number, trailing = 1000, viewportHei
     scrollHeight: { get: () => Math.max(viewportHeight, columnHeight()) },
     scrollTop: {
       get: () => outerTop,
-      set: (value: number) => { outerTop = Math.max(0, Math.min(value, scroller.scrollHeight - viewportHeight)) },
+      set: (value: number) => {
+        outerTop = Math.max(0, Math.min(value, scroller.scrollHeight - viewportHeight))
+      },
     },
   })
   Object.defineProperties(body, {
@@ -366,7 +392,9 @@ function nestedFixture(height: number, cap: number, trailing = 1000, viewportHei
     scrollHeight: { get: () => height + prefix },
     scrollTop: {
       get: () => innerTop,
-      set: (value: number) => { innerTop = Math.max(0, Math.min(value, body.scrollHeight - bodyHeight())) },
+      set: (value: number) => {
+        innerTop = Math.max(0, Math.min(value, body.scrollHeight - bodyHeight()))
+      },
     },
   })
   vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 500, viewportHeight))
@@ -377,15 +405,32 @@ function nestedFixture(height: number, cap: number, trailing = 1000, viewportHei
   const observed = new Set<Element>()
   let notifyResize = () => {}
   class Observer implements ResizeObserver {
-    constructor(callback: ResizeObserverCallback) { notifyResize = () => { callback([], this) } }
-    observe(target: Element): void { observed.add(target) }
-    unobserve(target: Element): void { observed.delete(target) }
-    disconnect(): void { observed.clear() }
+    constructor(callback: ResizeObserverCallback) {
+      notifyResize = () => {
+        callback([], this)
+      }
+    }
+    observe(target: Element): void {
+      observed.add(target)
+    }
+    unobserve(target: Element): void {
+      observed.delete(target)
+    }
+    disconnect(): void {
+      observed.clear()
+    }
   }
   vi.stubGlobal('ResizeObserver', Observer)
   const viewport = new ChatViewport()
   viewport.attach(column, column)
-  viewport.connect({ scroll: () => {}, scrollEnd: () => {}, resize: () => { viewport.preserve() }, interact: () => {} })
+  viewport.connect({
+    scroll: () => {},
+    scrollEnd: () => {},
+    resize: () => {
+      viewport.preserve()
+    },
+    interact: () => {},
+  })
   onTestFinished(() => {
     viewport.detach()
     scroller.remove()
@@ -398,9 +443,20 @@ function nestedFixture(height: number, cap: number, trailing = 1000, viewportHei
     return top
   }
   return {
-    scroller, column, body, content, row, viewport, observed, begin,
-    prepend: (amount: number) => { prefix += amount },
-    resize: () => { notifyResize() },
+    scroller,
+    column,
+    body,
+    content,
+    row,
+    viewport,
+    observed,
+    begin,
+    prepend: (amount: number) => {
+      prefix += amount
+    },
+    resize: () => {
+      notifyResize()
+    },
   }
 }
 
@@ -458,7 +514,8 @@ it('gives paging compensation priority over an active inner follow animation', (
 })
 
 it.each(['wheel', 'touchstart', 'pointerdown', 'keydown', 'beforematch'])(
-  'retains the same paging anchor through later content resizes until %s', (intent) => {
+  'retains the same paging anchor through later content resizes until %s',
+  (intent) => {
     const h = nestedFixture(200, 400)
     h.scroller.scrollTop = 80
     const top = h.begin()
@@ -468,50 +525,57 @@ it.each(['wheel', 'touchstart', 'pointerdown', 'keydown', 'beforematch'])(
       h.resize()
       expect(h.row.getBoundingClientRect().top).toBe(top)
     }
-    h.body.dispatchEvent(intent === 'keydown'
-      ? new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true })
-      : new Event(intent, { bubbles: true }))
+    h.body.dispatchEvent(
+      intent === 'keydown' ? new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }) : new Event(intent, { bubbles: true }),
+    )
     expect(h.viewport.preserving).toBe(false)
     expect(h.observed.has(h.content)).toBe(false)
     const previousTop = h.scroller.scrollTop
     h.prepend(100)
     h.resize()
     expect(h.scroller.scrollTop).toBe(previousTop)
+  },
+)
+
+it.each(['typing', 'space', 'arrow', 'pointer'])('keeps the paging anchor when the composer receives %s', (interaction) => {
+  const h = nestedFixture(200, 400)
+  const composer = document.createElement('div')
+  composer.dataset.composerSeat = ''
+  const input = document.createElement('textarea')
+  composer.append(input)
+  h.scroller.append(composer)
+  h.scroller.scrollTop = 80
+  const top = h.begin()
+  const interact = vi.fn()
+  h.viewport.connect({
+    scroll: () => {},
+    scrollEnd: () => {},
+    resize: () => {
+      h.viewport.preserve()
+    },
+    interact,
   })
+  input.dispatchEvent(
+    interaction === 'pointer'
+      ? new Event('pointerdown', { bubbles: true })
+      : new KeyboardEvent('keydown', { key: interaction === 'space' ? ' ' : interaction === 'arrow' ? 'ArrowUp' : 'a', bubbles: true }),
+  )
+  expect(h.viewport.preserving).toBe(true)
+  expect(interact).not.toHaveBeenCalled()
+  h.prepend(200)
+  h.resize()
+  expect(h.row.getBoundingClientRect().top).toBe(top)
+})
 
-it.each(['typing', 'space', 'arrow', 'pointer'])(
-  'keeps the paging anchor when the composer receives %s', (interaction) => {
-    const h = nestedFixture(200, 400)
-    const composer = document.createElement('div')
-    composer.dataset.composerSeat = ''
-    const input = document.createElement('textarea')
-    composer.append(input)
-    h.scroller.append(composer)
-    h.scroller.scrollTop = 80
-    const top = h.begin()
-    const interact = vi.fn()
-    h.viewport.connect({ scroll: () => {}, scrollEnd: () => {}, resize: () => { h.viewport.preserve() }, interact })
-    input.dispatchEvent(interaction === 'pointer' ? new Event('pointerdown', { bubbles: true })
-      : new KeyboardEvent('keydown', { key: interaction === 'space' ? ' ' : interaction === 'arrow' ? 'ArrowUp' : 'a', bubbles: true }))
-    expect(h.viewport.preserving).toBe(true)
-    expect(interact).not.toHaveBeenCalled()
-    h.prepend(200)
-    h.resize()
-    expect(h.row.getBoundingClientRect().top).toBe(top)
-  },
-)
-
-it.each(['a', 'Tab', 'Escape', 'Enter'])(
-  'keeps the paging anchor for the non-scrolling key %s in the transcript', (key) => {
-    const h = nestedFixture(200, 400)
-    const top = h.begin()
-    h.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-    expect(h.viewport.preserving).toBe(true)
-    h.prepend(100)
-    h.resize()
-    expect(h.row.getBoundingClientRect().top).toBe(top)
-  },
-)
+it.each(['a', 'Tab', 'Escape', 'Enter'])('keeps the paging anchor for the non-scrolling key %s in the transcript', (key) => {
+  const h = nestedFixture(200, 400)
+  const top = h.begin()
+  h.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  expect(h.viewport.preserving).toBe(true)
+  h.prepend(100)
+  h.resize()
+  expect(h.row.getBoundingClientRect().top).toBe(top)
+})
 
 it('does not compensate twice when native inner anchoring already held the old row', () => {
   const h = nestedFixture(600, 400)

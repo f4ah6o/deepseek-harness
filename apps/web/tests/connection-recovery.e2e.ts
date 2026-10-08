@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url'
 import { readFile } from 'node:fs/promises'
 import { chromium, type WebSocketRoute } from 'playwright'
-import { expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { expect, it, onTestFailed, onTestFinished } from 'vite-plus/test'
 import { launchWebScaffold, seedSession, watchConsole } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
@@ -43,8 +43,8 @@ it.each([false, true])('retains the mounted application across WebSocket recover
       if (typeof message === 'string') {
         const frame = JSON.parse(message) as { type?: string; streamId: string; value?: { type?: string } }
         if (frame.type === 'item' && frame.value?.type === 'ready') readyFrames++
-        if (frame.type === 'item' && endpoints.get(frame.streamId) === 'session/follow'
-          && frame.value?.type === 'snapshot') sessionBaselines++
+        if (frame.type === 'item' && endpoints.get(frame.streamId) === 'session/follow' && frame.value?.type === 'snapshot')
+          sessionBaselines++
       }
       client.send(message)
     })
@@ -52,7 +52,10 @@ it.each([false, true])('retains the mounted application across WebSocket recover
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   const composer = page.locator('[data-composer-input][contenteditable="true"]')
   if (activeSession) {
-    await page.getByRole('treeitem').filter({ has: page.getByText(title, { exact: true }) }).click({ timeout: 20_000 })
+    await page
+      .getByRole('treeitem')
+      .filter({ has: page.getByText(title, { exact: true }) })
+      .click({ timeout: 20_000 })
     await writeComposerDraft(page, composer, draft)
     await expect.poll(() => sessionBaselines).toBeGreaterThan(0)
   } else {
@@ -62,7 +65,9 @@ it.each([false, true])('retains the mounted application across WebSocket recover
   const root = await page.locator('[data-slot="root"]').elementHandle()
   expect(root).not.toBeNull()
   let navigations = 0
-  page.on('framenavigated', () => { navigations++ })
+  page.on('framenavigated', () => {
+    navigations++
+  })
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const previousReady = readyFrames
@@ -76,10 +81,17 @@ it.each([false, true])('retains the mounted application across WebSocket recover
     if (activeSession) {
       await expect.poll(() => sessionBaselines, { timeout: 20_000 }).toBeGreaterThan(previousBaseline)
     }
-    await page.evaluate(() => new Promise<void>((resolve) => {
-      requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
-    }))
-    expect(await root!.evaluate(element => element.isConnected)).toBe(true)
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve()
+            })
+          })
+        }),
+    )
+    expect(await root!.evaluate((element) => element.isConnected)).toBe(true)
     expect(console.pageErrors).toEqual([])
     if (activeSession) expect(await composer.textContent()).toBe(draft)
   }

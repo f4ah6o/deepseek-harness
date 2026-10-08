@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 
@@ -95,8 +95,8 @@ describe('SubagentRuntime', () => {
     const { ctx, subagents } = await service()
     const added: string[] = []
     const removed: string[] = []
-    ctx.on('subagent/provider-added', provider => void added.push(provider.name))
-    ctx.on('subagent/provider-removed', name => void removed.push(name))
+    ctx.on('subagent/provider-added', (provider) => void added.push(provider.name))
+    ctx.on('subagent/provider-removed', (name) => void removed.push(name))
     const provider = new StubProvider('alpha')
 
     const dispose = subagents.registerProvider(provider)
@@ -114,18 +114,22 @@ describe('SubagentRuntime', () => {
 
   it('rolls registration back when provider-added throws', async () => {
     const { ctx, subagents } = await service()
-    ctx.on('subagent/provider-added', () => { throw new Error('added boom') })
-    expect(() => { subagents.registerProvider(new StubProvider('alpha')) }).toThrow('added boom')
+    ctx.on('subagent/provider-added', () => {
+      throw new Error('added boom')
+    })
+    expect(() => {
+      subagents.registerProvider(new StubProvider('alpha'))
+    }).toThrow('added boom')
     expect(subagents.getProvider('alpha')).toBeUndefined()
   })
 
   it('rejects duplicate and absent provider names with typed errors', async () => {
     const { subagents } = await service()
     subagents.registerProvider(new StubProvider('dup'))
-    expect(() => { subagents.registerProvider(new StubProvider('dup')) })
-      .toThrow(expect.objectContaining({ code: 'DUPLICATE_PROVIDER' }))
-    await expect(subagents.start('missing', baseRequest()))
-      .rejects.toMatchObject({ code: 'NO_PROVIDER' })
+    expect(() => {
+      subagents.registerProvider(new StubProvider('dup'))
+    }).toThrow(expect.objectContaining({ code: 'DUPLICATE_PROVIDER' }))
+    await expect(subagents.start('missing', baseRequest())).rejects.toMatchObject({ code: 'NO_PROVIDER' })
   })
 
   it('resolves the one-shot descriptor and exposes no provider continuation operations', async () => {
@@ -161,26 +165,27 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service()
     // Without a continuation manager no live Activation can exist, so there is
     // nothing to stop and nothing to authorize against.
-    expect(() => { subagents.interrupt(SessionId('child'), {
-      kind: 'user',
-      parentSessionId: SessionId('parent-1'),
-    }) }).not.toThrow()
+    expect(() => {
+      subagents.interrupt(SessionId('child'), {
+        kind: 'user',
+        parentSessionId: SessionId('parent-1'),
+      })
+    }).not.toThrow()
   })
 
   it('rejects continuable operations when their runtime services are absent', async () => {
     const { subagents } = await service()
-    await expect(subagents.startContinuable({
-      provider: 'unused',
-      label: 'unused child',
-      request: baseRequest(),
-      signal: new AbortController().signal,
-    })).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
-    await expect(subagents.sendMessage(
-      fakeParent(),
-      SessionId('child'),
-      [{ type: 'text', text: 'hello' }],
-      { signal: new AbortController().signal },
-    )).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
+    await expect(
+      subagents.startContinuable({
+        provider: 'unused',
+        label: 'unused child',
+        request: baseRequest(),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
+    await expect(
+      subagents.sendMessage(fakeParent(), SessionId('child'), [{ type: 'text', text: 'hello' }], { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
   })
 
   it.each([
@@ -193,8 +198,7 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service()
     const provider = new StubProvider('weak', NO_CAPS)
     subagents.registerProvider(provider)
-    await expect(subagents.start('weak', baseRequest(override)))
-      .rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
+    await expect(subagents.start('weak', baseRequest(override))).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
     expect(provider.startCount).toBe(0)
   })
 
@@ -202,12 +206,12 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service()
     const provider = new StubProvider('strong')
     subagents.registerProvider(provider)
-    await expect(subagents.start('strong', baseRequest({ maxDepth: -1 })))
-      .rejects.toThrow('non-negative safe integer')
-    await expect(subagents.start('strong', baseRequest({ outputSchema: { type: 'string' } as never })))
-      .rejects.toThrow()
+    await expect(subagents.start('strong', baseRequest({ maxDepth: -1 }))).rejects.toThrow('non-negative safe integer')
+    await expect(subagents.start('strong', baseRequest({ outputSchema: { type: 'string' } as never }))).rejects.toThrow()
     expect(provider.startCount).toBe(0)
-    expect(() => { assertSubagentMaxDepth(undefined) }).not.toThrow()
+    expect(() => {
+      assertSubagentMaxDepth(undefined)
+    }).not.toThrow()
   })
 
   it('publishes lifecycle only after async provider start and keeps parent scope', async () => {
@@ -224,8 +228,16 @@ describe('SubagentRuntime', () => {
     const events: string[] = []
     const keys: unknown[] = []
     const runIds: string[] = []
-    ctx.on('subagent/start', function (info) { events.push('start'); keys.push(carrierKeyOf(this)); runIds.push(info.runId) })
-    ctx.on('subagent/end', function (info) { events.push('end'); keys.push(carrierKeyOf(this)); runIds.push(info.runId) })
+    ctx.on('subagent/start', function (info) {
+      events.push('start')
+      keys.push(carrierKeyOf(this))
+      runIds.push(info.runId)
+    })
+    ctx.on('subagent/end', function (info) {
+      events.push('end')
+      keys.push(carrierKeyOf(this))
+      runIds.push(info.runId)
+    })
 
     const starting = subagents.start('deferred', baseRequest({ parent }))
     await Promise.resolve()
@@ -245,7 +257,7 @@ describe('SubagentRuntime', () => {
     const { ctx, subagents } = await service()
     subagents.registerProvider(new StubProvider('reused'))
     const runIds: string[] = []
-    ctx.on('subagent/start', info => void runIds.push(info.runId))
+    ctx.on('subagent/start', (info) => void runIds.push(info.runId))
 
     const first = await subagents.start('reused', baseRequest())
     const second = await subagents.start('reused', baseRequest())
@@ -261,7 +273,9 @@ describe('SubagentRuntime', () => {
       name: 'failed',
       capabilities: NO_CAPS,
       inheritsParentContext: false,
-      start: async () => { throw new Error('setup rolled back') },
+      start: async () => {
+        throw new Error('setup rolled back')
+      },
     })
     const lifecycle = vi.fn()
     ctx.on('subagent/start', lifecycle)
@@ -283,27 +297,27 @@ describe('SubagentRuntime', () => {
     const dispose = vi.fn(async () => {
       result.reject(new Error('run infrastructure failed'))
       // Cross Node's unhandled-rejection checkpoint while disposal is pending.
-      await new Promise<void>(resolve => setImmediate(resolve))
+      await new Promise<void>((resolve) => setImmediate(resolve))
       if (failsDisposal) throw cleanupFailure
     })
     subagents.registerProvider({
       name: 'catalog-failure',
       capabilities: NO_CAPS,
       inheritsParentContext: false,
-      start: () => Promise.resolve({
-        id: childSession.id,
-        localAgent,
-        result: result.promise,
-        dispose,
-      }),
+      start: () =>
+        Promise.resolve({
+          id: childSession.id,
+          localAgent,
+          result: result.promise,
+          dispose,
+        }),
     })
     const catalogFailure = new Error('catalog unavailable')
     const append = vi.spyOn(parentSession, 'append').mockImplementation(() => {
       throw catalogFailure
     })
 
-    await expect(subagents.start('catalog-failure', baseRequest({ parent })))
-      .rejects.toBe(catalogFailure)
+    await expect(subagents.start('catalog-failure', baseRequest({ parent }))).rejects.toBe(catalogFailure)
     expect(append).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
     expect(warnings).toHaveBeenCalledTimes(failsDisposal ? 1 : 0)
@@ -321,11 +335,13 @@ describe('SubagentRuntime', () => {
     const run = await subagents.start('completed', baseRequest())
     await run.result
     await Promise.resolve()
-    expect(ended).toHaveBeenCalledWith(expect.objectContaining({
-      provider: 'completed',
-      lastAssistantMessage: [{ type: 'text', text: 'answer' }],
-      stopReason: 'completed',
-    }))
+    expect(ended).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'completed',
+        lastAssistantMessage: [{ type: 'text', text: 'answer' }],
+        stopReason: 'completed',
+      }),
+    )
 
     // The lifecycle event omits lastAssistantMessage when output is empty,
     // matching the continuable epoch event.
@@ -334,7 +350,7 @@ describe('SubagentRuntime', () => {
     const silentRun = await subagents.start('silent', baseRequest())
     await silentRun.result
     await Promise.resolve()
-    const silentEnd = ended.mock.calls.map(call => call[0] as SubagentRunEndInfo).find(info => info.provider === 'silent')
+    const silentEnd = ended.mock.calls.map((call) => call[0] as SubagentRunEndInfo).find((info) => info.provider === 'silent')
     expect(silentEnd).toBeDefined()
     expect('lastAssistantMessage' in silentEnd!).toBe(false)
 
@@ -359,20 +375,30 @@ describe('SubagentRuntime', () => {
     const warnings: string[] = []
     ctx.logger.warn = ((message: unknown) => void warnings.push(String(message))) as typeof ctx.logger.warn
     const heard: string[] = []
-    ctx.on('subagent/provider-removed', () => { throw new Error('sync boom') })
+    ctx.on('subagent/provider-removed', () => {
+      throw new Error('sync boom')
+    })
     // Runtime listeners may return thenables even though the declaration's observable result is void.
     // oxlint-disable-next-line typescript/no-misused-promises -- exercises rejected-listener containment
-    ctx.on('subagent/provider-removed', async () => { throw new Error('async boom') })
-    ctx.on('subagent/provider-removed', () => { throw { toString: () => { throw new Error('coercion') } } })
-    ctx.on('subagent/provider-removed', name => void heard.push(name))
+    ctx.on('subagent/provider-removed', async () => {
+      throw new Error('async boom')
+    })
+    ctx.on('subagent/provider-removed', () => {
+      throw {
+        toString: () => {
+          throw new Error('coercion')
+        },
+      }
+    })
+    ctx.on('subagent/provider-removed', (name) => void heard.push(name))
     const dispose = subagents.registerProvider(new StubProvider('contained'))
 
     dispose()
     await Promise.resolve()
     expect(heard).toEqual(['contained'])
-    expect(warnings.some(message => message.includes('sync boom'))).toBe(true)
-    expect(warnings.some(message => message.includes('async boom'))).toBe(true)
-    expect(warnings.some(message => message.includes('<unrenderable thrown value>'))).toBe(true)
+    expect(warnings.some((message) => message.includes('sync boom'))).toBe(true)
+    expect(warnings.some((message) => message.includes('async boom'))).toBe(true)
+    expect(warnings.some((message) => message.includes('<unrenderable thrown value>'))).toBe(true)
   })
 
   it('SubagentError participates in the harness error taxonomy', () => {
@@ -384,10 +410,11 @@ describe('SubagentRuntime', () => {
 })
 
 describe('subagent descriptors', () => {
-  const event = (data: unknown): SessionEvent<'subagent/descriptor'> => ({
-    type: 'subagent/descriptor',
-    data,
-  } as unknown as SessionEvent<'subagent/descriptor'>)
+  const event = (data: unknown): SessionEvent<'subagent/descriptor'> =>
+    ({
+      type: 'subagent/descriptor',
+      data,
+    }) as unknown as SessionEvent<'subagent/descriptor'>
 
   it('omits absent fields, recovers a complete payload, and rejects unsupported versions', () => {
     expect(foldSubagentDescriptor([])).toBeUndefined()
@@ -398,11 +425,13 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
     })
     expect(foldSubagentDescriptor([event(minimal)])).toEqual(minimal)
-    expect(snapshotSubagentDescriptor({
-      mode: 'one-shot',
-      provider: 'spawn',
-      label: 'child work',
-    })).toEqual({ ...minimal, label: 'child work' })
+    expect(
+      snapshotSubagentDescriptor({
+        mode: 'one-shot',
+        provider: 'spawn',
+        label: 'child work',
+      }),
+    ).toEqual({ ...minimal, label: 'child work' })
     const complete = {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable' as const,
@@ -414,44 +443,50 @@ describe('subagent descriptors', () => {
       persona: 'reviewer',
       toolFilter: { allow: ['read'], deny: ['bash'] },
     }
-    expect(snapshotSubagentDescriptor({
-      mode: 'continuable',
-      provider: complete.provider,
-      label: complete.label,
-      agentProvider: complete.agentProvider,
-      agentModel: complete.agentModel,
-      agentReasoningEffort: complete.agentReasoningEffort,
-      persona: complete.persona,
-      toolFilter: complete.toolFilter,
-    })).toEqual(complete)
+    expect(
+      snapshotSubagentDescriptor({
+        mode: 'continuable',
+        provider: complete.provider,
+        label: complete.label,
+        agentProvider: complete.agentProvider,
+        agentModel: complete.agentModel,
+        agentReasoningEffort: complete.agentReasoningEffort,
+        persona: complete.persona,
+        toolFilter: complete.toolFilter,
+      }),
+    ).toEqual(complete)
     expect(foldSubagentDescriptor([event(complete)])).toEqual(complete)
-    expect(foldSubagentDescriptor([
-      event({
-        version: SUBAGENT_DESCRIPTOR_VERSION,
+    expect(
+      foldSubagentDescriptor([
+        event({
+          version: SUBAGENT_DESCRIPTOR_VERSION,
+          mode: 'continuable',
+          provider: 'spawn',
+          label: 'l',
+          toolFilter: { allow: ['read'] },
+        }),
+      ]),
+    ).toMatchObject({ toolFilter: { allow: ['read'] } })
+    expect(
+      foldSubagentDescriptor([
+        event({
+          version: SUBAGENT_DESCRIPTOR_VERSION,
+          mode: 'continuable',
+          provider: 'spawn',
+          label: 'l',
+          toolFilter: { deny: ['bash'] },
+        }),
+      ]),
+    ).toMatchObject({ toolFilter: { deny: ['bash'] } })
+    expect(foldSubagentDescriptor([event({ version: SUBAGENT_DESCRIPTOR_VERSION + 1, provider: 'spawn' })])).toBeUndefined()
+    expect(() =>
+      snapshotSubagentDescriptor({
         mode: 'continuable',
         provider: 'spawn',
-        label: 'l',
-        toolFilter: { allow: ['read'] },
+        label: 'bad',
+        toolFilter: { deny: [Symbol('not-json')] as unknown as string[] },
       }),
-    ])).toMatchObject({ toolFilter: { allow: ['read'] } })
-    expect(foldSubagentDescriptor([
-      event({
-        version: SUBAGENT_DESCRIPTOR_VERSION,
-        mode: 'continuable',
-        provider: 'spawn',
-        label: 'l',
-        toolFilter: { deny: ['bash'] },
-      }),
-    ])).toMatchObject({ toolFilter: { deny: ['bash'] } })
-    expect(foldSubagentDescriptor([
-      event({ version: SUBAGENT_DESCRIPTOR_VERSION + 1, provider: 'spawn' }),
-    ])).toBeUndefined()
-    expect(() => snapshotSubagentDescriptor({
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'bad',
-      toolFilter: { deny: [Symbol('not-json')] as unknown as string[] },
-    })).toThrow('not losslessly JSON-serializable')
+    ).toThrow('not losslessly JSON-serializable')
   })
 
   it.each([
@@ -462,105 +497,165 @@ describe('subagent descriptors', () => {
     ['string version', { version: '1', provider: 'spawn' }, 'version must be a number'],
     ['missing mode', { version: SUBAGENT_DESCRIPTOR_VERSION }, 'mode must be "one-shot" or "continuable"'],
     ['invalid mode', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'later' }, 'mode must be "one-shot" or "continuable"'],
-    ['unknown one-shot field', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'one-shot',
-      provider: 'spawn',
-      label: 'l',
-      persona: 'reviewer',
-    }, 'payload has unknown field "persona"'],
-    ['invalid one-shot label', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'one-shot',
-      provider: 'spawn',
-      label: 7,
-    }, 'label must be a string'],
-    ['unknown payload field', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      extra: true,
-    }, 'payload has unknown field "extra"'],
+    [
+      'unknown one-shot field',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'one-shot',
+        provider: 'spawn',
+        label: 'l',
+        persona: 'reviewer',
+      },
+      'payload has unknown field "persona"',
+    ],
+    [
+      'invalid one-shot label',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'one-shot',
+        provider: 'spawn',
+        label: 7,
+      },
+      'label must be a string',
+    ],
+    [
+      'unknown payload field',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        extra: true,
+      },
+      'payload has unknown field "extra"',
+    ],
     ['missing provider', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable' }, 'provider must be a string'],
-    ['missing label', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-    }, 'label must be a string'],
-    ['invalid label', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 7,
-    }, 'label must be a string'],
-    ['invalid provider', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 7,
-    }, 'provider must be a string'],
-    ['invalid agent provider', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      agentProvider: 7,
-    }, 'agentProvider must be a string'],
-    ['invalid agent model', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      agentModel: [],
-    }, 'agentModel must be a string'],
-    ['invalid agent reasoning effort', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      agentReasoningEffort: 7,
-    }, 'agentReasoningEffort must be a string'],
-    ['invalid persona', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      persona: {},
-    }, 'persona must be a string'],
-    ['non-object tool filter', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      toolFilter: [],
-    }, 'toolFilter must be an object'],
-    ['unknown tool-filter field', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      toolFilter: { except: ['bash'] },
-    }, 'toolFilter has unknown field "except"'],
-    ['empty tool filter', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      toolFilter: {},
-    }, 'toolFilter must declare allow and/or deny'],
-    ['non-array allow list', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      toolFilter: { allow: 'read' },
-    }, 'toolFilter.allow must be an array of strings'],
-    ['non-string deny item', {
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'l',
-      toolFilter: { deny: [7] },
-    }, 'toolFilter.deny must be an array of strings'],
+    [
+      'missing label',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+      },
+      'label must be a string',
+    ],
+    [
+      'invalid label',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 7,
+      },
+      'label must be a string',
+    ],
+    [
+      'invalid provider',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 7,
+      },
+      'provider must be a string',
+    ],
+    [
+      'invalid agent provider',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        agentProvider: 7,
+      },
+      'agentProvider must be a string',
+    ],
+    [
+      'invalid agent model',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        agentModel: [],
+      },
+      'agentModel must be a string',
+    ],
+    [
+      'invalid agent reasoning effort',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        agentReasoningEffort: 7,
+      },
+      'agentReasoningEffort must be a string',
+    ],
+    [
+      'invalid persona',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        persona: {},
+      },
+      'persona must be a string',
+    ],
+    [
+      'non-object tool filter',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        toolFilter: [],
+      },
+      'toolFilter must be an object',
+    ],
+    [
+      'unknown tool-filter field',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        toolFilter: { except: ['bash'] },
+      },
+      'toolFilter has unknown field "except"',
+    ],
+    [
+      'empty tool filter',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        toolFilter: {},
+      },
+      'toolFilter must declare allow and/or deny',
+    ],
+    [
+      'non-array allow list',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        toolFilter: { allow: 'read' },
+      },
+      'toolFilter.allow must be an array of strings',
+    ],
+    [
+      'non-string deny item',
+      {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'continuable',
+        provider: 'spawn',
+        label: 'l',
+        toolFilter: { deny: [7] },
+      },
+      'toolFilter.deny must be an array of strings',
+    ],
   ])('rejects a malformed persisted descriptor: %s', (_case, data, detail) => {
     expect(() => foldSubagentDescriptor([event(data)])).toThrow(detail)
   })

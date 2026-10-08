@@ -1,15 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm, type StubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import type {
-  ThemeSettings,
-  ThemeSnapshot,
-  ThemeTokenOverrides,
-} from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { ThemeSettings, ThemeSnapshot, ThemeTokenOverrides } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 
-const make = (host = stubConfigForm<ThemeSettings>()): {
+const make = (
+  host = stubConfigForm<ThemeSettings>(),
+): {
   ctx: Context
   theme: ThemeRuntime
   events: ThemeSnapshot[]
@@ -17,7 +15,9 @@ const make = (host = stubConfigForm<ThemeSettings>()): {
 } => {
   const ctx = new Context()
   const events: ThemeSnapshot[] = []
-  ctx.on('theme/change', (snapshot) => { events.push(snapshot) })
+  ctx.on('theme/change', (snapshot) => {
+    events.push(snapshot)
+  })
   return { ctx, theme: new ThemeRuntime(ctx, host.scope), events, host }
 }
 
@@ -30,7 +30,7 @@ describe('ThemeRuntime', () => {
     // jsdom matchMedia is absent; system resolves to light.
     expect(snapshot.active.id).toBe('light')
     expect(snapshot.active.colorScheme).toBe('light')
-    expect(snapshot.themes.map(t => t.id)).toEqual(['light', 'dark'])
+    expect(snapshot.themes.map((t) => t.id)).toEqual(['light', 'dark'])
   })
 
   it('seeds the initial font size from the boot-script body variable, ignoring junk', () => {
@@ -60,7 +60,9 @@ describe('ThemeRuntime', () => {
   it('rejects out-of-range and fractional font sizes', () => {
     const { theme, events, host } = make()
     for (const px of [9, 23, 14.5, Number.NaN]) {
-      expect(() => { theme.setFontSize(px) }).toThrow('outside 10..22')
+      expect(() => {
+        theme.setFontSize(px)
+      }).toThrow('outside 10..22')
     }
     expect(events).toHaveLength(0)
     expect(host.set).not.toHaveBeenCalled()
@@ -109,7 +111,9 @@ describe('ThemeRuntime', () => {
 
   it('throws on unknown setTheme ids, duplicate registration, and the system id', () => {
     const { theme } = make()
-    expect(() => { theme.setTheme('sepia') }).toThrow('not registered')
+    expect(() => {
+      theme.setTheme('sepia')
+    }).toThrow('not registered')
     expect(() => theme.register({ id: 'light', colorScheme: 'light', tokens: {} })).toThrow('already registered')
     expect(() => theme.register({ id: 'system', colorScheme: 'light', tokens: {} })).toThrow('preference')
   })
@@ -117,12 +121,12 @@ describe('ThemeRuntime', () => {
   it('registered themes join the snapshot; disposing the active one resets to default', () => {
     const { theme, events, host } = make()
     const dispose = theme.register({ id: 'sepia', colorScheme: 'light', tokens: { '--dsw-alias-bg-base': 'red' } })
-    expect(theme.getTheme().themes.map(t => t.id)).toEqual(['light', 'dark', 'sepia'])
+    expect(theme.getTheme().themes.map((t) => t.id)).toEqual(['light', 'dark', 'sepia'])
     theme.setTheme('sepia')
     expect(theme.getTheme().active.tokens['--dsw-alias-bg-base']).toBe('red')
     dispose()
     expect(theme.getTheme().preference).toBe('system')
-    expect(theme.getTheme().themes.map(t => t.id)).toEqual(['light', 'dark'])
+    expect(theme.getTheme().themes.map((t) => t.id)).toEqual(['light', 'dark'])
     // Custom ids are in-process extension themes; only the built-in product
     // preferences cross the Host settings schema.
     expect(host.set).not.toHaveBeenCalled()
@@ -146,7 +150,7 @@ describe('ThemeRuntime', () => {
     theme.setTheme('light')
     const dispose = theme.register({ id: 'sepia', colorScheme: 'dark', tokens: {} })
     dispose()
-    expect(events.map(e => e.revision)).toEqual([1, 2, 3, 4])
+    expect(events.map((e) => e.revision)).toEqual([1, 2, 3, 4])
   })
 
   it('stacks reversible token overrides in call order and selects the active palette value', () => {
@@ -209,15 +213,15 @@ describe('ThemeRuntime', () => {
     })
 
     const tokens = theme.exportInspectTokens()
-    expect(tokens.map(token => token.name)).toEqual([...tokens.map(token => token.name)].sort())
-    expect(tokens.find(token => token.name === '--registered')).toMatchObject({
+    expect(tokens.map((token) => token.name)).toEqual([...tokens.map((token) => token.name)].sort())
+    expect(tokens.find((token) => token.name === '--registered')).toMatchObject({
       valueType: 'CSS value',
       cssVariable: '--registered',
     })
-    const semantic = tokens.find(token => token.name === 'semanticAccent')
+    const semantic = tokens.find((token) => token.name === 'semanticAccent')
     expect(semantic).toMatchObject({ valueType: 'CSS value' })
     expect(semantic).not.toHaveProperty('cssVariable')
-    expect(tokens.filter(token => token.name === '--dsw-alias-bg-base')).toHaveLength(1)
+    expect(tokens.filter((token) => token.name === '--dsw-alias-bg-base')).toHaveLength(1)
 
     tokens[0]!.description = 'caller mutation'
     expect(theme.exportInspectTokens()[0]!.description).not.toBe('caller mutation')
@@ -228,9 +232,13 @@ describe('ThemeRuntime', () => {
     const override = (value: unknown): void => {
       theme.overrideTokens('package', { '--bad': value } as unknown as ThemeTokenOverrides)
     }
-    expect(() => { override('red') }).toThrow(/bare string.*light.*dark/)
+    expect(() => {
+      override('red')
+    }).toThrow(/bare string.*light.*dark/)
     for (const value of [1, null, {}, { light: 1, dark: 'dark' }, { light: 'light' }]) {
-      expect(() => { override(value) }).toThrow(/must map to a \{ light, dark \} pair/)
+      expect(() => {
+        override(value)
+      }).toThrow(/must map to a \{ light, dark \} pair/)
     }
   })
 
@@ -247,8 +255,12 @@ describe('ThemeRuntime', () => {
       const listeners = new Set<Listener>()
       const media = {
         matches: initialMatches,
-        addEventListener: (_: 'change', fn: Listener) => { listeners.add(fn) },
-        removeEventListener: (_: 'change', fn: Listener) => { listeners.delete(fn) },
+        addEventListener: (_: 'change', fn: Listener) => {
+          listeners.add(fn)
+        },
+        removeEventListener: (_: 'change', fn: Listener) => {
+          listeners.delete(fn)
+        },
         flip() {
           this.matches = !this.matches
           for (const fn of listeners) fn()
@@ -259,7 +271,9 @@ describe('ThemeRuntime', () => {
       return media
     }
 
-    afterEach(() => { vi.unstubAllGlobals() })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
 
     it('system resolves against the media query and follows OS flips', () => {
       const media = stubMedia(true)

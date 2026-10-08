@@ -1,5 +1,5 @@
 /** Stream scripts, live stream control, cancellation, and the built-in `$events` opening. */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { RemoteStreamHandle } from '@deepseek-ai/dsh-typert-protocol'
 import { RemoteMock, frames, openStream, streamHandle, streamMethod } from '../src/index.ts'
 
@@ -35,13 +35,16 @@ describe('RemoteMock streams', () => {
     const sessionOf = ([request]: readonly unknown[]): string => (request as { sessionId: string }).sessionId
     const a = mock.open('s/f', [{ sessionId: 'a' }], idle())
     const b = mock.open('s/f', [{ sessionId: 'b' }], idle())
-    expect(mock.streams.push('s/f', 'only-b', open => sessionOf(open) === 'b')).toBe(1)
+    expect(mock.streams.push('s/f', 'only-b', (open) => sessionOf(open) === 'b')).toBe(1)
     expect(mock.streams.push('s/f', 'both')).toBe(2)
-    expect(mock.streams.fail('s/f', new Error('gone'), open => sessionOf(open) === 'a')).toBe(1)
+    expect(mock.streams.fail('s/f', new Error('gone'), (open) => sessionOf(open) === 'a')).toBe(1)
     expect(mock.streams.end('s/f')).toBe(1)
     await expect(drain(b)).resolves.toEqual(['hello', 'only-b', 'both'])
     await expect(drain(a)).rejects.toThrow('gone')
-    expect(mock.log.streams().map(entry => [entry.state, entry.pushed])).toEqual([['failed', 2], ['ended', 3]])
+    expect(mock.log.streams().map((entry) => [entry.state, entry.pushed])).toEqual([
+      ['failed', 2],
+      ['ended', 3],
+    ])
     expect(mock.streams.push('s/f', 'late')).toBe(0)
   })
 
@@ -66,7 +69,7 @@ describe('RemoteMock streams', () => {
     mock.streams.end('s/f')
     settled.abort()
     await expect(drain(ended)).resolves.toEqual([])
-    expect(mock.log.streams().map(entry => entry.state)).toEqual(['ended', 'failed', 'ended'])
+    expect(mock.log.streams().map((entry) => entry.state)).toEqual(['ended', 'failed', 'ended'])
   })
 
   it('lets a consumer that returns after the producer ended drop the rest, so drained() settles', async () => {
@@ -93,7 +96,7 @@ describe('RemoteMock streams', () => {
     aborted.abort()
     await expect(drain(mock.open('s/f', [], aborted.signal))).resolves.toEqual([])
     await expect(take(mock.open('s/f', [], idle()), 1)).resolves.toEqual(['queued'])
-    expect(mock.log.streams().map(entry => entry.state)).toEqual(['cancelled', 'cancelled', 'cancelled'])
+    expect(mock.log.streams().map((entry) => entry.state)).toEqual(['cancelled', 'cancelled', 'cancelled'])
   })
 
   it('aborts the stream handle signal when the consumer returns', async () => {
@@ -124,9 +127,13 @@ describe('RemoteMock streams', () => {
         stream.push('later')
         stream.end()
       })
-      .stream('s/throws', () => { throw new Error('sync boom') })
+      .stream('s/throws', () => {
+        throw new Error('sync boom')
+      })
       .stream('s/rejects', () => Promise.reject(new Error('async boom')))
-      .stream('s/odd', () => { throw 'string reason' })
+      .stream('s/odd', () => {
+        throw 'string reason'
+      })
     await expect(drain(mock.open('s/echo', [{ a: 1 }], idle()))).resolves.toEqual([[{ a: 1 }]])
     await expect(drain(mock.open('s/async', [], idle()))).resolves.toEqual(['later'])
     await expect(drain(mock.open('s/throws', [], idle()))).rejects.toThrow('sync boom')
@@ -140,7 +147,9 @@ describe('RemoteMock streams', () => {
     const reader = mock.open('s/f', [], idle())[Symbol.asyncIterator]()
     const unread = mock.streams.drained('s/f')
     let settled = false
-    void unread.then(() => { settled = true })
+    void unread.then(() => {
+      settled = true
+    })
     await Promise.resolve()
     expect(settled).toBe(false) // 'first' is queued and nobody has pulled it
     await expect(reader.next()).resolves.toEqual({ value: 'first', done: false })
@@ -154,7 +163,9 @@ describe('RemoteMock streams', () => {
     mock.streams.end('s/f')
     const ended = mock.streams.drained('s/f')
     let endedSettled = false
-    void ended.then(() => { endedSettled = true })
+    void ended.then(() => {
+      endedSettled = true
+    })
     await Promise.resolve()
     expect(endedSettled).toBe(false) // ended, but 'third' is still queued
     await expect(reader.next()).resolves.toEqual({ value: 'third', done: false })
@@ -186,10 +197,12 @@ describe('RemoteMock streams', () => {
   })
 
   it('types a fake stream as the generated handle, with inert uplink members', async () => {
-    const handle = streamHandle<string, string>((async function* () {
-      yield 'a'
-      yield 'b'
-    })())
+    const handle = streamHandle<string, string>(
+      (async function* () {
+        yield 'a'
+        yield 'b'
+      })(),
+    )
     handle.send('ignored')
     handle.end()
     handle.dispose()

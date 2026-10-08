@@ -2,7 +2,7 @@
 import { appendFile, mkdtemp, rm, stat, writeFile, type FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { readPdf } from '../src/output.ts'
 
 const io = vi.hoisted(() => ({ opened: undefined as ((file: FileHandle) => Promise<void>) | undefined }))
@@ -18,7 +18,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-afterEach(() => { io.opened = undefined; vi.restoreAllMocks() })
+afterEach(() => {
+  io.opened = undefined
+  vi.restoreAllMocks()
+})
 
 const pdf = Buffer.from('%PDF-1.7\npreview\n%%EOF\n')
 
@@ -26,8 +29,11 @@ async function output(): Promise<{ directory: string; path: string; handles: Fil
   const directory = await mkdtemp(join(tmpdir(), 'dsh-office-to-pdf-output-'))
   const handles: FileHandle[] = []
   onTestFinished(async () => {
-    try { await Promise.all(handles.map(file => file.close())) }
-    finally { await rm(directory, { recursive: true, force: true }) }
+    try {
+      await Promise.all(handles.map((file) => file.close()))
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
   const path = join(directory, 'preview.pdf')
   await writeFile(path, pdf)

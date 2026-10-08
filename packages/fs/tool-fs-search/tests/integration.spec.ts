@@ -9,7 +9,7 @@
  * fake-service suite (tools.spec.ts) carries the coverage gate.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -33,12 +33,15 @@ function call(name: string, args: unknown, agentObj?: object) {
     callId: ToolCallId(`it-${++callCounter}`),
     name,
     arguments: args,
-    ...agentObj ? { agent: agentObj as never } : {},
+    ...(agentObj ? { agent: agentObj as never } : {}),
   })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  return result.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
 }
 
 /** The fixture workspace as a session cwd, so relative paths resolve inside `dir`. */

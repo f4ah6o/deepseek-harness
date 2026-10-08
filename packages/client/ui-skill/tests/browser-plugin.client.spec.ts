@@ -14,7 +14,7 @@
  * source's own contract.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
@@ -26,9 +26,7 @@ import { apply, inject } from '../src/client/index.ts'
 import { SkillRow as SkillToolRow } from '../src/client/SkillRow.tsx'
 
 type SkillRow = { name: string; description: string; whenToUse?: string; path?: string; modelInvocable?: boolean }
-type ListResult =
-  | { ok: true; value: { skills: SkillRow[] } }
-  | { ok: false; error: RemoteFailure }
+type ListResult = { ok: true; value: { skills: SkillRow[] } } | { ok: false; error: RemoteFailure }
 type ListFn = (payload: object, signal?: AbortSignal) => Promise<ListResult>
 
 interface PresentationCapture {
@@ -40,10 +38,13 @@ interface PresentationCapture {
 /** Provide the presentation registries and capture the plugin's registrations. */
 function providePresentation(ctx: Context): PresentationCapture {
   const slots = new SlotRegistry(ctx)
-  slots.register({
-    name: 'root',
-    children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
-  } as never, () => null)
+  slots.register(
+    {
+      name: 'root',
+      children: { 'tool.call.toolview': { kind: 'keyed', scope: 'session' } },
+    } as never,
+    () => null,
+  )
   const capture: PresentationCapture = {
     slots,
     dictionaries: [],
@@ -52,10 +53,12 @@ function providePresentation(ctx: Context): PresentationCapture {
   ctx.provide('locale', {
     register(namespace: string, dictionaries: unknown) {
       capture.dictionaries.push({ namespace, dictionaries })
-      return () => { capture.localeDisposed = true }
+      return () => {
+        capture.localeDisposed = true
+      }
     },
     // Minimal bound-translate fake: zh dictionary lookup, key passthrough on miss.
-    bind: () => (key: string) => key === 'menu.userOnly' ? '仅用户' : key,
+    bind: () => (key: string) => (key === 'menu.userOnly' ? '仅用户' : key),
   })
   return capture
 }
@@ -66,8 +69,15 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
   const openResource = vi.fn()
   ctx.provide('sidebarRight', { openResource })
   let captured: InputTriggerSource | undefined
-  ctx.provide('inputTriggers', { registerSource: (src: InputTriggerSource) => { captured = src; return () => {} } })
-  const sessions = new TestSessions(async (action) => { await action() }, ctx)
+  ctx.provide('inputTriggers', {
+    registerSource: (src: InputTriggerSource) => {
+      captured = src
+      return () => {}
+    },
+  })
+  const sessions = new TestSessions(async (action) => {
+    await action()
+  }, ctx)
   ctx.provide('sessions', sessions)
   onTestFinished(async () => {
     await sessions.disposeScopes()
@@ -75,14 +85,14 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
   })
   for (const id of ['s1', 's2', 'preview', 'first', 'second', 'child']) {
     await sessions.add({ id, ...opening })
-    sessions.retainFor(ctx, id === addressed
-      ? { parentSessionId: sid('parent'), childSessionId: addressed, mode: 'continuable' }
-      : sid(id))
+    sessions.retainFor(ctx, id === addressed ? { parentSessionId: sid('parent'), childSessionId: addressed, mode: 'continuable' } : sid(id))
   }
   const remote = new TestRemote(ctx, { skills: { list } })
   providePresentation(ctx)
   const fiber = ctx.plugin({ inject: [...inject], apply })
-  onTestFinished(async () => { await fiber.dispose() })
+  onTestFinished(async () => {
+    await fiber.dispose()
+  })
   await fiber.await()
   return { ctx, source: captured!, remote, fiber, openResource, sessions }
 }
@@ -93,7 +103,10 @@ const CATALOG: SkillRow[] = [
   { name: 'deploy', description: 'deploy flow', modelInvocable: true },
 ]
 
-const listOk = (skills: SkillRow[]): ListFn => () => Promise.resolve({ ok: true as const, value: { skills } })
+const listOk =
+  (skills: SkillRow[]): ListFn =>
+  () =>
+    Promise.resolve({ ok: true as const, value: { skills } })
 
 /** Counting fake: records payloads, resolves the shared catalog. */
 function countingList(skills: SkillRow[] = CATALOG) {
@@ -109,8 +122,12 @@ const sid = (id: string) => id as SessionId
 
 const proj = (id: string): ClientSessionContext => ({ sessionId: sid(id) })
 
-const req = (query: string, signal?: AbortSignal) =>
-  ({ query, position: 'leading' as const, drilled: false, signal: signal ?? new AbortController().signal })
+const req = (query: string, signal?: AbortSignal) => ({
+  query,
+  position: 'leading' as const,
+  drilled: false,
+  signal: signal ?? new AbortController().signal,
+})
 
 describe('apply', () => {
   it('declares the services it binds', () => {
@@ -129,30 +146,33 @@ describe('apply', () => {
     expect(entry?.options).toMatchObject({ key: 'skill' })
     expect(entry?.locale).toBe('skill')
     expect(entry?.component).toBe(SkillToolRow)
-    expect(presentation.dictionaries).toEqual([{
-      namespace: 'skill', dictionaries: {
-        zh: {
-          'row.title': '加载技能',
-          'row.running': '正在加载 skill',
-          'row.preparing': '准备加载技能',
-          'row.failed': 'skill 加载失败',
-          'row.stopped': 'skill 加载已中止',
-          'row.instructions': '说明',
-          'row.inspect': '查看',
-          'menu.userOnly': '仅用户',
-        },
-        en: {
-          'row.title': 'Skill',
-          'row.running': 'Loading skill',
-          'row.preparing': 'Preparing to load a skill',
-          'row.failed': 'Skill load failed',
-          'row.stopped': 'Skill load stopped',
-          'row.instructions': 'Instructions',
-          'row.inspect': 'Inspect',
-          'menu.userOnly': 'user-only',
+    expect(presentation.dictionaries).toEqual([
+      {
+        namespace: 'skill',
+        dictionaries: {
+          zh: {
+            'row.title': '加载技能',
+            'row.running': '正在加载 skill',
+            'row.preparing': '准备加载技能',
+            'row.failed': 'skill 加载失败',
+            'row.stopped': 'skill 加载已中止',
+            'row.instructions': '说明',
+            'row.inspect': '查看',
+            'menu.userOnly': '仅用户',
+          },
+          en: {
+            'row.title': 'Skill',
+            'row.running': 'Loading skill',
+            'row.preparing': 'Preparing to load a skill',
+            'row.failed': 'Skill load failed',
+            'row.stopped': 'Skill load stopped',
+            'row.instructions': 'Instructions',
+            'row.inspect': 'Inspect',
+            'menu.userOnly': 'user-only',
+          },
         },
       },
-    }])
+    ])
   })
 
   it('registers the "/" skill source; disposal frees the name (HMR safety)', async () => {
@@ -193,7 +213,9 @@ describe('candidates: sessionId addressing', () => {
       expect(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.skillCatalog).toBe(1)
       expect(list).not.toHaveBeenCalled()
       opened.resolve(undefined)
-      await vi.waitFor(() => { expect(list).toHaveBeenCalledOnce() })
+      await vi.waitFor(() => {
+        expect(list).toHaveBeenCalledOnce()
+      })
       expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(2)
       response.resolve({ ok: true, value: { skills: CATALOG } })
       await pending
@@ -247,7 +269,7 @@ describe('candidates: sessionId addressing', () => {
       { name: 'commit-helper', description: 'commit flow' },
       { name: 'code-review', description: 'review flow' },
     ])
-    const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map(c => c.name)
+    const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map((c) => c.name)
     // 'de' prefixes deploy and is a subsequence of code-review: the prefix ranks first.
     await expect(names('de')).resolves.toEqual(['deploy', 'code-review'])
     await expect(names('REV')).resolves.toEqual(['code-review'])
@@ -255,11 +277,13 @@ describe('candidates: sessionId addressing', () => {
   })
 
   it('rejects on a failed result (the slash shell owns the menu-side fold)', async () => {
-    const { source } = await bench(() => Promise.resolve({
-      ok: false, error: new RemoteError('gateway/internal', 'boom', {}),
-    }))
-    await expect(source.candidates(proj('s1'), req('co')))
-      .rejects.toThrow('skills/list failed: gateway/internal: boom')
+    const { source } = await bench(() =>
+      Promise.resolve({
+        ok: false,
+        error: new RemoteError('gateway/internal', 'boom', {}),
+      }),
+    )
+    await expect(source.candidates(proj('s1'), req('co'))).rejects.toThrow('skills/list failed: gateway/internal: boom')
   })
 
   it('does not fetch Agent-bound skills for an addressed child', async () => {
@@ -290,10 +314,7 @@ describe('catalog cache', () => {
   it('single-flight: concurrent candidates on one cold key share one RPC', async () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
-    const [a, b] = await Promise.all([
-      source.candidates(proj('s1'), req('dep')),
-      source.candidates(proj('s1'), req('co')),
-    ])
+    const [a, b] = await Promise.all([source.candidates(proj('s1'), req('dep')), source.candidates(proj('s1'), req('co'))])
     expect(payloads).toHaveLength(1)
     expect(a).toEqual([{ name: 'deploy', description: 'deploy flow' }])
     expect(b).toHaveLength(2)
@@ -329,7 +350,9 @@ describe('catalog cache', () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
     source.warm!(proj('s1'))
-    await vi.waitFor(() => { expect(payloads).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(payloads).toHaveLength(1)
+    })
     expect(payloads[0]).toEqual({ sessionId: 's1' })
     // The prewarmed key serves candidates with zero further RPC; other
     // sessions' keys stay untouched.
@@ -370,7 +393,9 @@ describe('catalog cache', () => {
 describe('lexicon', () => {
   it('is undefined before the session catalog settles and serves names after', async () => {
     let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => { release = resolve })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
     const { source } = await bench(async (payload) => {
       await gate
       return listOk(CATALOG)(payload)
@@ -469,7 +494,9 @@ describe('reference preview', () => {
     expect(source.openReference!(session, { ref: '/review' })).toBe(true)
     const candidates = source.candidates(session, req(''))
     expect(openResource).not.toHaveBeenCalled()
-    await vi.waitFor(() => { expect(list).toHaveBeenCalledTimes(1) })
+    await vi.waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(1)
+    })
     gate.resolve({ ok: true, value: { skills: rows } })
     await candidates
     expect(openResource).toHaveBeenCalledExactlyOnceWith('dsh-resource://file/session/preview//skills/review/SKILL.md')
@@ -522,12 +549,16 @@ describe('reference preview', () => {
 
   it('reports a failed preview fetch and allows the next click to retry', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    onTestFinished(() => { error.mockRestore() })
+    onTestFinished(() => {
+      error.mockRestore()
+    })
     const list = vi.fn<ListFn>().mockRejectedValueOnce(new Error('offline')).mockImplementation(listOk(rows))
     const { source, openResource } = await bench(list)
     const session = proj('preview')
     source.openReference!(session, { ref: '/review' })
-    await vi.waitFor(() => { expect(error).toHaveBeenCalledWith('[ui-skill] reference preview failed:', expect.any(Error)) })
+    await vi.waitFor(() => {
+      expect(error).toHaveBeenCalledWith('[ui-skill] reference preview failed:', expect.any(Error))
+    })
     expect(openResource).not.toHaveBeenCalled()
     source.openReference!(session, { ref: '/review' })
     await source.candidates(session, req(''))

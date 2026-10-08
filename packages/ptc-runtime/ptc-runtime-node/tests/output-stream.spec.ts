@@ -1,5 +1,5 @@
 import { PassThrough } from 'node:stream'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { drainOutput } from '../src/output-stream.ts'
 
 afterEach(() => vi.useRealTimers())
@@ -7,7 +7,7 @@ afterEach(() => vi.useRealTimers())
 it('waits for queued output and accepts an already ended or absent stream', async () => {
   const stream = new PassThrough()
   const chunks: string[] = []
-  stream.on('data', chunk => chunks.push(String(chunk)))
+  stream.on('data', (chunk) => chunks.push(String(chunk)))
   const pending = drainOutput(stream, 1000)
   stream.end('last output')
   expect(await pending).toBe(true)

@@ -1,16 +1,17 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
-import type { Plugin } from 'vite'
+import { defineConfig, lazyPlugins } from 'vite-plus'
+import type { Plugin } from 'vite-plus'
 import react from '@vitejs/plugin-react'
 import { clientBuildEnvironmentDefines } from '../../scripts/client-build-environment.ts'
 import { productWebBundleIsolation } from './product-isolation.ts'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
-const STANDALONE_ERROR = 'apps/web is not a standalone application: bare Vite cannot inject window.__DSH_BOOT__. '
-  + 'From a repository checkout, run `pnpm dsh web`; an installed package uses `dsh web`. '
-  + 'For client-plugin HMR, run `pnpm run dev:web`, which starts `dsh web` and the rebuild watchers together.'
+const STANDALONE_ERROR =
+  'apps/web is not a standalone application: bare Vite cannot inject window.__DSH_BOOT__. ' +
+  'From a repository checkout, run `pnpm dsh web`; an installed package uses `dsh web`. ' +
+  'For client-plugin HMR, run `pnpm run dev:web`, which starts `dsh web` and the rebuild watchers together.'
 const DEFAULT_CLIENT_TITLE = 'DSH Local Build'
 
 /** Escape build-time text before placing it in the HTML title element. */
@@ -82,7 +83,9 @@ function emitPreviewPage(): Plugin {
       }
       if (bootstrapFile === undefined) throw new Error('vite: preview bootstrap entry missing from the bundle')
     },
-    writeBundle() { written = true },
+    writeBundle() {
+      written = true
+    },
     async closeBundle() {
       if (!write || !written || bootstrapFile === undefined) return
       const page = await readFile(resolve(outputDirectory, 'index.html'), 'utf8')
@@ -143,11 +146,7 @@ const VENDOR_PACKAGES: ReadonlySet<string> = new Set([
  * part of the initial load and belong in the vendor chunk; the lazy ones must
  * stay unassigned so each keeps its own on-demand chunk.
  */
-const BOOT_GRAMMAR_FILES: readonly string[] = [
-  'dist/typescript.mjs',
-  'dist/shellscript.mjs',
-  'dist/json.mjs',
-]
+const BOOT_GRAMMAR_FILES: readonly string[] = ['dist/typescript.mjs', 'dist/shellscript.mjs', 'dist/json.mjs']
 
 /** Font asset extensions routed to assets/fonts/ (KaTeX's woff2/woff/ttf faces). */
 const FONT_EXTENSIONS: readonly string[] = ['.woff2', '.woff', '.ttf']
@@ -166,13 +165,20 @@ function npmPackageOf(id: string): string | undefined {
 }
 
 export default defineConfig({
+  test: {
+    clearMocks: false,
+  },
   // Relative asset URLs: preview.html mounts the same output under any base
   // directory, and the served index resolves identically from the site root.
   base: './',
-  plugins: [
-    rejectStandaloneServe(), clientDocumentTitle(), brandFontLicense(), react(), emitPreviewPage(),
+  plugins: lazyPlugins(() => [
+    rejectStandaloneServe(),
+    clientDocumentTitle(),
+    brandFontLicense(),
+    react(),
+    emitPreviewPage(),
     productWebBundleIsolation(src('../..'), src('.')),
-  ],
+  ]),
   build: {
     // The worker bootstrap holds its page at top-level await; Vite's default
     // `modules` target (es2020-era) rejects that syntax.
@@ -205,19 +211,19 @@ export default defineConfig({
           // index and vendor are excluded by name — vendor legitimately
           // carries the three boot grammars.
           if (chunk.name === 'index' || chunk.name === 'vendor') return 'assets/[name]-[hash].js'
-          const isLangChunk = chunk.moduleIds.some(id => id.includes('/node_modules/@shikijs/langs/'))
+          const isLangChunk = chunk.moduleIds.some((id) => id.includes('/node_modules/@shikijs/langs/'))
           return isLangChunk ? 'assets/langs/[name]-[hash].js' : 'assets/[name]-[hash].js'
         },
         assetFileNames(asset): string {
           const fileName = asset.names[0] ?? ''
-          const isFont = FONT_EXTENSIONS.some(ext => fileName.endsWith(ext))
+          const isFont = FONT_EXTENSIONS.some((ext) => fileName.endsWith(ext))
           return isFont ? 'assets/fonts/[name]-[hash][extname]' : 'assets/[name]-[hash][extname]'
         },
         manualChunks(id: string): string | undefined {
           const pkg = npmPackageOf(id)
           if (pkg === undefined) return undefined // workspace + vendored cordis: index
           if (pkg === '@shikijs/langs') {
-            return BOOT_GRAMMAR_FILES.some(file => id.endsWith(`/${file}`)) ? 'vendor' : undefined
+            return BOOT_GRAMMAR_FILES.some((file) => id.endsWith(`/${file}`)) ? 'vendor' : undefined
           }
           return VENDOR_PACKAGES.has(pkg) ? 'vendor' : undefined
         },
@@ -243,9 +249,7 @@ export default defineConfig({
     // beside the bundle. Plugin packages never enter this graph; they arrive as
     // runtime bundles through the client module system. The remaining alias
     // browserizes the vendored Cordis Loader's only Node import.
-    alias: [
-      { find: /^node:module$/, replacement: src('./src/node-module-stub.ts') },
-    ],
+    alias: [{ find: /^node:module$/, replacement: src('./src/node-module-stub.ts') }],
   },
   define: {
     ...clientBuildEnvironmentDefines(process.env),

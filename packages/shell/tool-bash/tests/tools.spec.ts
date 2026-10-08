@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
@@ -85,11 +85,20 @@ async function registerFakeAgent(ctx: Context, sessionId: string, inject: (...ar
 }
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`call-${++callCounter}`), name, arguments: args, ...agent ? { agent } : {} })
+  return ctx.tools.execute({
+    signal: testToolSignal,
+    callId: ToolCallId(`call-${++callCounter}`),
+    name,
+    arguments: args,
+    ...(agent ? { agent } : {}),
+  })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+  return result.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
 }
 
 async function callUntilText(
@@ -104,11 +113,12 @@ async function callUntilText(
   while (Date.now() < deadline) {
     last = await call(ctx, name, args)
     if (text(last).includes(expected)) return last
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
-  throw new Error(`${name} output did not include ${JSON.stringify(expected)}; last text was ${JSON.stringify(last !== undefined ? text(last) : '')}`)
+  throw new Error(
+    `${name} output did not include ${JSON.stringify(expected)}; last text was ${JSON.stringify(last !== undefined ? text(last) : '')}`,
+  )
 }
-
 
 /** Wrap a canned handle (and optional foreground result) as the unified execute() surface. */
 function fakeExecution(proc: ShellProcess, result?: () => Promise<ShellRunResult>): ShellExecution {
@@ -132,7 +142,7 @@ class RecordingSandboxExecutor extends ShellExecutor {
       stdoutMaxBytes: request.stdoutMaxBytes ?? 64_000,
       timeoutMs: request.timeoutMs ?? 1000,
       onExpiry: request.onExpiry ?? 'kill',
-      ...request.signal ? { signal: request.signal } : {},
+      ...(request.signal ? { signal: request.signal } : {}),
       sandboxPolicy: request.sandboxPolicy ?? { mode: 'read-only', workspaceRoot: process.cwd() },
     }
   }
@@ -141,31 +151,33 @@ class RecordingSandboxExecutor extends ShellExecutor {
     this.modes.push(spec.sandboxPolicy?.mode)
     // One settled handle serves every path: a job's starter reads it and a
     // foreground call projects its result.
-    return fakeExecution({
-      status: 'completed',
-      exitCode: 0,
-      signal: null,
-      done: Promise.resolve(),
-      sandbox: { mode: spec.sandboxPolicy?.mode ?? 'read-only', denied: false },
-      readOutput: () => ({ delta: '', lossy: false }),
-      observed: { stdout: silentReader, stderr: silentReader },
-      kill: () => false,
-    }, () => Promise.resolve({
-      exitCode: 0,
-      signal: null,
-      timedOut: false,
-      aborted: false,
-      timeoutMs: spec.timeoutMs,
-      stdout: { text: 'ok', truncated: false },
-      stderr: { text: '', truncated: false },
-      sandbox: {
-        mode: spec.sandboxPolicy?.mode ?? 'read-only',
-        denied: false,
-        ...spec.command === 'without optional sandbox facts'
-          ? {}
-          : { enforcement: 'full' as const, runnerFailed: false },
+    return fakeExecution(
+      {
+        status: 'completed',
+        exitCode: 0,
+        signal: null,
+        done: Promise.resolve(),
+        sandbox: { mode: spec.sandboxPolicy?.mode ?? 'read-only', denied: false },
+        readOutput: () => ({ delta: '', lossy: false }),
+        observed: { stdout: silentReader, stderr: silentReader },
+        kill: () => false,
       },
-    }))
+      () =>
+        Promise.resolve({
+          exitCode: 0,
+          signal: null,
+          timedOut: false,
+          aborted: false,
+          timeoutMs: spec.timeoutMs,
+          stdout: { text: 'ok', truncated: false },
+          stderr: { text: '', truncated: false },
+          sandbox: {
+            mode: spec.sandboxPolicy?.mode ?? 'read-only',
+            denied: false,
+            ...(spec.command === 'without optional sandbox facts' ? {} : { enforcement: 'full' as const, runnerFailed: false }),
+          },
+        }),
+    )
   }
 }
 
@@ -226,11 +238,13 @@ function sandboxAgent(
   const id = SessionId('sandbox-session')
   return {
     id,
-    ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
+    ...(ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx }),
     session: {
       id,
       header: { version: 0, id, createdAt: 0 },
-      get seq() { return events.length },
+      get seq() {
+        return events.length
+      },
       eventAt: (seq: number) => events[seq],
       snapshotEvents: () => events,
       append: (type: string, data: Record<string, unknown>) => {
@@ -309,7 +323,10 @@ describe('bash tool', () => {
     await ctx.plugin(LocalBashExecutor, { maxOutputBytes: 100, graceMs: 200 })
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(ToolBash)
-    const result = await call(ctx, 'bash', { command: 'for i in $(seq 1 100); do printf "line-%04d\\n" $i; done', description: 'test command' })
+    const result = await call(ctx, 'bash', {
+      command: 'for i in $(seq 1 100); do printf "line-%04d\\n" $i; done',
+      description: 'test command',
+    })
     expect(text(result)).toContain('[output truncated; full output: ')
     expect(text(result)).toContain('line-0100')
   })
@@ -336,7 +353,9 @@ describe('bash tool', () => {
       arguments: { command: 'sleep 60', description: 'test command' },
       signal: controller.signal,
     })
-    setTimeout(() => { controller.abort() }, 50)
+    setTimeout(() => {
+      controller.abort()
+    }, 50)
     const result = await pending
     expect(result.isError).toBe(true)
     expect(result.error).toMatchObject({
@@ -383,7 +402,9 @@ describe('bash tool', () => {
   it('rejects a non-JSON numeric argument before tool-specific validation', async () => {
     const ctx = await setup()
     const result = await call(ctx, 'bash', {
-      command: 'x', description: 'd', timeoutMs: Number.NaN,
+      command: 'x',
+      description: 'd',
+      timeoutMs: Number.NaN,
     })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('tool execution arguments must be losslessly JSON-serializable')
@@ -395,9 +416,8 @@ describe('bash tool', () => {
   ] as const)('requests description before command in the %s schema', async (_mode, setupContext) => {
     const ctx = await setupContext()
     try {
-      const schema = ctx.tools.schemas().find(tool => tool.name === 'bash')!
-      expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, 2))
-        .toEqual(['description', 'command'])
+      const schema = ctx.tools.schemas().find((tool) => tool.name === 'bash')!
+      expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, 2)).toEqual(['description', 'command'])
       expect(schema.parameters).toHaveProperty('required', ['description', 'command'])
       expect(schema.description).toContain('Provide `description` before `command` in the arguments.')
     } finally {
@@ -408,14 +428,13 @@ describe('bash tool', () => {
   it('registers the bash schema with run_in_background exposed while a job registry is composed', async () => {
     const ctx = await setupWithJobs()
     const schemas = ctx.tools.schemas()
-    expect(schemas.map(schema => schema.name).sort()).toEqual(['bash', 'job_kill', 'job_list', 'job_output'])
-    const bashSchema = schemas.find(schema => schema.name === 'bash')!
+    expect(schemas.map((schema) => schema.name).sort()).toEqual(['bash', 'job_kill', 'job_list', 'job_output'])
+    const bashSchema = schemas.find((schema) => schema.name === 'bash')!
     expect(bashSchema.parameters).toMatchObject({
       type: 'object',
       required: ['description', 'command'],
     })
-    expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>))
-      .toContain('run_in_background')
+    expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>)).toContain('run_in_background')
     expect(JSON.stringify(bashSchema.parameters)).toContain('job_output')
     expect(JSON.stringify(bashSchema.parameters)).toContain('moves to the background as a job')
   })
@@ -423,10 +442,14 @@ describe('bash tool', () => {
   it('registers a foreground-only schema without a job registry', async () => {
     const ctx = await setup()
     const schemas = ctx.tools.schemas()
-    expect(schemas.map(schema => schema.name)).toEqual(['bash'])
+    expect(schemas.map((schema) => schema.name)).toEqual(['bash'])
     const bashSchema = schemas[0]!
-    expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>))
-      .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
+    expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>)).toEqual([
+      'description',
+      'command',
+      'timeoutMs',
+      'workdir',
+    ])
     expect(JSON.stringify(bashSchema.parameters)).not.toContain('job_output')
     expect(JSON.stringify(bashSchema.parameters)).toContain('kills the command on expiry')
   })
@@ -444,8 +467,8 @@ describe('bash tool', () => {
       text: 'after',
     })
     const assembly = await ctx.systemPrompt.assemble()
-    const section = assembly.sections.find(s => s.name === 'tool:bash')
-    expect(assembly.sections.map(s => s.name)).toEqual([
+    const section = assembly.sections.find((s) => s.name === 'tool:bash')
+    expect(assembly.sections.map((s) => s.name)).toEqual([
       'harness:identity',
       'deployment:persona-prefix',
       'test:before-bash',
@@ -465,11 +488,20 @@ describe('bash tool', () => {
     await ctx.plugin(BashEnvPlugin)
     const fiber = await ctx.plugin(ToolBash)
     expect(ctx.tools.schemas()).toHaveLength(1)
-    expect((await ctx.systemPrompt.assemble()).sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'tool:bash', 'deployment:persona-suffix'])
+    expect((await ctx.systemPrompt.assemble()).sections.map((s) => s.name)).toEqual([
+      'harness:identity',
+      'deployment:persona-prefix',
+      'tool:bash',
+      'deployment:persona-suffix',
+    ])
     await fiber.dispose()
     expect(ctx.tools.schemas()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
-    expect((await ctx.systemPrompt.assemble()).sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'deployment:persona-suffix'])
+    expect((await ctx.systemPrompt.assemble()).sections.map((s) => s.name)).toEqual([
+      'harness:identity',
+      'deployment:persona-prefix',
+      'deployment:persona-suffix',
+    ])
   })
 
   it('tools depend on the executor: no registration without ctx.shell', async () => {
@@ -482,7 +514,7 @@ describe('bash tool', () => {
     expect(ctx.tools.schemas()).toHaveLength(0)
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, {})
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(ctx.tools.schemas()).toHaveLength(1)
   })
 
@@ -498,10 +530,9 @@ describe('bash tool', () => {
     await ctx.plugin(LocalBashExecutor, {})
     ToolBash.apply(ctx, {})
     // The job-backed variant registers from the registry fork, one turn later.
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     const schema = ctx.tools.schemas()[0]!
-    expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toContain('run_in_background')
+    expect(Object.keys(schema.parameters.properties as Record<string, unknown>)).toContain('run_in_background')
   })
 })
 
@@ -527,7 +558,7 @@ describe('the background surface follows the job registry', () => {
 
     const registry = await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolJobs)
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(backgroundAdvertised(ctx)).toBe(true)
     const started = await call(ctx, 'bash', { command: 'echo swapped', description: 'test command', run_in_background: true })
     expect(text(started)).toBe('started background job bash-1')
@@ -536,7 +567,7 @@ describe('the background surface follows the job registry', () => {
     // The registry leaves; the foreground-only variant returns in its place,
     // and the tool never disappears in between.
     await registry.dispose()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(ctx.tools.get('bash')).toBeDefined()
     expect(backgroundAdvertised(ctx)).toBe(false)
     const foreground = await call(ctx, 'bash', { command: 'echo plain', description: 'test command' })
@@ -551,7 +582,7 @@ describe('the background surface follows the job registry', () => {
     const fiber = await ctx.plugin(ToolBash)
     expect(backgroundAdvertised(ctx)).toBe(true)
     await fiber.dispose()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(ctx.tools.get('bash')).toBeUndefined()
     expect(errors).not.toHaveBeenCalled()
   })
@@ -671,9 +702,8 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(LocalBashExecutor, {})
     await ctx.plugin(ToolBash, { enableRunInBackground: false })
 
-    const schema = ctx.tools.schemas().find(s => s.name === 'bash')!
-    expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
+    const schema = ctx.tools.schemas().find((s) => s.name === 'bash')!
+    expect(Object.keys(schema.parameters.properties as Record<string, unknown>)).toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(schema.description).not.toContain('run_in_background')
     // The registry-held definition agrees (schema and capability never disagree).
     const parameters = ctx.tools.get('bash')!.parameters as { properties: Record<string, unknown> }
@@ -707,7 +737,7 @@ describe('sandbox escalation through the generic task producer', () => {
 
   it('advertises the sandbox fields and validates their pairing', async () => {
     const { ctx } = await setupSandboxed()
-    const schema = ctx.tools.schemas().find(item => item.name === 'bash')!
+    const schema = ctx.tools.schemas().find((item) => item.name === 'bash')!
     const properties = schema.parameters.properties as Record<string, { enum?: string[]; description?: string }>
     expect(properties['sandbox_permissions']?.enum).toEqual(['workspace-write', 'danger-full-access'])
     expect(properties['sandbox_permissions']?.description).toContain('asks the user for approval')
@@ -725,10 +755,20 @@ describe('sandbox escalation through the generic task producer', () => {
     const { ctx, bash } = await setupSandboxed(true)
     try {
       const prompted = vi.fn()
-      ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
-      const result = await call(ctx, 'bash', {
-        command: 'true', description: 'ordinary', ...justification === undefined ? {} : { justification },
-      }, sandboxAgent('workspace-write'))
+      ctx.on('approval/request', () => {
+        prompted()
+        return Promise.resolve<ApprovalOutcome>('allowed-once')
+      })
+      const result = await call(
+        ctx,
+        'bash',
+        {
+          command: 'true',
+          description: 'ordinary',
+          ...(justification === undefined ? {} : { justification }),
+        },
+        sandboxAgent('workspace-write'),
+      )
       expect(result.isError, text(result)).toBe(false)
       expect(text(result)).toBe('ok')
       expect(bash.modes).toEqual(['workspace-write'])
@@ -742,7 +782,10 @@ describe('sandbox escalation through the generic task producer', () => {
     const { ctx, bash } = await setupSandboxed(true)
     try {
       const prompted = vi.fn()
-      ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+      ctx.on('approval/request', () => {
+        prompted()
+        return Promise.resolve<ApprovalOutcome>('allowed-once')
+      })
       const result = await call(ctx, 'bash', { ...escalate, justification }, sandboxAgent())
       expect(text(result)).toContain('invalid justification: expected a non-empty sentence')
       expect(result.isError).toBe(true)
@@ -759,7 +802,10 @@ describe('sandbox escalation through the generic task producer', () => {
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()
-    ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+    ctx.on('approval/request', () => {
+      prompted()
+      return Promise.resolve<ApprovalOutcome>('allowed-once')
+    })
     const result = await call(ctx, 'bash', { ...escalate, sandbox_permissions: 'workspace-write' }, sandboxAgent('danger-full-access'))
     expect(text(result)).toContain('not strictly wider')
     expect(prompted).not.toHaveBeenCalled()
@@ -784,12 +830,22 @@ describe('sandbox escalation through the generic task producer', () => {
     const { ctx, bash } = await setupSandboxed(true)
     try {
       const prompted = vi.fn()
-      ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+      ctx.on('approval/request', () => {
+        prompted()
+        return Promise.resolve<ApprovalOutcome>('allowed-once')
+      })
       for (const justification of [undefined, '', ' \t\n']) {
-        const result = await call(ctx, 'bash', {
-          command: 'true', description: 'repeat current mode', sandbox_permissions: mode,
-          ...justification === undefined ? {} : { justification },
-        }, sandboxAgent(mode))
+        const result = await call(
+          ctx,
+          'bash',
+          {
+            command: 'true',
+            description: 'repeat current mode',
+            sandbox_permissions: mode,
+            ...(justification === undefined ? {} : { justification }),
+          },
+          sandboxAgent(mode),
+        )
         expect(result.isError, text(result)).toBe(false)
       }
       expect(bash.modes).toEqual([mode, mode, mode])
@@ -896,12 +952,26 @@ describe('sandbox escalation through the generic task producer', () => {
     // Confinement that only ends with the job's own cancellation: the wait
     // expires with no process, so the call ends as the deadline's
     // preparation timeout carrying the mode it resolved.
-    vi.spyOn(bash, 'execute').mockImplementation(spec => new Promise((_resolve, reject) => {
-      spec.signal?.addEventListener('abort', () => { reject(new Error('fixture preparation aborted')) }, { once: true })
-    }))
+    vi.spyOn(bash, 'execute').mockImplementation(
+      (spec) =>
+        new Promise((_resolve, reject) => {
+          spec.signal?.addEventListener(
+            'abort',
+            () => {
+              reject(new Error('fixture preparation aborted'))
+            },
+            { once: true },
+          )
+        }),
+    )
     const result = await call(ctx, 'bash', { command: 'true', description: 'confined preparation', timeoutMs: 100 })
     if (result.isError) throw new Error('expected a foreground result')
-    expect(result.value).toMatchObject({ kind: 'foreground', timedOut: true, exitCode: null, sandbox: { mode: 'read-only', denied: false } })
+    expect(result.value).toMatchObject({
+      kind: 'foreground',
+      timedOut: true,
+      exitCode: null,
+      sandbox: { mode: 'read-only', denied: false },
+    })
     expect(text(result)).toBe('(no output)\n[timed out after 100ms]\n[exit code: null]')
     expect(ctx.jobs.list()).toEqual([])
   })
@@ -921,41 +991,33 @@ describe('renderJobRead', () => {
   })
 
   it('appends the loss notice with the available spill paths', () => {
-    expect(renderJobRead('out\n', true, ['/spill/out.log']))
-      .toBe('out\n[some output was dropped from memory; full output: /spill/out.log]')
-    expect(renderJobRead('out\n', true, ['/spill/out.log', '/spill/err.log']))
-      .toBe('out\n[some output was dropped from memory; full output: /spill/out.log, /spill/err.log]')
+    expect(renderJobRead('out\n', true, ['/spill/out.log'])).toBe('out\n[some output was dropped from memory; full output: /spill/out.log]')
+    expect(renderJobRead('out\n', true, ['/spill/out.log', '/spill/err.log'])).toBe(
+      'out\n[some output was dropped from memory; full output: /spill/out.log, /spill/err.log]',
+    )
   })
 
   it('reports (unavailable) when a lossy read has no safe spill path', () => {
-    expect(renderJobRead('out\n', true, []))
-      .toBe('out\n[some output was dropped from memory; full output: (unavailable)]')
+    expect(renderJobRead('out\n', true, [])).toBe('out\n[some output was dropped from memory; full output: (unavailable)]')
   })
 
   it('an empty lossy delta is the notice alone', () => {
-    expect(renderJobRead('', true, ['/spill/err.log']))
-      .toBe('[some output was dropped from memory; full output: /spill/err.log]')
+    expect(renderJobRead('', true, ['/spill/err.log'])).toBe('[some output was dropped from memory; full output: /spill/err.log]')
   })
 
   it('inserts the separating newline only when the delta lacks one', () => {
-    expect(renderJobRead('tail', true, []))
-      .toBe('tail\n[some output was dropped from memory; full output: (unavailable)]')
-    expect(renderJobRead('tail\n', true, []))
-      .toBe('tail\n[some output was dropped from memory; full output: (unavailable)]')
+    expect(renderJobRead('tail', true, [])).toBe('tail\n[some output was dropped from memory; full output: (unavailable)]')
+    expect(renderJobRead('tail\n', true, [])).toBe('tail\n[some output was dropped from memory; full output: (unavailable)]')
   })
 
   it('appends settled sandbox denial and runner-failure facts', () => {
-    expect(renderJobRead('out\n', false, [], { mode: 'read-only', denied: true }, ['workspace-write']))
-      .toContain('[sandbox: escalation available')
-    expect(renderJobRead('tail', false, [], { mode: 'read-only', denied: true }))
-      .toBe('tail\n[sandbox: file access denied under read-only mode]')
-    const runner = renderJobRead(
-      '',
-      false,
-      [],
-      { mode: 'workspace-write', denied: true, runnerFailed: true },
-      ['danger-full-access'],
+    expect(renderJobRead('out\n', false, [], { mode: 'read-only', denied: true }, ['workspace-write'])).toContain(
+      '[sandbox: escalation available',
     )
+    expect(renderJobRead('tail', false, [], { mode: 'read-only', denied: true })).toBe(
+      'tail\n[sandbox: file access denied under read-only mode]',
+    )
+    const runner = renderJobRead('', false, [], { mode: 'workspace-write', denied: true, runnerFailed: true }, ['danger-full-access'])
     expect(runner).toContain('sandbox runner itself failed under workspace-write mode')
     expect(runner).not.toContain('file access denied')
   })
@@ -976,23 +1038,19 @@ describe('processOutcome', () => {
   }
 
   it('maps a signal-killed process to killed with the signal detail', () => {
-    expect(processOutcome(settled({ status: 'killed', signal: 'SIGTERM' })))
-      .toEqual({ status: 'killed', detail: 'signal: SIGTERM' })
+    expect(processOutcome(settled({ status: 'killed', signal: 'SIGTERM' }))).toEqual({ status: 'killed', detail: 'signal: SIGTERM' })
   })
 
   it('maps a killed process without a recorded signal (kill raced exit / spawn failure)', () => {
-    expect(processOutcome(settled({ status: 'killed', exitCode: null })))
-      .toEqual({ status: 'killed', detail: 'killed before exit' })
+    expect(processOutcome(settled({ status: 'killed', exitCode: null }))).toEqual({ status: 'killed', detail: 'killed before exit' })
   })
 
   it('maps a completed process to its exit code', () => {
-    expect(processOutcome(settled({ exitCode: 3 })))
-      .toEqual({ status: 'completed', detail: 'exit code: 3' })
+    expect(processOutcome(settled({ exitCode: 3 }))).toEqual({ status: 'completed', detail: 'exit code: 3' })
   })
 
   it('defensively reads a null exit code as 0 (handle shapes from other executors)', () => {
-    expect(processOutcome(settled({ exitCode: null })))
-      .toEqual({ status: 'completed', detail: 'exit code: 0' })
+    expect(processOutcome(settled({ exitCode: null }))).toEqual({ status: 'completed', detail: 'exit code: 0' })
   })
 
   it('appends sandbox facts to the terminal detail', () => {
@@ -1011,7 +1069,7 @@ describe('session-cwd routing (per-session workdir)', () => {
   const agentInCwd = (cwd: string) =>
     ({ inject: () => undefined, session: { header: { version: 0, id: 'c', createdAt: 0, cwd } } }) as unknown as Agent
 
-  it('defaults bash to the agent\'s session cwd (not the server launch dir)', async () => {
+  it("defaults bash to the agent's session cwd (not the server launch dir)", async () => {
     const ctx = await setup()
     const result = await call(ctx, 'bash', { command: 'pwd', description: 'pwd' }, agentInCwd('/tmp'))
     expect(text(result).trim()).toMatch(/\/tmp$/)
@@ -1041,7 +1099,12 @@ describe('session-cwd routing (per-session workdir)', () => {
   it('falls back to the executor default when the agent has no session cwd', async () => {
     const ctx = await setup()
     // No exec.agent at all → executor uses its config/process.cwd() default.
-    const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('cwd-noagent'), name: 'bash', arguments: { command: 'pwd', description: 'pwd' } })
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('cwd-noagent'),
+      name: 'bash',
+      arguments: { command: 'pwd', description: 'pwd' },
+    })
     expect(result.isError).toBe(false)
     expect(text(result).trim().length).toBeGreaterThan(0)
   })
@@ -1059,46 +1122,47 @@ describe('renderResult', () => {
   }
 
   it('renders stderr-only output without a stdout prefix', () => {
-    expect(renderResult({ ...base, stderr: { text: 'err\n', truncated: false } }))
-      .toBe('[stderr]\nerr\n')
+    expect(renderResult({ ...base, stderr: { text: 'err\n', truncated: false } })).toBe('[stderr]\nerr\n')
   })
 
   it('adds a separator when stdout does not end with a newline', () => {
-    expect(renderResult({
-      ...base,
-      stdout: { text: 'out', truncated: false },
-      stderr: { text: 'err', truncated: false },
-    })).toBe('out\n[stderr]\nerr')
+    expect(
+      renderResult({
+        ...base,
+        stdout: { text: 'out', truncated: false },
+        stderr: { text: 'err', truncated: false },
+      }),
+    ).toBe('out\n[stderr]\nerr')
   })
 
   it('appends exit-code markers after a newline for unterminated output', () => {
-    expect(renderResult({ ...base, exitCode: 7, stdout: { text: 'x', truncated: false } }))
-      .toBe('x\n[exit code: 7]')
+    expect(renderResult({ ...base, exitCode: 7, stdout: { text: 'x', truncated: false } })).toBe('x\n[exit code: 7]')
   })
 
   it('renders signal kills without the timeout marker when not timed out', () => {
-    expect(renderResult({ ...base, exitCode: null, signal: 'SIGKILL' }))
-      .toBe('(no output)\n[killed by signal: SIGKILL]')
+    expect(renderResult({ ...base, exitCode: null, signal: 'SIGKILL' })).toBe('(no output)\n[killed by signal: SIGKILL]')
   })
 
   it('reports a timeout that exited 0 (trapped signal) without a kill marker', () => {
-    expect(renderResult({ ...base, exitCode: 0, signal: null, timedOut: true }))
-      .toBe('(no output)\n[timed out after 1000ms]')
+    expect(renderResult({ ...base, exitCode: 0, signal: null, timedOut: true })).toBe('(no output)\n[timed out after 1000ms]')
   })
 
   it('orders the timeout marker before a kill marker', () => {
-    expect(renderResult({ ...base, exitCode: null, signal: 'SIGTERM', timedOut: true }))
-      .toBe('(no output)\n[timed out after 1000ms]\n[killed by signal: SIGTERM]')
+    expect(renderResult({ ...base, exitCode: null, signal: 'SIGTERM', timedOut: true })).toBe(
+      '(no output)\n[timed out after 1000ms]\n[killed by signal: SIGTERM]',
+    )
   })
 
   it('reports an outside stop by its reason, ahead of the signal marker the exit pill parses', () => {
-    expect(renderResult({ ...base, exitCode: null, signal: 'SIGTERM', stopped: 'cancelled by the user' }))
-      .toBe('(no output)\n[stopped: cancelled by the user]\n[killed by signal: SIGTERM]')
+    expect(renderResult({ ...base, exitCode: null, signal: 'SIGTERM', stopped: 'cancelled by the user' })).toBe(
+      '(no output)\n[stopped: cancelled by the user]\n[killed by signal: SIGTERM]',
+    )
   })
 
   it('notes truncation with a fallback when the spill path is missing', () => {
-    expect(renderResult({ ...base, stdout: { text: 'tail', truncated: true } }))
-      .toBe('tail\n[output truncated; full output: (unavailable)]')
+    expect(renderResult({ ...base, stdout: { text: 'tail', truncated: true } })).toBe(
+      'tail\n[output truncated; full output: (unavailable)]',
+    )
   })
 
   it('reports sandbox denials before exit status and hints only when escalation is advertised', () => {
@@ -1114,8 +1178,7 @@ describe('renderResult', () => {
     }
     expect(renderResult(result)).toMatch(/denied under read-only mode\]\n\[exit code: 1\]$/)
     expect(renderResult(result, ['workspace-write'])).toContain('[sandbox: escalation available')
-    expect(renderResult({ ...result, sandbox: { mode: 'read-only', denied: false } }, ['workspace-write']))
-      .not.toContain('[sandbox:')
+    expect(renderResult({ ...result, sandbox: { mode: 'read-only', denied: false } }, ['workspace-write'])).not.toContain('[sandbox:')
   })
 })
 
@@ -1124,15 +1187,26 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     const ctx = await setup()
     // No explicit workdir → a terminal card with no cwd (the UI bridge fills the
     // session cwd it owns; the pure presenter can't see it).
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls -la src', description: 'List files in src' }))
-      .toEqual({ card: 'terminal', title: 'ls -la src', description: 'List files in src' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls -la src', description: 'List files in src' })).toEqual({
+      card: 'terminal',
+      title: 'ls -la src',
+      description: 'List files in src',
+    })
     // An ABSOLUTE workdir is surfaced verbatim as the terminal cwd header.
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: '/tmp/x' }))
-      .toEqual({ card: 'terminal', title: 'pwd', description: 'Print dir', cwd: '/tmp/x' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: '/tmp/x' })).toEqual({
+      card: 'terminal',
+      title: 'pwd',
+      description: 'Print dir',
+      cwd: '/tmp/x',
+    })
     // A RELATIVE workdir is passed through AS-IS (the bridge resolves it against
     // the session cwd, matching where execution runs) — not dropped.
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: 'sub' }))
-      .toEqual({ card: 'terminal', title: 'pwd', description: 'Print dir', cwd: 'sub' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: 'sub' })).toEqual({
+      card: 'terminal',
+      title: 'pwd',
+      description: 'Print dir',
+      cwd: 'sub',
+    })
   })
 
   it('bash presentResult: a terminal result carries RAW output (newlines intact) + parsed exit code', async () => {
@@ -1150,19 +1224,25 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
   it('bash presentResult: a non-zero exit and a signal kill parse into exitCode / signal', async () => {
     const ctx = await setup()
     const args = { command: 'x', description: 'x' }
-    const nonzero = ctx.tools.get('bash')!.presentResult!(args, { content: [{ type: 'text', text: 'oops\n[exit code: 3]' }], isError: false })
+    const nonzero = ctx.tools.get('bash')!.presentResult!(args, {
+      content: [{ type: 'text', text: 'oops\n[exit code: 3]' }],
+      isError: false,
+    })
     expect(nonzero).toEqual({ card: 'terminal', output: 'oops', exitCode: 3 })
-    const killed = ctx.tools.get('bash')!.presentResult!(args, { content: [{ type: 'text', text: 'gone\n[killed by signal: SIGKILL]' }], isError: false })
+    const killed = ctx.tools.get('bash')!.presentResult!(args, {
+      content: [{ type: 'text', text: 'gone\n[killed by signal: SIGKILL]' }],
+      isError: false,
+    })
     expect(killed).toEqual({ card: 'terminal', output: 'gone', signal: 'SIGKILL' })
   })
 
   it('bash presentResult: markers a pill CANNOT show (timeout, sandbox denial) stay in the terminal output', async () => {
     const ctx = await setup()
     const args = { command: 'x', description: 'x' }
-    const timedOut = ctx.tools.get('bash')!.presentResult!(
-      args,
-      { content: [{ type: 'text', text: 'slow\n[timed out after 100ms]\n[exit code: 143]' }], isError: false },
-    )
+    const timedOut = ctx.tools.get('bash')!.presentResult!(args, {
+      content: [{ type: 'text', text: 'slow\n[timed out after 100ms]\n[exit code: 143]' }],
+      isError: false,
+    })
     expect(timedOut).toEqual({ card: 'terminal', output: 'slow\n[timed out after 100ms]', exitCode: 143 })
   })
 
@@ -1187,7 +1267,10 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     ]
     for (const c of cases) {
       const rendered = renderResult(c.result)
-      const out = present.presentResult!({ command: 'x', description: 'x' }, { content: [{ type: 'text', text: rendered }], isError: false })
+      const out = present.presentResult!(
+        { command: 'x', description: 'x' },
+        { content: [{ type: 'text', text: rendered }], isError: false },
+      )
       // Drop card + output; the remaining fields are the parsed exit.
       const { card: _c, output, ...exit } = out as { card: string; output?: string; exitCode?: number; signal?: string }
       expect(exit).toEqual(c.expect)
@@ -1206,7 +1289,10 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     expect(out).toEqual({ card: 'terminal', output: '[exit code: 5]', exitCode: 0 })
     // Unparsed marker-like text is real output, so it is NOT stripped from the body.
     // Same for a fake signal marker with no leading newline.
-    const sig = ctx.tools.get('bash')!.presentResult!(args, { content: [{ type: 'text', text: '[killed by signal: SIGKILL]' }], isError: false })
+    const sig = ctx.tools.get('bash')!.presentResult!(args, {
+      content: [{ type: 'text', text: '[killed by signal: SIGKILL]' }],
+      isError: false,
+    })
     expect(sig).toEqual({ card: 'terminal', output: '[killed by signal: SIGKILL]', exitCode: 0 })
   })
 
@@ -1215,7 +1301,13 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     // The background start returns a task-id ack, not a streamed run — a generic
     // execute card with the command as rawInput and the description as content.
     const call = ctx.tools.get('bash')!.presentCall!({ command: 'sleep 100', description: 'wait', run_in_background: true })
-    expect(call).toEqual({ card: 'generic', title: 'sleep 100', kind: 'execute', rawInput: 'sleep 100', content: [{ type: 'text', text: 'wait' }] })
+    expect(call).toEqual({
+      card: 'generic',
+      title: 'sleep 100',
+      kind: 'execute',
+      rawInput: 'sleep 100',
+      content: [{ type: 'text', text: 'wait' }],
+    })
     // The ack result is a generic fenced-text card — no terminal output / exit pill.
     const result = ctx.tools.get('bash')!.presentResult!(
       { command: 'sleep 100', description: 'wait', run_in_background: true },
@@ -1249,10 +1341,15 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     const args = { command: 'x', description: 'x' }
     // Empty content (no block) and multi-block content both fall through.
     expect(ctx.tools.get('bash')!.presentResult!(args, { content: [], isError: false })).toBeUndefined()
-    expect(ctx.tools.get('bash')!.presentResult!(args, {
-      content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
-      isError: false,
-    })).toBeUndefined()
+    expect(
+      ctx.tools.get('bash')!.presentResult!(args, {
+        content: [
+          { type: 'text', text: 'a' },
+          { type: 'text', text: 'b' },
+        ],
+        isError: false,
+      }),
+    ).toBeUndefined()
   })
 
   it('presentCall validates softly: malformed args (missing required description) return undefined, never throw', async () => {
@@ -1289,26 +1386,35 @@ describe('the model-facing bash tool builds its request from named args only (no
         timeoutMs: request.timeoutMs ?? 0,
         onExpiry: request.onExpiry ?? 'kill',
         stdoutMaxBytes: request.stdoutMaxBytes ?? 64_000,
-        ...request.signal ? { signal: request.signal } : {},
-        ...request.stdin !== undefined ? { stdin: request.stdin } : {},
-        ...request.env !== undefined ? { env: request.env } : {},
-        ...request.dshEnv !== undefined ? { dshEnv: request.dshEnv } : {},
+        ...(request.signal ? { signal: request.signal } : {}),
+        ...(request.stdin !== undefined ? { stdin: request.stdin } : {}),
+        ...(request.env !== undefined ? { env: request.env } : {}),
+        ...(request.dshEnv !== undefined ? { dshEnv: request.dshEnv } : {}),
         sandboxPolicy: request.sandboxPolicy,
       }
     }
     async execute(spec: ShellExecSpec): Promise<ShellExecution> {
-      return fakeExecution({
-        status: 'completed',
-        exitCode: 0,
-        signal: null,
-        done: Promise.resolve(),
-        readOutput: () => ({ delta: '', lossy: false }),
-        observed: { stdout: silentReader, stderr: silentReader },
-        kill: () => false,
-      }, () => Promise.resolve({
-        exitCode: 0, signal: null, timedOut: false, aborted: false, timeoutMs: spec.timeoutMs,
-        stdout: { text: 'ok', truncated: false }, stderr: { text: '', truncated: false },
-      }))
+      return fakeExecution(
+        {
+          status: 'completed',
+          exitCode: 0,
+          signal: null,
+          done: Promise.resolve(),
+          readOutput: () => ({ delta: '', lossy: false }),
+          observed: { stdout: silentReader, stderr: silentReader },
+          kill: () => false,
+        },
+        () =>
+          Promise.resolve({
+            exitCode: 0,
+            signal: null,
+            timedOut: false,
+            aborted: false,
+            timeoutMs: spec.timeoutMs,
+            stdout: { text: 'ok', truncated: false },
+            stderr: { text: '', truncated: false },
+          }),
+      )
     }
   }
 
@@ -1382,7 +1488,10 @@ describe('the model-facing bash tool builds its request from named args only (no
     const parent = await registerFakeAgent(ctx, 'request-parent', () => undefined)
     const child = await registerFakeAgent(ctx, 'request-child', () => undefined)
 
-    for (const [callId, agent] of [['parent', parent], ['child', child]] as const) {
+    for (const [callId, agent] of [
+      ['parent', parent],
+      ['child', child],
+    ] as const) {
       await ctx.tools.execute({
         signal: testToolSignal,
         callId: ToolCallId(`session-env-${callId}`),
@@ -1392,7 +1501,7 @@ describe('the model-facing bash tool builds its request from named args only (no
       })
     }
 
-    expect(bash.requests.map(request => request.dshEnv)).toEqual([
+    expect(bash.requests.map((request) => request.dshEnv)).toEqual([
       {
         DSH_HOME: recordingDshHome,
         DSH_SESSION_ID: 'request-parent',

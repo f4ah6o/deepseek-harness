@@ -1,19 +1,10 @@
-import { describe, expectTypeOf, it } from 'vitest'
+import { describe, expectTypeOf, it } from 'vite-plus/test'
 import type { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type {
-  ToolDispatchExecution,
-  ToolExecution,
-  ToolExecutionInput,
-  ToolRunContext,
-} from '@deepseek-ai/dsh-tools'
+import type { ToolDispatchExecution, ToolExecution, ToolExecutionInput, ToolRunContext } from '@deepseek-ai/dsh-tools'
 
-function inputAndExecutionContracts(
-  input: ToolExecutionInput,
-  execution: ToolExecution,
-  run: ToolRunContext,
-): void {
+function inputAndExecutionContracts(input: ToolExecutionInput, execution: ToolExecution, run: ToolRunContext): void {
   // @ts-expect-error -- every typed invocation must supply a caller-owned signal.
   const missingSignal: ToolExecutionInput = { callId: ToolCallId('missing'), name: 'probe', arguments: {} }
   void missingSignal

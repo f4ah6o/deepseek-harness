@@ -329,32 +329,32 @@ jobs:
             cores: '4'
             runner: dsh-windows-2025-4core
             blacksmith: blacksmith-4vcpu-windows-2025
-            workload: production-site
+            workload: package-build
           - platform: windows
             cores: '8'
             runner: dsh-windows-2025-8core
             blacksmith: blacksmith-8vcpu-windows-2025
-            workload: production-site
+            workload: package-build
           - platform: windows
             cores: '16'
             runner: dsh-windows-2025-16core
             blacksmith: blacksmith-16vcpu-windows-2025
-            workload: production-site
+            workload: package-build
           - platform: windows
             cores: '32'
             runner: dsh-windows-2025-32core
             blacksmith: blacksmith-32vcpu-windows-2025
-            workload: production-site
+            workload: package-build
           - platform: windows
             cores: '64'
             runner: dsh-windows-2025-64core
             blacksmith: ''
-            workload: production-site
+            workload: package-build
           - platform: windows
             cores: '96'
             runner: dsh-windows-2025-96core
             blacksmith: ''
-            workload: production-site
+            workload: package-build
     steps:
       - uses: actions/checkout@v6
 
@@ -382,9 +382,9 @@ jobs:
         if: matrix.platform == 'linux'
         run: pnpm run typecheck
 
-      - name: Run critical Windows production-site lane
+      - name: Run critical Windows package-build lane
         if: matrix.platform == 'windows'
-        run: pnpm run docs:build
+        run: pnpm run build
 
   # Manual comparison of the intended low-fanout topology. Linux runs the
   # complete unsharded primary aggregate with bounded in-runner parallelism;

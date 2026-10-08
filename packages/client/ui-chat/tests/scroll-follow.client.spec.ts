@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { ScrollFollow, scrollMetrics } from '../src/client/chat/use-scroll-follow.ts'
 
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function scrollport() {
   const element = document.createElement('div')
@@ -15,7 +17,14 @@ function scrollport() {
     scrollHeight: { get: () => height },
     scrollTo: { value: scrollTo },
   })
-  return { element, scrollTo, metrics: () => scrollMetrics(element), grow: (value: number) => { height = value } }
+  return {
+    element,
+    scrollTo,
+    metrics: () => scrollMetrics(element),
+    grow: (value: number) => {
+      height = value
+    },
+  }
 }
 
 describe('ScrollFollow', () => {
@@ -23,7 +32,10 @@ describe('ScrollFollow', () => {
     const world = scrollport()
     let top = 399.6
     Object.defineProperty(world.element, 'scrollTop', {
-      get: () => top, set: (value: number) => { top = Math.min(value, world.metrics().floor - 0.4) },
+      get: () => top,
+      set: (value: number) => {
+        top = Math.min(value, world.metrics().floor - 0.4)
+      },
     })
     const follow = new ScrollFollow(true, 1)
     follow.toBottom(world.element, world.metrics(), 'smooth')
@@ -157,7 +169,10 @@ describe('ScrollFollow', () => {
   })
 
   it('uses immediate following under reduced motion', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    )
     const world = scrollport()
     const follow = new ScrollFollow(false, 1)
     expect(follow.toBottom(world.element, world.metrics(), 'smooth').top).toBe(400)

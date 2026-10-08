@@ -1,12 +1,9 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
-import {
-  Config, apply,
-} from '../src/index.ts'
-
+import { Config, apply } from '../src/index.ts'
 
 describe('ui-chat Host settings', () => {
   it('registers, validates, and disposes the transcript-view namespace', async () => {
@@ -16,7 +13,11 @@ describe('ui-chat Host settings', () => {
 
     expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar' })
     await configuration.update({ transcriptView: 'normal' })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({
+      transcriptView: 'normal',
+      performanceUsage: 'detailed',
+      linkOpening: 'sidebar',
+    })
     for (const mode of ['expanded', 'compact', 'standard', 'detailed', 'verbose']) {
       await configuration.update({ transcriptView: mode })
       expect(plainConfig(configuration.fiber.config)).toMatchObject({ transcriptView: mode })
@@ -41,4 +42,4 @@ describe('ui-chat Host settings', () => {
   })
 })
 
-it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(ctx => ctx.plugin(HostPlugin)))
+it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage((ctx) => ctx.plugin(HostPlugin)))

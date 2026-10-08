@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -17,10 +17,13 @@ describe('workflow program environment', () => {
       start: () => Promise.reject(new Error('environment script must not start a child')),
     })
     await ctx.plugin(PtcWorkflowEngine, { provider: 'stub' })
-    const disposeProxy = await installProxyFromEnvironment({
-      get: name => name === 'HTTP_PROXY' || name === 'HTTPS_PROXY'
-        ? { value: 'http://fixture:canary@proxy.example:8080' } : undefined,
-    }, () => undefined)
+    const disposeProxy = await installProxyFromEnvironment(
+      {
+        get: (name) =>
+          name === 'HTTP_PROXY' || name === 'HTTPS_PROXY' ? { value: 'http://fixture:canary@proxy.example:8080' } : undefined,
+      },
+      () => undefined,
+    )
     vi.stubEnv('WORKFLOW_ENV_CANARY', 'must-not-inherit')
     vi.stubEnv('TSX_TSCONFIG_PATH', '/fixture/tsconfig.json')
     try {
@@ -33,7 +36,9 @@ describe('workflow program environment', () => {
         const result = await run.result
         expect(result.stopReason).toBe('completed')
         expect(result.value).toEqual({})
-      } finally { await run.dispose() }
+      } finally {
+        await run.dispose()
+      }
     } finally {
       vi.unstubAllEnvs()
       await disposeProxy()

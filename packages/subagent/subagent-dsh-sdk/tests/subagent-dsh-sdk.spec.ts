@@ -6,7 +6,7 @@
  * quiescent disposal are all exercised end to end. No model, no key.
  */
 
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,12 +15,7 @@ import { fileURLToPath } from 'node:url'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
-import {
-  DeepSeekHarness,
-  HarnessClient,
-  HarnessSession,
-  SdkProtocolError,
-} from '@deepseek-ai/dsh-sdk-client'
+import { DeepSeekHarness, HarnessClient, HarnessSession, SdkProtocolError } from '@deepseek-ai/dsh-sdk-client'
 import { createProcessDeepSeekHarness } from '../../../sdk/client/src/api.ts'
 import type { RuntimeProcessOptions } from '../../../sdk/client/src/launch.ts'
 import type { DeepSeekHarnessOptions } from '@deepseek-ai/dsh-sdk-client'
@@ -37,10 +32,7 @@ import {
 } from '../src/run.ts'
 
 const fakeRuntime = fileURLToPath(new URL('../../../sdk/client/tests/fake-runtime.ts', import.meta.url))
-const existingPatch = fileURLToPath(new URL(
-  './fixtures/loader/child.patch.yml',
-  import.meta.url,
-))
+const existingPatch = fileURLToPath(new URL('./fixtures/loader/child.patch.yml', import.meta.url))
 const defaultCreateHarness = runInternals.createHarness.bind(runInternals)
 let createdHarnessOptions: DeepSeekHarnessOptions[] = []
 
@@ -51,14 +43,14 @@ beforeEach(() => {
     const runtime: RuntimeProcessOptions = {
       command: process.execPath,
       args: [fakeRuntime],
-      ...options.processCwd === undefined ? {} : { cwd: options.processCwd },
+      ...(options.processCwd === undefined ? {} : { cwd: options.processCwd }),
       environment: () => options.env ?? process.env,
       description: 'scripted SDK subagent runtime',
       initializeTimeoutMs: options.initializeTimeoutMs ?? 5_000,
-      ...options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs },
-      ...options.shutdownTimeoutMs === undefined ? {} : { shutdownTimeoutMs: options.shutdownTimeoutMs },
-      ...options.disposeEofGraceMs === undefined ? {} : { disposeEofGraceMs: options.disposeEofGraceMs },
-      ...options.disposeGraceMs === undefined ? {} : { disposeGraceMs: options.disposeGraceMs },
+      ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
+      ...(options.shutdownTimeoutMs === undefined ? {} : { shutdownTimeoutMs: options.shutdownTimeoutMs }),
+      ...(options.disposeEofGraceMs === undefined ? {} : { disposeEofGraceMs: options.disposeEofGraceMs }),
+      ...(options.disposeGraceMs === undefined ? {} : { disposeGraceMs: options.disposeGraceMs }),
     }
     return createProcessDeepSeekHarness(runtime, options)
   }
@@ -77,7 +69,7 @@ function request(text = 'p', signal = new AbortController().signal, agentOptions
     prompt: [{ type: 'text' as const, text }],
     parent: fakeParent,
     signal,
-    ...agentOptions === undefined ? {} : { agentOptions },
+    ...(agentOptions === undefined ? {} : { agentOptions }),
   }
 }
 
@@ -103,7 +95,10 @@ async function setup(fakeEnv: Record<string, string> = {}, config: Partial<sdk.C
 }
 
 function text(blocks: readonly { type: string; text?: string }[]): string {
-  return blocks.filter(b => b.type === 'text').map(b => b.text).join('')
+  return blocks
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
 }
 
 function expectedFailure(fields: string): string {
@@ -119,7 +114,7 @@ async function waitForFile(file: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!existsSync(file)) {
     if (Date.now() > deadline) throw new Error(`fake runtime never became ready (${file})`)
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise((r) => setTimeout(r, 10))
   }
 }
 
@@ -180,10 +175,13 @@ describe('dsh-subagent-dsh-sdk provider', () => {
   })
 
   it('resolves relative launch files at load and forwards absolute paths', async () => {
-    const ctx = await setup({ FAKE_TEXT: 'explicit dsh child' }, {
-      dshBin: relative(process.cwd(), fakeRuntime),
-      patches: [relative(process.cwd(), existingPatch)],
-    })
+    const ctx = await setup(
+      { FAKE_TEXT: 'explicit dsh child' },
+      {
+        dshBin: relative(process.cwd(), fakeRuntime),
+        patches: [relative(process.cwd(), existingPatch)],
+      },
+    )
     const run = await ctx.subagents.start('dsh-sdk', request())
     expect(text((await run.result).output)).toBe('explicit dsh child')
     expect(createdHarnessOptions[0]).toMatchObject({
@@ -203,13 +201,18 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       await run.result
       await run.dispose()
       const { readFileSync } = await import('node:fs')
-      const records = readFileSync(recordFile, 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
-      expect(records).toEqual([{
-        cwd: process.cwd(),
-        provider: 'fake-provider',
-        model: 'fake-model',
-        maxTokens: 4096,
-      }])
+      const records = readFileSync(recordFile, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+      expect(records).toEqual([
+        {
+          cwd: process.cwd(),
+          provider: 'fake-provider',
+          model: 'fake-model',
+          maxTokens: 4096,
+        },
+      ])
       await ctx.fiber.dispose()
     } finally {
       rmSync(tmp, { recursive: true, force: true })
@@ -221,9 +224,12 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const recordFile = join(tmp, 'init.jsonl')
     try {
       const ctx = await setup({ FAKE_RECORD_INIT: recordFile }, { maxTokens: 4096 })
-      const run = await ctx.subagents.start('dsh-sdk', request('partial', new AbortController().signal, {
-        reasoningEffort: ReasoningEffortId('high'),
-      }))
+      const run = await ctx.subagents.start(
+        'dsh-sdk',
+        request('partial', new AbortController().signal, {
+          reasoningEffort: ReasoningEffortId('high'),
+        }),
+      )
       await run.result
       await run.dispose()
       const { readFileSync } = await import('node:fs')
@@ -246,24 +252,32 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     try {
       const ctx = await setup({ FAKE_RECORD_INIT: recordFile }, { maxTokens: 4096 })
       const runs = await Promise.all([
-        ctx.subagents.start('dsh-sdk', request('first', new AbortController().signal, {
-          provider: 'provider-a',
-          model: 'model-a',
-          reasoningEffort: ReasoningEffortId('high'),
-          maxTokens: 111,
-        })),
-        ctx.subagents.start('dsh-sdk', request('second', new AbortController().signal, {
-          provider: 'provider-b',
-          model: 'model-b',
-          reasoningEffort: ReasoningEffortId('max'),
-          maxTokens: 222,
-        })),
+        ctx.subagents.start(
+          'dsh-sdk',
+          request('first', new AbortController().signal, {
+            provider: 'provider-a',
+            model: 'model-a',
+            reasoningEffort: ReasoningEffortId('high'),
+            maxTokens: 111,
+          }),
+        ),
+        ctx.subagents.start(
+          'dsh-sdk',
+          request('second', new AbortController().signal, {
+            provider: 'provider-b',
+            model: 'model-b',
+            reasoningEffort: ReasoningEffortId('max'),
+            maxTokens: 222,
+          }),
+        ),
       ])
-      await Promise.all(runs.map(run => run.result))
-      await Promise.all(runs.map(run => run.dispose()))
+      await Promise.all(runs.map((run) => run.result))
+      await Promise.all(runs.map((run) => run.dispose()))
       const { readFileSync } = await import('node:fs')
-      const records = readFileSync(recordFile, 'utf8').trim().split('\n')
-        .map(line => JSON.parse(line) as Record<string, unknown>)
+      const records = readFileSync(recordFile, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
         .sort((left, right) => String(left.provider).localeCompare(String(right.provider)))
       expect(records).toEqual([
         {
@@ -322,9 +336,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result
     expect(result.stopReason).toBe('error')
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: child-error'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: child-error'))
     expect(text(result.output)).toBe('partial answer')
     await run.dispose()
     await ctx.fiber.dispose()
@@ -401,8 +413,8 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       const error = await ctx.subagents.start('dsh-sdk', request()).catch((cause: unknown) => cause)
       expect(error).toBeInstanceOf(AggregateError)
       expect((error as Error).message).toBe(
-        `subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: protocol')}; `
-        + `subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`,
+        `subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: protocol')}; ` +
+          `subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`,
       )
       expect((error as Error).message).not.toContain(rawCleanup)
       await ctx.fiber.dispose()
@@ -436,9 +448,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       const error = await pending.catch((cause: unknown) => cause)
       expect(error).toBeInstanceOf(AggregateError)
       expect((error as AggregateError).errors).toHaveLength(1)
-      expect((error as Error).message).toBe(
-        `subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`,
-      )
+      expect((error as Error).message).toBe(`subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`)
       expect((error as Error).message).not.toContain(rawCleanup)
     } finally {
       spy.mockRestore()
@@ -464,9 +474,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
         disposeGraceMs: 100,
       })
       controller.abort()
-      await expect(pending).rejects.toThrow(
-        `subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: protocol')}`,
-      )
+      await expect(pending).rejects.toThrow(`subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: protocol')}`)
       expect(close).not.toHaveBeenCalled()
     } finally {
       start.mockRestore()
@@ -479,9 +487,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result
     expect(result.stopReason).toBe('aborted')
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: child-disposed'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: child-disposed'))
     await run.dispose()
     await ctx.fiber.dispose()
   })
@@ -502,9 +508,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result
     expect(result.stopReason).toBe('error')
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: child-unknown'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: child-unknown'))
     expect(result.diagnostic).not.toContain(rawReason)
     await run.dispose()
     await ctx.fiber.dispose()
@@ -533,7 +537,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const ready = join(tmp, 'ready')
     const go = join(tmp, 'go')
     const createHarness = runInternals.createHarness.bind(runInternals)
-    runInternals.createHarness = options => createHarness({ ...options, initializeTimeoutMs: task.timeout })
+    runInternals.createHarness = (options) => createHarness({ ...options, initializeTimeoutMs: task.timeout })
     try {
       const controller = new AbortController()
       const spec: SdkRunSpec = {
@@ -551,7 +555,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       const pending = startSdkRun(request('p', controller.signal), spec)
       // Observe failed startup while readiness is pending; rollback owns the child.
       const settled = pending.then(
-        run => ({ kind: 'started' as const, run }),
+        (run) => ({ kind: 'started' as const, run }),
         (error: unknown) => ({ kind: 'failed' as const, error }),
       )
       try {
@@ -579,9 +583,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result
     expect(result.stopReason).toBe('error')
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: protocol'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: protocol'))
     expect(result.output).toEqual([])
     await run.dispose()
     await ctx.fiber.dispose()
@@ -598,9 +600,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const result = await run.result
     expect(result.stopReason).toBe('error')
     expect(result.output).toEqual([{ type: 'text', text: 'partial before transport exit' }])
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: transport'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: transport'))
     expect(result.diagnostic).not.toContain(stderr)
     await run.dispose()
     await ctx.fiber.dispose()
@@ -608,15 +608,12 @@ describe('dsh-subagent-dsh-sdk provider', () => {
 
   it('uses a fixed unknown category for an untyped SDK exception', async () => {
     const rawMessage = 'unknown SDK failure at /private/path SECRET_TOKEN'
-    const spy = vi.spyOn(HarnessSession.prototype, 'run')
-      .mockRejectedValue(new Error(rawMessage))
+    const spy = vi.spyOn(HarnessSession.prototype, 'run').mockRejectedValue(new Error(rawMessage))
     try {
       const ctx = await setup()
       const run = await ctx.subagents.start('dsh-sdk', request())
       const result = await run.result
-      expect(result.diagnostic).toBe(
-        expectedFailure('stage: session-run; category: unknown'),
-      )
+      expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: unknown'))
       expect(result.diagnostic).not.toContain(rawMessage)
       await run.dispose()
       await ctx.fiber.dispose()
@@ -626,20 +623,21 @@ describe('dsh-subagent-dsh-sdk provider', () => {
   })
 
   it('keeps child diagnostics isolated across concurrent runs', async () => {
-    const start = (reason: 'error' | 'unknown-reason') => startSdkRun(request(), {
-      profile: 'sdk',
-      patches: [],
-      dshHome: process.cwd(),
-      cwd: process.cwd(),
-      provider: 'p',
-      model: 'm',
-      env: { FAKE_REASON_KIND: reason },
-      // Product-default dispose budgets: two real children are reaped under
-      // runner contention, where tight windows misreport slow SIGKILL reaps.
-      shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
-      disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
-      disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
-    })
+    const start = (reason: 'error' | 'unknown-reason') =>
+      startSdkRun(request(), {
+        profile: 'sdk',
+        patches: [],
+        dshHome: process.cwd(),
+        cwd: process.cwd(),
+        provider: 'p',
+        model: 'm',
+        env: { FAKE_REASON_KIND: reason },
+        // Product-default dispose budgets: two real children are reaped under
+        // runner contention, where tight windows misreport slow SIGKILL reaps.
+        shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+        disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
+        disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
+      })
     const [errored, unknown] = await Promise.all([start('error'), start('unknown-reason')])
     const [errorResult, unknownResult] = await Promise.all([errored.result, unknown.result])
     expect(errorResult.diagnostic).toContain('category: child-error')
@@ -663,9 +661,8 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     try {
       const controller = new AbortController()
       controller.abort()
-      await expect(startSdkRun(
-        request('p', controller.signal),
-        {
+      await expect(
+        startSdkRun(request('p', controller.signal), {
           profile: 'sdk',
           patches: [],
           dshHome: sentinel,
@@ -676,8 +673,8 @@ describe('dsh-subagent-dsh-sdk provider', () => {
           shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
           disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
           disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
-        },
-      )).rejects.toThrow('aborted before the SDK child started')
+        }),
+      ).rejects.toThrow('aborted before the SDK child started')
       expect(existsSync(sentinel)).toBe(false)
     } finally {
       rmSync(tmp, { recursive: true, force: true })
@@ -689,12 +686,14 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const controller = new AbortController()
     controller.abort()
     const parent = { id: 'parent', session: { header: {} } } as unknown as Agent
-    await expect(ctx.subagents.start('dsh-sdk', {
-      label: 'p',
-      prompt: [{ type: 'text' as const, text: 'p' }],
-      parent,
-      signal: controller.signal,
-    })).rejects.toThrow('subagent request was aborted before the SDK child started')
+    await expect(
+      ctx.subagents.start('dsh-sdk', {
+        label: 'p',
+        prompt: [{ type: 'text' as const, text: 'p' }],
+        parent,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('subagent request was aborted before the SDK child started')
     await ctx.fiber.dispose()
   })
 
@@ -702,12 +701,12 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const rawStderr = 'scripted boot failure at /private/path SECRET_TOKEN'
     const ctx = await setup({ FAKE_EXIT_BEFORE_INIT: '1', FAKE_STDERR: rawStderr })
     const failure = await ctx.subagents.start('dsh-sdk', request()).then(
-      () => { throw new Error('start unexpectedly succeeded') },
+      () => {
+        throw new Error('start unexpectedly succeeded')
+      },
       (error: unknown) => error,
     )
-    expect(String(failure)).toBe(
-      `SdkRunFailure: subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: transport')}`,
-    )
+    expect(String(failure)).toBe(`SdkRunFailure: subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: transport')}`)
     expect(String(failure)).not.toContain(rawStderr)
     await ctx.fiber.dispose()
   })
@@ -764,9 +763,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     onTestFinished(() => run.dispose())
     const result = await run.result
     expect(result.stopReason).toBe('error')
-    expect(result.diagnostic).toBe(
-      expectedFailure('stage: session-run; category: protocol'),
-    )
+    expect(result.diagnostic).toBe(expectedFailure('stage: session-run; category: protocol'))
     expect(seen).toHaveLength(1)
     await run.dispose()
   })
@@ -774,7 +771,9 @@ describe('dsh-subagent-dsh-sdk provider', () => {
   it('routes provider-level onError through ctx.logger.warn', async () => {
     const ctx = await setup({ FAKE_MALFORMED_PROMPT: '1' })
     const warnings: string[] = []
-    ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
+    ctx.logger.warn = ((message: unknown) => {
+      warnings.push(String(message))
+    }) as typeof ctx.logger.warn
     const run = await ctx.subagents.start('dsh-sdk', request())
     expect(await run.result).toMatchObject({
       stopReason: 'error',
@@ -799,9 +798,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     try {
       const error = await run.dispose().catch((cause: unknown) => cause)
       expect(error).toBeInstanceOf(Error)
-      expect((error as Error).message).toBe(
-        `subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`,
-      )
+      expect((error as Error).message).toBe(`subagent-dsh-sdk: ${expectedFailure('stage: shutdown; category: unknown')}`)
       expect((error as Error).message).not.toContain(rawCleanup)
     } finally {
       spy.mockRestore()
@@ -843,22 +840,26 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const base = { providerName: 'sdk', profile: 'sdk', patches: [], dshHome: process.cwd(), provider: 'p', model: 'm', env: {} }
     await expect(ctx.plugin(sdk, { ...base, shutdownTimeoutMs: 0 })).rejects.toThrow('shutdownTimeoutMs must be a positive finite number')
     await expect(ctx.plugin(sdk, { ...base, disposeEofGraceMs: -1 })).rejects.toThrow('disposeEofGraceMs must be a positive finite number')
-    await expect(ctx.plugin(sdk, { ...base, disposeGraceMs: Number.NaN })).rejects.toThrow('disposeGraceMs must be a positive finite number')
+    await expect(ctx.plugin(sdk, { ...base, disposeGraceMs: Number.NaN })).rejects.toThrow(
+      'disposeGraceMs must be a positive finite number',
+    )
     await ctx.fiber.dispose()
   })
 
   it('requires an explicit absolute Harness home for nested dsh runtimes', async () => {
     const ctx = new Context()
     await ctx.plugin(SubagentRuntime)
-    await expect(ctx.plugin(sdk, {
-      providerName: 'sdk',
-      profile: 'sdk',
-      patches: [],
-      dshHome: './personal-home',
-      provider: 'p',
-      model: 'm',
-      env: {},
-    })).rejects.toThrow('dshHome must be an absolute path')
+    await expect(
+      ctx.plugin(sdk, {
+        providerName: 'sdk',
+        profile: 'sdk',
+        patches: [],
+        dshHome: './personal-home',
+        provider: 'p',
+        model: 'm',
+        env: {},
+      }),
+    ).rejects.toThrow('dshHome must be an absolute path')
     await ctx.fiber.dispose()
   })
 
@@ -869,26 +870,27 @@ describe('dsh-subagent-dsh-sdk provider', () => {
   ])('rejects an invalid $field at load', async ({ field, override }) => {
     const ctx = new Context()
     await ctx.plugin(SubagentRuntime)
-    await expect(ctx.plugin(sdk, {
-      providerName: 'sdk',
-      profile: 'sdk',
-      patches: [],
-      dshHome: process.cwd(),
-      provider: 'p',
-      model: 'm',
-      env: {},
-      ...override,
-    })).rejects.toThrow(`${field} must name an existing file`)
+    await expect(
+      ctx.plugin(sdk, {
+        providerName: 'sdk',
+        profile: 'sdk',
+        patches: [],
+        dshHome: process.cwd(),
+        provider: 'p',
+        model: 'm',
+        env: {},
+        ...override,
+      }),
+    ).rejects.toThrow(`${field} must name an existing file`)
     await ctx.fiber.dispose()
   })
 
-  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid maxTokens %s at load',
-    async (maxTokens) => {
-      const ctx = new Context()
-      await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(SubagentRuntime)
-      await expect(ctx.plugin(sdk, {
+  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])('rejects invalid maxTokens %s at load', async (maxTokens) => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SubagentRuntime)
+    await expect(
+      ctx.plugin(sdk, {
         providerName: 'sdk',
         profile: 'sdk',
         patches: [],
@@ -897,18 +899,17 @@ describe('dsh-subagent-dsh-sdk provider', () => {
         model: 'm',
         maxTokens,
         env: {},
-      })).rejects.toThrow('maxTokens')
-      await ctx.fiber.dispose()
-    },
-  )
+      }),
+    ).rejects.toThrow('maxTokens')
+    await ctx.fiber.dispose()
+  })
 
-  it.each([0, 1.5])(
-    'defensively rejects invalid maxTokens %s when apply is called directly',
-    async (maxTokens) => {
-      const ctx = new Context()
-      await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(SubagentRuntime)
-      expect(() => { sdk.apply(ctx, {
+  it.each([0, 1.5])('defensively rejects invalid maxTokens %s when apply is called directly', async (maxTokens) => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SubagentRuntime)
+    expect(() => {
+      sdk.apply(ctx, {
         providerName: 'sdk',
         profile: 'sdk',
         patches: [],
@@ -920,25 +921,27 @@ describe('dsh-subagent-dsh-sdk provider', () => {
         shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
         disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
         disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
-      }) }).toThrow('maxTokens must be a positive safe integer')
-      await ctx.fiber.dispose()
-    },
-  )
+      })
+    }).toThrow('maxTokens must be a positive safe integer')
+    await ctx.fiber.dispose()
+  })
 
   it('rejects an empty config cwd at load', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SubagentRuntime)
-    await expect(ctx.plugin(sdk, {
-      providerName: 'sdk',
-      profile: 'sdk',
-      patches: [],
-      dshHome: process.cwd(),
-      cwd: '',
-      provider: 'p',
-      model: 'm',
-      env: {},
-    })).rejects.toThrow('config cwd must not be empty')
+    await expect(
+      ctx.plugin(sdk, {
+        providerName: 'sdk',
+        profile: 'sdk',
+        patches: [],
+        dshHome: process.cwd(),
+        cwd: '',
+        provider: 'p',
+        model: 'm',
+        env: {},
+      }),
+    ).rejects.toThrow('config cwd must not be empty')
     await ctx.fiber.dispose()
   })
 
@@ -960,12 +963,14 @@ describe('dsh-subagent-dsh-sdk provider', () => {
   it('fails loud when neither config cwd nor parent session cwd exists', async () => {
     const ctx = await setup()
     const parent = { id: 'parent', session: { header: {} } } as unknown as Agent
-    await expect(ctx.subagents.start('dsh-sdk', {
-      label: 'p', prompt: [{ type: 'text' as const, text: 'p' }], parent, signal: new AbortController().signal,
-    }))
-      .rejects.toThrow(
-        `subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: configuration')}`,
-      )
+    await expect(
+      ctx.subagents.start('dsh-sdk', {
+        label: 'p',
+        prompt: [{ type: 'text' as const, text: 'p' }],
+        parent,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(`subagent-dsh-sdk: ${expectedFailure('stage: initialize; category: configuration')}`)
     await ctx.fiber.dispose()
   })
 

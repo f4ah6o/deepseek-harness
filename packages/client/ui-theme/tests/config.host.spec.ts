@@ -1,13 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
-import {
-  DEFAULT_PREFERENCE, Config, apply,
-} from '@deepseek-ai/dsh-client-ui-theme'
-
+import { DEFAULT_PREFERENCE, Config, apply } from '@deepseek-ai/dsh-client-ui-theme'
 
 /** Collect the injection table the way an index render or boot payload does. */
 function collect(ctx: Context): IndexInjection[] {
@@ -66,8 +63,6 @@ describe('ui-theme host', () => {
     await ctx.plugin({ Config, apply }).await()
     expect(rowText(collect(ctx)[1])).toContain('const preference = "system"')
   })
-
-
 })
 
-it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(ctx => ctx.plugin(HostPlugin)))
+it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage((ctx) => ctx.plugin(HostPlugin)))

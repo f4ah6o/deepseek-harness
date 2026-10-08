@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -11,9 +11,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import {
-  localizeTerminalCardModel, terminalCardModel, terminalFailed,
-} from '../src/client/tool/models/terminal-card-model.ts'
+import { localizeTerminalCardModel, terminalCardModel, terminalFailed } from '../src/client/tool/models/terminal-card-model.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
 import { en, zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
@@ -42,27 +40,44 @@ const SID = 's1' as SessionId
 
 const ARGS = '{"command":"ls -la","description":"List files"}'
 
-const shellArgs = (over: Record<string, unknown> = {}): string => JSON.stringify({
-  command: 'ls -la', description: 'List files', ...over,
-})
+const shellArgs = (over: Record<string, unknown> = {}): string =>
+  JSON.stringify({
+    command: 'ls -la',
+    description: 'List files',
+    ...over,
+  })
 
 const running = (over?: Partial<StartedToolCall>): StartedToolCall => {
   const argsRaw = over?.argsRaw ?? ARGS
   return {
-    phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId: 'c1', name: 'bash', argsRaw,
-    turn: 1, step: 1, time: 1_000, subCalls: [], ...over,
+    phase: 'start' as const,
+    args: PartialArguments.fromText(argsRaw),
+    callId: 'c1',
+    name: 'bash',
+    argsRaw,
+    turn: 1,
+    step: 1,
+    time: 1_000,
+    subCalls: [],
+    ...over,
   }
 }
 
 const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
   const call = over?.call === undefined ? { name: 'bash', argsRaw: ARGS } : over.call
   return {
-    kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1',
-    name: call?.name ?? '', args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
+    kind: 'tool-result',
+    seq: 10,
+    time: 2_000,
+    callId: 'c1',
+    name: call?.name ?? '',
+    args: call === null ? PartialArguments.EMPTY : PartialArguments.fromText(call.argsRaw),
     call,
     callTime: 1_000,
-    content: [{ type: 'text', text: 'a.ts  b.ts\nc.ts  d.ts\n' }], isError: false,
-    subCalls: [], ...over,
+    content: [{ type: 'text', text: 'a.ts  b.ts\nc.ts  d.ts\n' }],
+    isError: false,
+    subCalls: [],
+    ...over,
   }
 }
 
@@ -71,66 +86,114 @@ describe('terminalCardModel', () => {
     expect(terminalCardModel(running({ argsRaw: shellArgs({ workdir: '/projects/app' }) }))).toEqual({
       copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
       card: {
-        cwd: '/projects/app', output: undefined,
-        exitCode: undefined, signal: undefined, running: true,
+        cwd: '/projects/app',
+        output: undefined,
+        exitCode: undefined,
+        signal: undefined,
+        running: true,
       },
     })
   })
 
   it('derives a settled standard-shell card and removes its final exit marker', () => {
-    expect(terminalCardModel(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ workdir: '/projects/app' }) },
-      content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
-    }))).toEqual({
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'bash', argsRaw: shellArgs({ workdir: '/projects/app' }) },
+          content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
+        }),
+      ),
+    ).toEqual({
       copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
       card: {
-        cwd: '/projects/app', output: 'boom',
-        exitCode: 2, signal: undefined, running: false,
+        cwd: '/projects/app',
+        output: 'boom',
+        exitCode: 2,
+        signal: undefined,
+        running: false,
       },
     })
-    expect(terminalCardModel(settled({
-      content: [{ type: 'text', text: 'gone\n[killed by signal: SIGTERM]' }],
-    }))?.card).toMatchObject({ output: 'gone', signal: 'SIGTERM' })
+    expect(
+      terminalCardModel(
+        settled({
+          content: [{ type: 'text', text: 'gone\n[killed by signal: SIGTERM]' }],
+        }),
+      )?.card,
+    ).toMatchObject({ output: 'gone', signal: 'SIGTERM' })
   })
 
   it('flags a failing exit as terminalFailed; clean exits and running cards are not', () => {
     // isError stays false on a failing command (the exit status is result
     // data), so this predicate is the row's only failure signal.
-    expect(terminalFailed(terminalCardModel(settled({
-      content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
-    }))!)).toBe(true)
-    expect(terminalFailed(terminalCardModel(settled({
-      content: [{ type: 'text', text: 'gone\n[killed by signal: SIGTERM]' }],
-    }))!)).toBe(true)
+    expect(
+      terminalFailed(
+        terminalCardModel(
+          settled({
+            content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
+          }),
+        )!,
+      ),
+    ).toBe(true)
+    expect(
+      terminalFailed(
+        terminalCardModel(
+          settled({
+            content: [{ type: 'text', text: 'gone\n[killed by signal: SIGTERM]' }],
+          }),
+        )!,
+      ),
+    ).toBe(true)
     expect(terminalFailed(terminalCardModel(settled())!)).toBe(false)
     expect(terminalFailed(terminalCardModel(running())!)).toBe(false)
   })
 
   it('keeps status text that has no terminal pill and requires a leading newline', () => {
-    expect(terminalCardModel(settled({
-      content: [{ type: 'text', text: 'timed out\n[timed out after 1000ms]\n[exit code: 2]' }],
-    }))?.card).toMatchObject({ output: 'timed out\n[timed out after 1000ms]', exitCode: 2 })
-    expect(terminalCardModel(settled({
-      content: [{ type: 'text', text: '[exit code: 5]' }],
-    }))?.card).toMatchObject({ output: '[exit code: 5]', exitCode: 0 })
+    expect(
+      terminalCardModel(
+        settled({
+          content: [{ type: 'text', text: 'timed out\n[timed out after 1000ms]\n[exit code: 2]' }],
+        }),
+      )?.card,
+    ).toMatchObject({ output: 'timed out\n[timed out after 1000ms]', exitCode: 2 })
+    expect(
+      terminalCardModel(
+        settled({
+          content: [{ type: 'text', text: '[exit code: 5]' }],
+        }),
+      )?.card,
+    ).toMatchObject({ output: '[exit code: 5]', exitCode: 0 })
   })
 
   it('resolves the raw workdir against the session workspace', () => {
     // Omitted workdir — the common bash call — IS the session workspace.
     expect(terminalCardModel(settled(), '/w/app')?.card.cwd).toBe('/w/app')
     // A relative workdir joins under it.
-    expect(terminalCardModel(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ workdir: 'packages/ui' }) },
-    }), '/w/app')?.card.cwd).toBe('/w/app/packages/ui')
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'bash', argsRaw: shellArgs({ workdir: 'packages/ui' }) },
+        }),
+        '/w/app',
+      )?.card.cwd,
+    ).toBe('/w/app/packages/ui')
     // An absolute one is used as-is.
-    expect(terminalCardModel(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ workdir: '/srv/other' }) },
-    }), '/w/app')?.card.cwd).toBe('/srv/other')
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'bash', argsRaw: shellArgs({ workdir: '/srv/other' }) },
+        }),
+        '/w/app',
+      )?.card.cwd,
+    ).toBe('/srv/other')
     // With no session cwd there is nothing to resolve against: a relative path
     // stays as authored and an omitted one stays absent (a bare `$` prompt).
-    expect(terminalCardModel(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ workdir: 'packages/ui' }) },
-    }))?.card.cwd).toBe('packages/ui')
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'bash', argsRaw: shellArgs({ workdir: 'packages/ui' }) },
+        }),
+      )?.card.cwd,
+    ).toBe('packages/ui')
     expect(terminalCardModel(settled())?.card.cwd).toBeUndefined()
     // The running arm resolves identically.
     expect(terminalCardModel(running(), '/w/app')?.card.cwd).toBe('/w/app')
@@ -141,26 +204,43 @@ describe('terminalCardModel', () => {
     // /w/app runs in /w — the card must say `w`, not `..`.
     expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '..' }) } }), '/w/app')?.card.cwd).toBe('/w')
     expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '.' }) } }), '/w/app')?.card.cwd).toBe('/w/app')
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../sibling' }) } }), '/w/app')?.card.cwd).toBe('/w/sibling')
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: './nested/../other' }) } }), '/w/app')?.card.cwd).toBe('/w/app/other')
+    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../sibling' }) } }), '/w/app')?.card.cwd).toBe(
+      '/w/sibling',
+    )
+    expect(
+      terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: './nested/../other' }) } }), '/w/app')?.card.cwd,
+    ).toBe('/w/app/other')
     // A `..` that would climb past the root is dropped, as a filesystem does.
     expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../../..' }) } }), '/w')?.card.cwd).toBe('/')
     // An absolute path carrying segments normalizes too.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '/srv/./app/../other' }) } }), '/w/app')?.card.cwd).toBe('/srv/other')
+    expect(
+      terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '/srv/./app/../other' }) } }), '/w/app')?.card.cwd,
+    ).toBe('/srv/other')
     // A Windows path keeps its separators.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: 'C:\\ws\\app\\..' }) } }), '/w')?.card.cwd).toBe('C:\\ws')
+    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: 'C:\\ws\\app\\..' }) } }), '/w')?.card.cwd).toBe(
+      'C:\\ws',
+    )
     // Without a session cwd a relative `..` has nothing to resolve against, so
     // it survives as authored rather than being silently dropped.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../elsewhere' }) } }))?.card.cwd).toBe('../elsewhere')
+    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../elsewhere' }) } }))?.card.cwd).toBe(
+      '../elsewhere',
+    )
   })
 
   it('keeps a UNC server and share as an unpoppable root', () => {
     // Windows cannot climb above a share, so `..` from the share root stays put.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '..' }) } }), '\\\\server\\share')?.card.cwd).toBe('\\\\server\\share')
+    expect(
+      terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '..' }) } }), '\\\\server\\share')?.card.cwd,
+    ).toBe('\\\\server\\share')
     // Below the share it pops normally, keeping the UNC separators.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '..' }) } }), '\\\\server\\share\\app')?.card.cwd).toBe('\\\\server\\share')
+    expect(
+      terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '..' }) } }), '\\\\server\\share\\app')?.card.cwd,
+    ).toBe('\\\\server\\share')
     // Several `..` cannot escape the root either.
-    expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../../..' }) } }), '\\\\server\\share\\app')?.card.cwd).toBe('\\\\server\\share')
+    expect(
+      terminalCardModel(settled({ call: { name: 'bash', argsRaw: shellArgs({ workdir: '../../..' }) } }), '\\\\server\\share\\app')?.card
+        .cwd,
+    ).toBe('\\\\server\\share')
   })
 
   it('supports terminal_send without giving background or failed sends a terminal card', () => {
@@ -172,47 +252,62 @@ describe('terminalCardModel', () => {
     })
     const done = settled({ call: { name: 'terminal_send', argsRaw }, content: [{ type: 'text', text: 'ok' }] })
     expect(localizeTerminalCardModel(terminalCardModel(done)!, enT)).toMatchObject({
-      description: 'Terminal pty-3', card: { command: 'make', output: 'ok', running: false },
+      description: 'Terminal pty-3',
+      card: { command: 'make', output: 'ok', running: false },
     })
-    expect(terminalCardModel(settled({
-      call: { name: 'terminal_send', argsRaw: JSON.stringify({ sessionId: 'pty-3', text: 'make', run_in_background: true }) },
-    }))).toBeNull()
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'terminal_send', argsRaw: JSON.stringify({ sessionId: 'pty-3', text: 'make', run_in_background: true }) },
+        }),
+      ),
+    ).toBeNull()
     expect(terminalCardModel(settled({ ...done, isError: true }))).toBeNull()
   })
 
   it('preserves persistent-shell running cards and settled generic output', () => {
     const persistent = JSON.stringify({ command: 'pwd' })
     expect(terminalCardModel(running({ argsRaw: persistent }))).toMatchObject({
-      copy: { kind: 'shell', command: 'pwd', description: undefined }, card: { running: true },
+      copy: { kind: 'shell', command: 'pwd', description: undefined },
+      card: { running: true },
     })
     expect(terminalCardModel(running({ name: 'pwsh', argsRaw: persistent }))).toMatchObject({
-      copy: { kind: 'shell', command: 'pwd', description: undefined }, card: { running: true },
+      copy: { kind: 'shell', command: 'pwd', description: undefined },
+      card: { running: true },
     })
     expect(terminalCardModel(settled({ call: { name: 'bash', argsRaw: persistent } }))).toBeNull()
     expect(terminalCardModel(settled({ call: { name: 'pwsh', argsRaw: persistent } }))).toBeNull()
   })
 
   it('derives the standard pwsh card from the same raw status markers', () => {
-    expect(terminalCardModel(settled({
-      call: { name: 'pwsh', argsRaw: ARGS },
-      content: [{ type: 'text', text: 'failed\n[exit code: 3]' }],
-    }))).toMatchObject({
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name: 'pwsh', argsRaw: ARGS },
+          content: [{ type: 'text', text: 'failed\n[exit code: 3]' }],
+        }),
+      ),
+    ).toMatchObject({
       copy: { kind: 'shell', command: 'ls -la', description: 'List files' },
       card: { output: 'failed', exitCode: 3, running: false },
     })
   })
 
   it('keeps terminal_send copy semantic until the render locale is known', () => {
-    const model = terminalCardModel(running({
-      name: 'terminal_send',
-      argsRaw: JSON.stringify({ sessionId: 'pty-3', text: '' }),
-    }))!
+    const model = terminalCardModel(
+      running({
+        name: 'terminal_send',
+        argsRaw: JSON.stringify({ sessionId: 'pty-3', text: '' }),
+      }),
+    )!
     expect(model.copy).toEqual({ kind: 'terminal-send', text: '', sessionId: 'pty-3' })
     expect(localizeTerminalCardModel(model, t)).toMatchObject({
-      description: '终端 pty-3', card: { command: '（发送输入）' },
+      description: '终端 pty-3',
+      card: { command: '（发送输入）' },
     })
     expect(localizeTerminalCardModel(model, enT)).toMatchObject({
-      description: 'Terminal pty-3', card: { command: '(send input)' },
+      description: 'Terminal pty-3',
+      card: { command: '(send input)' },
     })
   })
 
@@ -227,8 +322,7 @@ describe('terminalCardModel', () => {
 
   it.each(['bash', 'pwsh'])('keeps nested persistent %s running cards and settled generic results', (name) => {
     const argsRaw = JSON.stringify({ command: 'pwd' })
-    expect(terminalCardModel(running({ name, argsRaw, parentCallId: 'parent' })))
-      .toEqual(terminalCardModel(running({ name, argsRaw })))
+    expect(terminalCardModel(running({ name, argsRaw, parentCallId: 'parent' }))).toEqual(terminalCardModel(running({ name, argsRaw })))
     expect(terminalCardModel(settled({ call: { name, argsRaw }, parentCallId: 'parent' }))).toBeNull()
   })
 
@@ -236,17 +330,25 @@ describe('terminalCardModel', () => {
     const notice = '(Omitted 50000 bytes. Full formatted result stored at: /spill/output.txt. Read the file.)'
     for (const parentCallId of [undefined, 'parent']) {
       for (const preview of ['failed\n[exit code: 7]', 'killed\n[killed by signal: SIGTERM]', 'partial', '']) {
-        expect(terminalCardModel(settled({
-          ...parentCallId === undefined ? {} : { parentCallId },
-          call: { name, argsRaw: ARGS },
-          content: [{ type: 'text', text: preview === '' ? notice : `${preview}\n\n${notice}` }],
-        }))).toBeNull()
+        expect(
+          terminalCardModel(
+            settled({
+              ...(parentCallId === undefined ? {} : { parentCallId }),
+              call: { name, argsRaw: ARGS },
+              content: [{ type: 'text', text: preview === '' ? notice : `${preview}\n\n${notice}` }],
+            }),
+          ),
+        ).toBeNull()
       }
     }
-    expect(terminalCardModel(settled({
-      call: { name, argsRaw: ARGS },
-      content: [{ type: 'text', text: `${notice}\nordinary output` }],
-    }))).not.toBeNull()
+    expect(
+      terminalCardModel(
+        settled({
+          call: { name, argsRaw: ARGS },
+          content: [{ type: 'text', text: `${notice}\nordinary output` }],
+        }),
+      ),
+    ).not.toBeNull()
   })
 
   it('returns null for background, errors, malformed args, unsupported tools, and non-text results', () => {
@@ -255,7 +357,16 @@ describe('terminalCardModel', () => {
     expect(terminalCardModel(running({ argsRaw: '{' }))).toBeNull()
     expect(terminalCardModel(running({ name: 'read' }))).toBeNull()
     expect(terminalCardModel(settled({ content: [] }))).toBeNull()
-    expect(terminalCardModel(settled({ content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] }))).toBeNull()
+    expect(
+      terminalCardModel(
+        settled({
+          content: [
+            { type: 'text', text: 'a' },
+            { type: 'text', text: 'b' },
+          ],
+        }),
+      ),
+    ).toBeNull()
   })
 
   it.each([
@@ -277,19 +388,26 @@ describe('terminalCardModel', () => {
   })
 
   it('accepts valid optional and unknown standard-shell fields on the open parameter root', () => {
-    expect(terminalCardModel(running({ argsRaw: shellArgs({
-      timeoutMs: 1_000,
-      sandbox_permissions: 'workspace-write',
-      justification: 'Write generated output',
-      extension: { version: 1 },
-    }) }))).not.toBeNull()
+    expect(
+      terminalCardModel(
+        running({
+          argsRaw: shellArgs({
+            timeoutMs: 1_000,
+            sandbox_permissions: 'workspace-write',
+            justification: 'Write generated output',
+            extension: { version: 1 },
+          }),
+        }),
+      ),
+    ).not.toBeNull()
   })
 
   it('validates terminal_send optional fields while retaining open-root extensions', () => {
-    const send = (over: Record<string, unknown>) => running({
-      name: 'terminal_send',
-      argsRaw: JSON.stringify({ sessionId: 'pty-1', text: 'make', ...over }),
-    })
+    const send = (over: Record<string, unknown>) =>
+      running({
+        name: 'terminal_send',
+        argsRaw: JSON.stringify({ sessionId: 'pty-1', text: 'make', ...over }),
+      })
     expect(terminalCardModel(send({ submit: 'yes' }))).toBeNull()
     expect(terminalCardModel(send({ run_in_background: 'yes' }))).toBeNull()
     expect(terminalCardModel(send({ submit: false, run_in_background: false }))).not.toBeNull()
@@ -306,7 +424,12 @@ describe('terminalCardModel', () => {
 describe('chat row terminal body', () => {
   const ownerProps = (block: StartedToolCall | ToolResultNode): GenericToolCardProps => ({
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
-    useDisclosure, callId: 'c1', toolName: 'bash', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), t,
+    useDisclosure,
+    callId: 'c1',
+    toolName: 'bash',
+    ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }),
+    openFile: vi.fn(),
+    t,
   })
 
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */
@@ -328,9 +451,15 @@ describe('chat row terminal body', () => {
 
   it('a long output renders in full — the scroll container replaces the middle collapse', () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line-${i}`)
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      content: [{ type: 'text', text: `${lines.join('\n')}\n` }],
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            content: [{ type: 'text', text: `${lines.join('\n')}\n` }],
+          }),
+        )}
+      />,
+    )
     toggleRow(view)
     expect(view.getByText('line-5')).toBeTruthy()
     expect(view.getByText('line-19')).toBeTruthy()
@@ -338,28 +467,46 @@ describe('chat row terminal body', () => {
   })
 
   it('renders a multi-line command as one prompt row per line', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ command: 'ls -la\necho done' }) },
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ command: 'ls -la\necho done' }) },
+          }),
+        )}
+      />,
+    )
     toggleRow(view)
     const rows = view.container.querySelectorAll('[class^="_promptLine_"]')
-    expect([...rows].map(row => row.textContent)).toEqual(['$ls -la', '$echo done'])
+    expect([...rows].map((row) => row.textContent)).toEqual(['$ls -la', '$echo done'])
     // Still one dot for the call, on the first row.
     expect(view.container.querySelectorAll('[data-terminal] [data-state]')).toHaveLength(1)
   })
 
   it('the fallback row shows the call description', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
+          }),
+        )}
+      />,
+    )
     expect(view.getByText('Terminal 3')).toBeTruthy()
     expect(view.queryByText('List files')).toBeNull()
   })
 
   it('keeps the call description visible once the terminal card is expanded', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
+          }),
+        )}
+      />,
+    )
     expect(view.getByText('Terminal 3')).toBeTruthy()
     toggleRow(view)
     expect(view.container.querySelector('[data-terminal]')).not.toBeNull()
@@ -391,43 +538,68 @@ describe('chat row terminal body', () => {
   })
 
   it('a non-terminal call keeps the args-JSON text body', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ run_in_background: true }) },
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ run_in_background: true }) },
+          }),
+        )}
+      />,
+    )
     toggleRow(view)
     expect(view.getByText(/"command"/)).toBeTruthy()
   })
 
   it('malformed empty args use the generic output body', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      call: { name: 'bash', argsRaw: '' },
-    }))} />)
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            call: { name: 'bash', argsRaw: '' },
+          }),
+        )}
+      />,
+    )
     toggleRow(view)
     expect(view.container.querySelector('[class*="_ioText_"]')?.textContent).toBe('a.ts  b.ts\nc.ts  d.ts\n')
     expect(view.container.querySelector('[data-terminal]')).toBeNull()
   })
 
-  it('a failing exit status surfaces as the collapsed row\'s error state', () => {
-    const view = render(<GenericToolCard {...ownerProps(settled({
-      content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
-    }))} />)
+  it("a failing exit status surfaces as the collapsed row's error state", () => {
+    const view = render(
+      <GenericToolCard
+        {...ownerProps(
+          settled({
+            content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
+          }),
+        )}
+      />,
+    )
     expect(view.container.querySelector('[data-state]')?.getAttribute('data-state')).toBe('error')
   })
 })
 
 describe('BashRow terminal card', () => {
-  const list = () => createSnapshotStore<SessionListState>({
-    ids: [SID],
-    byId: { [SID]: { id: SID, displayTitle: 'r', running: false, retainedBy: {}, blank: false, updatedAt: 0 } },
-    phase: 'ready',
-    projectionsBySession: {},
-  })
+  const list = () =>
+    createSnapshotStore<SessionListState>({
+      ids: [SID],
+      byId: { [SID]: { id: SID, displayTitle: 'r', running: false, retainedBy: {}, blank: false, updatedAt: 0 } },
+      phase: 'ready',
+      projectionsBySession: {},
+    })
 
-  const rowProps = (block: StartedToolCall | ToolResultNode): BashRowProps => ({
-    useDisclosure, callId: 'c1', toolName: 'bash', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(),
-    sessionId: SID, useSessions: bindSnapshotSelector(list()),
-    t,
-  } as BashRowProps)
+  const rowProps = (block: StartedToolCall | ToolResultNode): BashRowProps =>
+    ({
+      useDisclosure,
+      callId: 'c1',
+      toolName: 'bash',
+      ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }),
+      openFile: vi.fn(),
+      sessionId: SID,
+      useSessions: bindSnapshotSelector(list()),
+      t,
+    }) as BashRowProps
 
   it('collapses to the summary row; the whole row toggles the command output', () => {
     const view = render(<BashRow {...rowProps(settled())} />)
@@ -443,9 +615,15 @@ describe('BashRow terminal card', () => {
   })
 
   it('expands a completed command that carries Host-accepted blank escalation fields', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ sandbox_permissions: 'danger-full-access', justification: '' }) },
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ sandbox_permissions: 'danger-full-access', justification: '' }) },
+          }),
+        )}
+      />,
+    )
     fireEvent.click(view.getByRole('button'))
     expect(view.getByText('a.ts  b.ts', RAW)).toBeTruthy()
   })
@@ -464,26 +642,44 @@ describe('BashRow terminal card', () => {
     expect(runStateOf(settledView.container)).toBe('done')
   })
 
-  it('a failing exit status surfaces as the collapsed row\'s error state', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
-    }))} />)
+  it("a failing exit status surfaces as the collapsed row's error state", () => {
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            content: [{ type: 'text', text: 'boom\n[exit code: 2]' }],
+          }),
+        )}
+      />,
+    )
     expect(view.container.querySelector('[data-variant="bash"]')?.getAttribute('data-state')).toBe('error')
     expect(view.container.querySelector('[class*="_errorSummary_"]')?.textContent).toBe('List files')
   })
 
   it('shows the call description as the terminal summary', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) },
+          }),
+        )}
+      />,
+    )
     expect(view.getByText('Terminal 3')).toBeTruthy()
     expect(view.queryByText('List files')).toBeNull()
   })
 
   it('expands a settled persistent shell through the generic input/output card', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      call: { name: 'bash', argsRaw: JSON.stringify({ command: 'ls -la' }) },
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            call: { name: 'bash', argsRaw: JSON.stringify({ command: 'ls -la' }) },
+          }),
+        )}
+      />,
+    )
     const row = view.container.querySelector('[data-sample="bash"]')!
     expect(view.getByText('ls -la')).toBeTruthy()
     expect(row.getAttribute('role')).toBe('button')
@@ -496,15 +692,21 @@ describe('BashRow terminal card', () => {
     expect(view.getByText('输出')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[class*="_ioText_"][data-error]')).toBeNull()
-    expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent)
-      .toBe('a.ts  b.ts\nc.ts  d.ts\n')
+    expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent).toBe('a.ts  b.ts\nc.ts  d.ts\n')
   })
 
   it('expands a spilled child result without a successful terminal indicator', () => {
     const output = 'failed\n[exit code: 7]\n\n(Omitted 50000 bytes. Full formatted result stored at: /spill/output.txt. Read the file.)'
-    const view = render(<BashRow {...rowProps(settled({
-      parentCallId: 'parent', content: [{ type: 'text', text: output }],
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            parentCallId: 'parent',
+            content: [{ type: 'text', text: output }],
+          }),
+        )}
+      />,
+    )
     const row = view.container.querySelector('[data-sample="bash"]')!
     expect(row.getAttribute('role')).toBe('button')
     fireEvent.click(row)
@@ -513,20 +715,32 @@ describe('BashRow terminal card', () => {
   })
 
   it('a non-terminal bash call (background start) renders the summary row alone', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      call: { name: 'bash', argsRaw: shellArgs({ command: 'sleep 30', description: 'Wait', run_in_background: true }) },
-      content: [{ type: 'text', text: 'started background job job-1' }],
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            call: { name: 'bash', argsRaw: shellArgs({ command: 'sleep 30', description: 'Wait', run_in_background: true }) },
+            content: [{ type: 'text', text: 'started background job job-1' }],
+          }),
+        )}
+      />,
+    )
     expect(view.getByText('Wait')).toBeTruthy()
     expect(view.queryByText(/a\.ts/)).toBeNull()
     expect(view.container.querySelector('[data-sample="bash"]')?.getAttribute('role')).toBeNull()
   })
 
   it('expands a generic execution error to its original args and full output', () => {
-    const view = render(<BashRow {...rowProps(settled({
-      content: [{ type: 'text', text: 'Error: command aborted' }],
-      isError: true,
-    }))} />)
+    const view = render(
+      <BashRow
+        {...rowProps(
+          settled({
+            content: [{ type: 'text', text: 'Error: command aborted' }],
+            isError: true,
+          }),
+        )}
+      />,
+    )
     const row = view.container.querySelector('[data-sample="bash"]')!
     expect(row.getAttribute('role')).toBe('button')
     expect(row.getAttribute('aria-expanded')).toBe('false')

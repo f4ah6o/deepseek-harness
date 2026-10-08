@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
-import LlmRuntime, { createUserMessage, LlmAdapter  } from '@deepseek-ai/dsh-llm'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import LlmRuntime, { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -11,7 +11,7 @@ import * as providerPlugin from '@deepseek-ai/dsh-session-title-first-prompt-llm
 class RecordingAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
 
-  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     yield { type: 'text-delta', index: 0, text: 'First-message model title' }
     yield { type: 'finish', reason: { kind: 'stop' } }
@@ -30,7 +30,7 @@ const LLM_CONFIG = {
 } as const
 
 async function settle(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('first-prompt LLM title provider', () => {
@@ -48,11 +48,13 @@ describe('first-prompt LLM title provider', () => {
     })
     providerPlugin.apply(ctx, LLM_CONFIG)
 
-    await expect(registered!.generate({
-      session: Session.create(SessionId('empty-first-provider')),
-      messages: [],
-      signal: new AbortController().signal,
-    })).rejects.toThrow(/requires one human message/)
+    await expect(
+      registered!.generate({
+        session: Session.create(SessionId('empty-first-provider')),
+        messages: [],
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow(/requires one human message/)
   })
 
   it('always selects only the first eligible human message, including explicit refresh', async () => {
@@ -67,17 +69,28 @@ describe('first-prompt LLM title provider', () => {
     await ctx.plugin(providerPlugin, LLM_CONFIG)
     const session = ctx.sessions.create(SessionId('first-plugin'))
     session.append('turn/start', { turn: 1 })
-    const first = session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'first input' }], source: { kind: 'user' },
-    }), { surfaceOp: 'append' })
+    const first = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'first input' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: 'append' },
+    )
     await settle()
     session.append('request/header', {
-      header: { config: { provider: 'main', model: 'main-model' } }, reason: 'initial',
+      header: { config: { provider: 'main', model: 'main-model' } },
+      reason: 'initial',
     })
     await settle()
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'second input must be ignored' }], source: { kind: 'user' },
-    }), { surfaceOp: 'append' })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'second input must be ignored' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: 'append' },
+    )
 
     await ctx.sessionTitle.refresh(session)
 

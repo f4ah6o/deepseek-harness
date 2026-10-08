@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Scope, ScopeKey } from '@deepseek-ai/dsh-scope'
@@ -15,8 +15,14 @@ async function mintScope(ctx: Context, name: string): Promise<Scope> {
   let scope!: Scope
   // The scoped context resolves services through the MINTING plugin's
   // dependency chain — the minter must inject what scope holders will reach.
-  await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, { name }) },
-    { inject: ['systemPrompt'] }))
+  await ctx.plugin(
+    Object.assign(
+      (inner: Context) => {
+        scope = createScope(inner, { name })
+      },
+      { inject: ['systemPrompt'] },
+    ),
+  )
   return scope
 }
 
@@ -73,11 +79,10 @@ describe('scoped sections', () => {
 
     const assembly = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
 
-    expect(assembly.sections.find(section => section.name === 'shared')?.text).toBe('scoped text')
+    expect(assembly.sections.find((section) => section.name === 'shared')?.text).toBe('scoped text')
     expect(globalText).not.toHaveBeenCalled()
     expect(scopedText).toHaveBeenCalledOnce()
   })
-
 })
 
 describe('scoped variables', () => {
@@ -131,16 +136,15 @@ describe('scoped cache-safe context', () => {
     const scope = await mintScope(ctx, 'child-context')
     ctx.systemPrompt.context({ name: 'policy', order: 1, text: 'global policy' })
     scope.ctx.systemPrompt.context({ name: 'policy', order: 1, text: 'scoped policy' })
-    expect(() => scope.ctx.systemPrompt.context({ name: 'policy', order: 2, text: 'duplicate' }))
-      .toThrow('prompt context "policy" is already registered in this scope')
+    expect(() => scope.ctx.systemPrompt.context({ name: 'policy', order: 2, text: 'duplicate' })).toThrow(
+      'prompt context "policy" is already registered in this scope',
+    )
 
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })))
-      .toContain('scoped policy')
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) }))).toContain('scoped policy')
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble())).toContain('global policy')
 
     await scope.dispose()
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })))
-      .toContain('global policy')
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) }))).toContain('global policy')
   })
 
   it('suppresses all context for one scope and restores it when disposed', async () => {
@@ -156,8 +160,7 @@ describe('scoped cache-safe context', () => {
     expect(renderContextSnapshot(global)).toContain('global policy')
 
     dispose()
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: key })))
-      .toContain('global policy')
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ scope: key }))).toContain('global policy')
   })
 })
 
@@ -170,8 +173,8 @@ describe('scoped tool providers and toolOrder × restriction', () => {
 
     const scoped = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
     const global = await ctx.systemPrompt.assemble()
-    expect(scoped.tools.map(t => t.name)).toEqual(['global_tool', 'scoped_tool'])
-    expect(global.tools.map(t => t.name)).toEqual(['global_tool'])
+    expect(scoped.tools.map((t) => t.name)).toEqual(['global_tool', 'scoped_tool'])
+    expect(global.tools.map((t) => t.name)).toEqual(['global_tool'])
   })
 
   it('disposing a scoped tool provider empties its layer without residue', async () => {
@@ -180,11 +183,11 @@ describe('scoped tool providers and toolOrder × restriction', () => {
     const dispose = scope.ctx.systemPrompt.tools(() => ({ schemas: [schema('scoped_tool')] }))
     dispose()
     const after = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
-    expect(after.tools.map(t => t.name)).toEqual([])
+    expect(after.tools.map((t) => t.name)).toEqual([])
     // Re-registering through the same scope starts a fresh layer.
     scope.ctx.systemPrompt.tools(() => ({ schemas: [schema('again')] }))
     const again = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
-    expect(again.tools.map(t => t.name)).toEqual(['again'])
+    expect(again.tools.map((t) => t.name)).toEqual(['again'])
   })
 
   it('a toolOrder entry restricted away for a scope is a normal absence, while a typo still throws', async () => {
@@ -196,7 +199,7 @@ describe('scoped tool providers and toolOrder × restriction', () => {
       knownNames: ['read', 'bash'],
     }))
     const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.tools.map(t => t.name)).toEqual(['read'])
+    expect(assembly.tools.map((t) => t.name)).toEqual(['read'])
 
     const bad = await mount({ toolOrder: ['basj', TOOL_ORDER_REST] })
     bad.systemPrompt.tools(() => ({ schemas: [schema('read')], knownNames: ['read', 'bash'] }))
@@ -205,7 +208,7 @@ describe('scoped tool providers and toolOrder × restriction', () => {
 })
 
 describe('scoped assemble dispatch', () => {
-  it('an agent.ctx assemble listener shapes only its own scope\'s assemblies', async () => {
+  it("an agent.ctx assemble listener shapes only its own scope's assemblies", async () => {
     const ctx = await mount()
     const scope = await mintScope(ctx, 'child')
     const shaped: (ScopeKey | undefined)[] = []
@@ -218,9 +221,8 @@ describe('scoped assemble dispatch', () => {
 
     const scoped = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
     const global = await ctx.systemPrompt.assemble()
-    expect(scoped.sections.some(s => s.name === 'listener:extra')).toBe(true)
-    expect(global.sections.some(s => s.name === 'listener:extra')).toBe(false)
+    expect(scoped.sections.some((s) => s.name === 'listener:extra')).toBe(true)
+    expect(global.sections.some((s) => s.name === 'listener:extra')).toBe(false)
     expect(shaped).toHaveLength(1)
   })
-
 })

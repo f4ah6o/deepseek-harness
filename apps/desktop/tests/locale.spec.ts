@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { en, formatDesktopMessage, ja, resolveDesktopLocale, resolveDesktopStartupLocale, zh } from '../src/locale.ts'
 
 describe('desktop locale dictionaries', () => {
   it('ships the same keys and interpolation placeholders in every locale', () => {
     expect(Object.keys(zh)).toEqual(Object.keys(en))
     expect(Object.keys(ja)).toEqual(Object.keys(en))
-    const placeholders = (message: string): string[] => [...message.matchAll(/\{([^{}]+)\}/gu)].map(match => match[1]!).sort()
+    const placeholders = (message: string): string[] => [...message.matchAll(/\{([^{}]+)\}/gu)].map((match) => match[1]!).sort()
     for (const key of Object.keys(en) as (keyof typeof en)[]) {
       expect(placeholders(zh[key]), `zh.${key}`).toEqual(placeholders(en[key]))
       expect(placeholders(ja[key]), `ja.${key}`).toEqual(placeholders(en[key]))
@@ -18,8 +18,7 @@ describe('desktop locale dictionaries', () => {
   })
 
   it('formats named values without consuming unknown placeholders', () => {
-    expect(formatDesktopMessage('{name}@{version} {missing}', { name: 'plugin', version: '1.2.3' }))
-      .toBe('plugin@1.2.3 {missing}')
+    expect(formatDesktopMessage('{name}@{version} {missing}', { name: 'plugin', version: '1.2.3' })).toBe('plugin@1.2.3 {missing}')
   })
 
   it('preserves explicit language choices and defaults to Japanese regardless of system language', () => {

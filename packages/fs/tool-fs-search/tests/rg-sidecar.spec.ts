@@ -1,5 +1,5 @@
 import { join, parse } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 const { dependency, existsSync } = vi.hoisted(() => ({
   dependency: { rgPath: '/node_modules/@vscode/ripgrep/bin/rg' },
@@ -13,7 +13,11 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...actual, existsSync }
 })
 
-vi.mock('@vscode/ripgrep', () => ({ get rgPath() { return dependency.rgPath } }))
+vi.mock('@vscode/ripgrep', () => ({
+  get rgPath() {
+    return dependency.rgPath
+  },
+}))
 
 beforeEach(() => {
   vi.resetModules()
@@ -72,9 +76,7 @@ describe('ripgrep resolution', () => {
 
     await expect(resolveRgPath()).resolves.toBe(dependency.rgPath)
     const executable = parse(process.execPath)
-    const sidecar = process.platform === 'win32'
-      ? join(executable.dir, `${executable.name}-rg.exe`)
-      : `${process.execPath}-rg`
+    const sidecar = process.platform === 'win32' ? join(executable.dir, `${executable.name}-rg.exe`) : `${process.execPath}-rg`
     expect(existsSync).toHaveBeenCalledWith(sidecar)
   })
 

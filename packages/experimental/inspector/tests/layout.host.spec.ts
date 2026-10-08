@@ -3,7 +3,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url))
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -13,8 +13,8 @@ describe('Inspector execution layout', () => {
   it('keeps Client and Host adapters mirrored apart from Client dictionaries and bottom controls', async () => {
     const clientOnly = ['bridge/locales.ts', 'bottom/locales.ts', 'bottom/keyboard.ts']
     const client = await sourceFiles('client')
-    expect(clientOnly.every(file => client.includes(file))).toBe(true)
-    expect(client.filter(file => !clientOnly.includes(file))).toEqual(await sourceFiles('host'))
+    expect(clientOnly.every((file) => client.includes(file))).toBe(true)
+    expect(client.filter((file) => !clientOnly.includes(file))).toEqual(await sourceFiles('host'))
   })
 
   it('keeps Worker Client and Host backend paths mirrored', async () => {
@@ -33,16 +33,20 @@ describe('Inspector execution layout', () => {
   it('keeps compiler files and specs on their declared execution face', async () => {
     const hostFiles = await compilerFiles('tsconfig.host.json')
     const clientFiles = await compilerFiles('tsconfig.client.json')
-    expect(hostFiles.some(file => file.startsWith('src/client/'))).toBe(false)
-    expect(clientFiles.some(file => file.startsWith('src/host/') || file.startsWith('src/worker/'))).toBe(false)
+    expect(hostFiles.some((file) => file.startsWith('src/client/'))).toBe(false)
+    expect(clientFiles.some((file) => file.startsWith('src/host/') || file.startsWith('src/worker/'))).toBe(false)
 
-    const testFiles = (await walk(testsRoot)).filter(file => file.endsWith('.ts'))
-    const specs = testFiles.filter(file => file.endsWith('.spec.ts'))
-    expect(specs.every(file => file.endsWith('.host.spec.ts') || file.endsWith('.client.spec.ts'))).toBe(true)
-    await expectTestImports(testFiles.filter(file =>
-      file.endsWith('.host.ts') || file.endsWith('.host.spec.ts')), ['client'])
-    await expectTestImports(testFiles.filter(file =>
-      file.endsWith('.client.ts') || file.endsWith('.client.spec.ts')), ['host', 'worker'])
+    const testFiles = (await walk(testsRoot)).filter((file) => file.endsWith('.ts'))
+    const specs = testFiles.filter((file) => file.endsWith('.spec.ts'))
+    expect(specs.every((file) => file.endsWith('.host.spec.ts') || file.endsWith('.client.spec.ts'))).toBe(true)
+    await expectTestImports(
+      testFiles.filter((file) => file.endsWith('.host.ts') || file.endsWith('.host.spec.ts')),
+      ['client'],
+    )
+    await expectTestImports(
+      testFiles.filter((file) => file.endsWith('.client.ts') || file.endsWith('.client.spec.ts')),
+      ['host', 'worker'],
+    )
   })
 
   it('keeps Worker repositories and realm backends independent of the Chrome adapter', async () => {
@@ -54,14 +58,14 @@ describe('Inspector execution layout', () => {
 async function sourceFiles(directory: string): Promise<string[]> {
   const root = resolve(sourceRoot, directory)
   return (await walk(root))
-    .filter(file => file.endsWith('.ts'))
-    .map(file => relative(root, file).split(sep).join('/'))
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => relative(root, file).split(sep).join('/'))
     .sort()
 }
 
 async function compilerFiles(config: string): Promise<string[]> {
   const parsed = JSON.parse(await readFile(resolve(packageRoot, config), 'utf8')) as { files?: unknown }
-  if (!Array.isArray(parsed.files) || !parsed.files.every(file => typeof file === 'string')) {
+  if (!Array.isArray(parsed.files) || !parsed.files.every((file) => typeof file === 'string')) {
     throw new Error(`${config} must declare a string files array`)
   }
   return parsed.files
@@ -103,13 +107,15 @@ async function expectNoImports(owner: string, forbidden: readonly string[]): Pro
 
 async function walk(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
-  const files = await Promise.all(entries.map(async (entry) => {
-    const value = resolve(directory, entry.name)
-    return entry.isDirectory() ? await walk(value) : [value]
-  }))
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const value = resolve(directory, entry.name)
+      return entry.isDirectory() ? await walk(value) : [value]
+    }),
+  )
   return files.flat()
 }
 
 function relativeSpecifiers(source: string): string[] {
-  return [...source.matchAll(/(?:from\s+|import\s*\()['"](\.[^'"]+)['"]/gu)].map(match => match[1] ?? '')
+  return [...source.matchAll(/(?:from\s+|import\s*\()['"](\.[^'"]+)['"]/gu)].map((match) => match[1] ?? '')
 }

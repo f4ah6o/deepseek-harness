@@ -1,9 +1,13 @@
 /** Worker entry translates parser failures into its private response protocol. */
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { Config } from '../src/config.ts'
 import { excelFixture } from './excel-fixture.ts'
 
-afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.doUnmock('../src/client/excel/convert.ts') })
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.resetModules()
+  vi.doUnmock('../src/client/excel/convert.ts')
+})
 
 it('returns parsed sheets and bounded failure categories', async () => {
   const post = vi.fn()
@@ -15,11 +19,17 @@ it('returns parsed sheets and bounded failure categories', async () => {
     handle({ data: { bytes, format: 'xlsx', limits: { ...Config({}).excel, maxCells } } } as MessageEvent)
   }
   message(await excelFixture())
-  await vi.waitFor(() => { expect(post).toHaveBeenCalledWith(expect.objectContaining({ ok: true })) })
+  await vi.waitFor(() => {
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ ok: true }))
+  })
   message(new Uint8Array([1, 2]))
-  await vi.waitFor(() => { expect(post).toHaveBeenCalledWith({ ok: false, code: 'invalid' }) })
+  await vi.waitFor(() => {
+    expect(post).toHaveBeenCalledWith({ ok: false, code: 'invalid' })
+  })
   message(await excelFixture(), 1)
-  await vi.waitFor(() => { expect(post).toHaveBeenCalledWith({ ok: false, code: 'tooLarge' }) })
+  await vi.waitFor(() => {
+    expect(post).toHaveBeenCalledWith({ ok: false, code: 'tooLarge' })
+  })
 })
 
 it('reports an unexpected parser failure as an invalid workbook', async () => {
@@ -33,5 +43,7 @@ it('reports an unexpected parser failure as an invalid workbook', async () => {
   await import('../src/client/excel/worker.ts')
   const handle: (event: MessageEvent) => void = globalThis.onmessage!
   handle({ data: { bytes: new Uint8Array(), format: 'xlsx', limits: Config({}).excel } } as MessageEvent)
-  await vi.waitFor(() => { expect(post).toHaveBeenCalledWith({ ok: false, code: 'invalid' }) })
+  await vi.waitFor(() => {
+    expect(post).toHaveBeenCalledWith({ ok: false, code: 'invalid' })
+  })
 })

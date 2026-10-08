@@ -5,7 +5,7 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import Schema from '@deepseek-ai/schemastery'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { buildConfigSchemaDocument } from '../src/config-schema/document.ts'
@@ -79,12 +79,14 @@ describe('generateConfigSchema', () => {
     ]
     const original = structuredClone(layers)
     const installAnchor = join(dir, 'installation.json')
-    const resolve = vi.spyOn(profileOperations, 'createRuntimeResolution')
+    const resolve = vi
+      .spyOn(profileOperations, 'createRuntimeResolution')
       .mockResolvedValue(new profileOperations.ProfileRuntimeResolution({ installAnchor: '', home: '', profileDir: undefined }, resolution))
     const result = await generateConfigSchema(profile, layers, installAnchor)
     expect(resolve).toHaveBeenCalledExactlyOnceWith({ installAnchor, profile })
-    expect(result['x-cordis'].entries.map(entry => [entry.path, entry.name])).toEqual([
-      ['/0', 'cordis:group'], ['/0/config/0', 'server'],
+    expect(result['x-cordis'].entries.map((entry) => [entry.path, entry.name])).toEqual([
+      ['/0', 'cordis:group'],
+      ['/0/config/0', 'server'],
     ])
     expect(result['x-cordis'].diagnostics).toEqual([
       { level: 'error', message: 'Selected profile bundle "missing" could not be loaded; repair or remove its bundle selection.' },
@@ -106,10 +108,14 @@ describe('collectConfigSchemas', () => {
   it('serializes namespace and class Config exports, retaining descriptions, defaults, and shared refs', async () => {
     const port = Schema.number().default(3080).description('Listening port')
     const config = Schema.object({ port, anotherPort: port })
-    const apply = vi.fn(() => { throw new Error('must not activate') })
+    const apply = vi.fn(() => {
+      throw new Error('must not activate')
+    })
     class Server {
       static Config = config
-      constructor() { apply() }
+      constructor() {
+        apply()
+      }
     }
     modules.set('namespace', { Config: config, apply })
     modules.set('class', { default: Server, Config: Schema.never() })
@@ -117,11 +123,11 @@ describe('collectConfigSchemas', () => {
     const result = await collectConfigSchemas(profile, [row('namespace'), row('class'), row('interop')], resolution)
     expect(result['x-cordis'].complete).toBe(true)
     expect(result['x-cordis'].diagnostics).toEqual([])
-    expect(result['x-cordis'].entries.map(entry => entry.status)).toEqual(['schema', 'schema', 'schema'])
+    expect(result['x-cordis'].entries.map((entry) => entry.status)).toEqual(['schema', 'schema', 'schema'])
     const restored = schemaOf(result)
     expect(restored.properties!.port).toEqual(restored.properties!.anotherPort)
     expect(restored.properties!.port).toMatchObject({ default: 3080, description: 'Listening port' })
-    expect(new Set(result['x-cordis'].entries.map(entry => entry.configRef)).size).toBe(1)
+    expect(new Set(result['x-cordis'].entries.map((entry) => entry.configRef)).size).toBe(1)
     expect(apply).not.toHaveBeenCalled()
     expect(importModule).toHaveBeenCalledWith('namespace', pathToFileURL(join(dir, 'cordis.yml')).href, {})
     expect(installRuntimeInterception).toHaveBeenCalledWith(resolution)
@@ -138,7 +144,9 @@ describe('collectConfigSchemas', () => {
     ] as EntryOptions[]
     const result = await collectConfigSchemas(profile, rows, resolution)
     expect(result['x-cordis'].entries.map(({ path, id }) => ({ path, id }))).toEqual([
-      { path: '/0', id: undefined }, { path: '/1', id: 'same' }, { path: '/2', id: 'same' },
+      { path: '/0', id: undefined },
+      { path: '/1', id: 'same' },
+      { path: '/2', id: 'same' },
     ])
     expect(result['x-cordis'].entries[0]).not.toHaveProperty('id')
     expect(JSON.stringify(result)).not.toContain('do-not-')
@@ -146,24 +154,32 @@ describe('collectConfigSchemas', () => {
   })
 
   it('reports failed disabled declarations rather than equating discovery with bootability', async () => {
-    const result = await collectConfigSchemas(profile, [
-      { ...row('missing-disabled-plugin'), disabled: true },
-      { ...row('cordis:include', { path: './missing.yml' }), disabled: true },
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        { ...row('missing-disabled-plugin'), disabled: true },
+        { ...row('cordis:include', { path: './missing.yml' }), disabled: true },
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].entries[0]!.status).toBe('error')
-    expect(result['x-cordis'].diagnostics.map(item => item.path)).toEqual(['/0', '/1'])
+    expect(result['x-cordis'].diagnostics.map((item) => item.path)).toEqual(['/0', '/1'])
     expect(importModule).toHaveBeenCalledWith('missing-disabled-plugin', pathToFileURL(join(dir, 'cordis.yml')).href, {})
   })
 
   it('records dormant carriers without config as childless trees and names a missing config otherwise', async () => {
-    const result = await collectConfigSchemas(profile, [
-      { ...row('cordis:group'), disabled: true },
-      { ...row('cordis:include'), disabled: { __jsExpr: 'ctx.disabled' } },
-      { ...row('cordis:group'), disabled: true, group: true },
-      row('cordis:include'),
-    ], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.tree)).toEqual(['group', 'include', 'group', 'include'])
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        { ...row('cordis:group'), disabled: true },
+        { ...row('cordis:include'), disabled: { __jsExpr: 'ctx.disabled' } },
+        { ...row('cordis:group'), disabled: true, group: true },
+        row('cordis:include'),
+      ],
+      resolution,
+    )
+    expect(result['x-cordis'].entries.map((entry) => entry.tree)).toEqual(['group', 'include', 'group', 'include'])
     expect(result['x-cordis'].diagnostics).toEqual([
       { level: 'error', path: '/2', message: 'entry list config is missing' },
       { level: 'error', path: '/3', message: 'include config is missing' },
@@ -175,28 +191,55 @@ describe('collectConfigSchemas', () => {
     modules.set('standard', { Config: { '~standard': { version: 1, vendor: 'other', validate: vi.fn() } } })
     modules.set('primitive', { Config: 1 })
     modules.set('no-serializer', { Config: { [Symbol.for('schemastery')]: true } })
-    modules.set('getter', { get Config() { throw new Error('getter failed') } })
+    modules.set('getter', {
+      get Config() {
+        throw new Error('getter failed')
+      },
+    })
     modules.set('empty-module', null)
-    const result = await collectConfigSchemas(profile, [
-      row('noop'), row('null-config'), row('standard'), row('primitive'), row('no-serializer'),
-      row('missing'), row('getter'), row('empty-module'), row('cordis:missing'),
-    ], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.status)).toEqual([
-      'absent', 'absent', 'unsupported', 'unsupported', 'unsupported', 'error', 'error', 'absent', 'error',
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('noop'),
+        row('null-config'),
+        row('standard'),
+        row('primitive'),
+        row('no-serializer'),
+        row('missing'),
+        row('getter'),
+        row('empty-module'),
+        row('cordis:missing'),
+      ],
+      resolution,
+    )
+    expect(result['x-cordis'].entries.map((entry) => entry.status)).toEqual([
+      'absent',
+      'absent',
+      'unsupported',
+      'unsupported',
+      'unsupported',
+      'error',
+      'error',
+      'absent',
+      'error',
     ])
     expect(result['x-cordis'].complete).toBe(false)
-    expect(result['x-cordis'].diagnostics.map(diagnostic => diagnostic.path)).toEqual(['/2', '/3', '/4', '/5', '/6', '/8'])
-    expect(result['x-cordis'].diagnostics.map(diagnostic => diagnostic.message)).toContain('getter failed')
+    expect(result['x-cordis'].diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['/2', '/3', '/4', '/5', '/6', '/8'])
+    expect(result['x-cordis'].diagnostics.map((diagnostic) => diagnostic.message)).toContain('getter failed')
   })
 
   it('retains recursive references and restores serialization state after a failing lazy schema', async () => {
     const recursive: Schema = Schema.lazy(() => Schema.object({ children: Schema.array(recursive) }))
     modules.set('recursive', { Config: recursive })
-    modules.set('broken', { Config: Schema.lazy(() => { throw new Error('lazy failed') }) })
+    modules.set('broken', {
+      Config: Schema.lazy(() => {
+        throw new Error('lazy failed')
+      }),
+    })
     modules.set('healthy', { Config: Schema.object({ value: Schema.string().required() }) })
     const before = Object.getOwnPropertyDescriptor(globalThis, '__schemastery_refs__')
     const result = await collectConfigSchemas(profile, [row('broken'), row('recursive'), row('healthy')], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.status)).toEqual(['error', 'partial', 'schema'])
+    expect(result['x-cordis'].entries.map((entry) => entry.status)).toEqual(['error', 'partial', 'schema'])
     expect(schemaOf(result, 1).$ref).toContain('Recursive')
     expect(schemaOf(result, 2).required).toEqual(['value'])
     expect(Object.getOwnPropertyDescriptor(globalThis, '__schemastery_refs__')).toEqual(before)
@@ -204,8 +247,12 @@ describe('collectConfigSchemas', () => {
 
   it('does not invoke native validation or UID serialization hooks', async () => {
     const config = Schema.object({ port: Schema.number().default(3080) })
-    const serialize = vi.spyOn(config, 'toJSON').mockImplementation(() => { throw new Error('must not serialize') })
-    const validate = vi.spyOn(Schema, 'resolve').mockImplementation(() => { throw new Error('must not validate') })
+    const serialize = vi.spyOn(config, 'toJSON').mockImplementation(() => {
+      throw new Error('must not serialize')
+    })
+    const validate = vi.spyOn(Schema, 'resolve').mockImplementation(() => {
+      throw new Error('must not validate')
+    })
     modules.set('config', { Config: config })
     const result = await collectConfigSchemas(profile, [row('config')], resolution)
     expect(result['x-cordis'].complete).toBe(true)
@@ -214,7 +261,11 @@ describe('collectConfigSchemas', () => {
   })
 
   it('reports non-Error lazy builder failures without losing other schemas', async () => {
-    modules.set('broken', { Config: Schema.lazy(() => { throw 'plain failure' }) })
+    modules.set('broken', {
+      Config: Schema.lazy(() => {
+        throw 'plain failure'
+      }),
+    })
     const result = await collectConfigSchemas(profile, [row('broken'), row('noop')], resolution)
     expect(result['x-cordis'].diagnostics[0]!.message).toBe('plain failure')
     expect(result['x-cordis'].entries[1]!.status).toBe('absent')
@@ -223,26 +274,34 @@ describe('collectConfigSchemas', () => {
   it('walks native groups but not ordinary plugin config arrays', async () => {
     modules.set('group-package', { default: Group })
     const child = row('noop')
-    const result = await collectConfigSchemas(profile, [
-      row('cordis:group', [row('group-package', [child])]), row('noop', [row('missing')]),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [row('cordis:group', [row('group-package', [child])]), row('noop', [row('missing')])],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(true)
-    expect(result['x-cordis'].entries.map(entry => entry.path)).toEqual(['/0', '/0/config/0', '/0/config/0/config/0', '/1'])
+    expect(result['x-cordis'].entries.map((entry) => entry.path)).toEqual(['/0', '/0/config/0', '/0/config/0/config/0', '/1'])
   })
 
   it('recognizes external canonical Include aliases and caches them per tree base', async () => {
     class ExternalInclude {
       static [EntryGroup.key] = true
-      constructor() { throw new Error('must not activate Include') }
+      constructor() {
+        throw new Error('must not activate Include')
+      }
     }
     modules.set('@deepseek-ai/cordis-plugin-include', { default: ExternalInclude })
     modules.set('include-alias', { default: ExternalInclude })
-    const result = await collectConfigSchemas(profile, [
-      row('include-alias', { path: './missing.yml', initial: [row('noop')] }),
-      row('include-alias', { path: './other.yml', initial: [row('noop')] }),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('include-alias', { path: './missing.yml', initial: [row('noop')] }),
+        row('include-alias', { path: './other.yml', initial: [row('noop')] }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(true)
-    expect(result['x-cordis'].entries.filter(entry => entry.tree === 'include')).toHaveLength(2)
+    expect(result['x-cordis'].entries.filter((entry) => entry.tree === 'include')).toHaveLength(2)
     expect(importModule.mock.calls.filter(([name]) => name === '@deepseek-ai/cordis-plugin-include')).toHaveLength(1)
     expect(importModule.mock.calls.filter(([name]) => name === '@deepseek-ai/cordis-plugin-group')).toHaveLength(1)
   })
@@ -250,26 +309,39 @@ describe('collectConfigSchemas', () => {
   it('recognizes an external canonical Group even when Include cannot resolve', async () => {
     class ExternalGroup {
       static [EntryGroup.key] = true
-      constructor() { throw new Error('must not activate Group') }
+      constructor() {
+        throw new Error('must not activate Group')
+      }
     }
     modules.set('@deepseek-ai/cordis-plugin-group', { default: ExternalGroup })
     modules.set('group-alias', { default: ExternalGroup })
     const result = await collectConfigSchemas(profile, [row('group-alias', [row('group-alias', [row('noop')])])], resolution)
     expect(result['x-cordis'].complete).toBe(true)
-    expect(result['x-cordis'].entries.map(entry => entry.path)).toEqual(['/0', '/0/config/0', '/0/config/0/config/0'])
+    expect(result['x-cordis'].entries.map((entry) => entry.path)).toEqual(['/0', '/0/config/0', '/0/config/0/config/0'])
     expect(importModule.mock.calls.filter(([name]) => name === '@deepseek-ai/cordis-plugin-group')).toHaveLength(1)
   })
 
   it('reports unknown tree-carrier identities instead of silently omitting their children', async () => {
     modules.set('@deepseek-ai/cordis-plugin-group', { default: Group })
     modules.set('@deepseek-ai/cordis-plugin-include', { default: Include })
-    modules.set('other-include', { default: class OtherInclude {
-      static [EntryGroup.key] = true
-      constructor() { throw new Error('must not activate a tree carrier') }
-    } })
-    const result = await collectConfigSchemas(profile, [row('other-include', {
-      path: './unused.yml', initial: [row('noop')],
-    })], resolution)
+    modules.set('other-include', {
+      default: class OtherInclude {
+        static [EntryGroup.key] = true
+        constructor() {
+          throw new Error('must not activate a tree carrier')
+        }
+      },
+    })
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('other-include', {
+          path: './unused.yml',
+          initial: [row('noop')],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].entries).toMatchObject([{ path: '/0', id: 'other-include', name: 'other-include', status: 'absent' }])
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].diagnostics[0]!.message).toContain('unrecognized Loader tree carrier')
@@ -281,24 +353,42 @@ describe('collectConfigSchemas', () => {
     writeFileSync(join(childDir, 'list.yml'), '- id: a\n  name: noop\n')
     writeFileSync(join(dir, 'list.json'), JSON.stringify([row('cordis:include', { path: './child/list.yml' })]))
     modules.set('include-package', { default: Include })
-    const result = await collectConfigSchemas(profile, [
-      row('cordis:include', { path: './list.json' }),
-      row('include-package', { path: './child/list.yml', patches: [
-        { id: 'a', disabled: true }, { insert: [row('noop')] }, { id: 'unknown', disabled: true },
-      ] }),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', { path: './list.json' }),
+        row('include-package', {
+          path: './child/list.yml',
+          patches: [{ id: 'a', disabled: true }, { insert: [row('noop')] }, { id: 'unknown', disabled: true }],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(true)
-    expect(result['x-cordis'].entries.map(entry => entry.path)).toEqual([
-      '/0', '/0/include/0', '/0/include/0/include/0', '/1', '/1/include/0', '/1/include/1',
+    expect(result['x-cordis'].entries.map((entry) => entry.path)).toEqual([
+      '/0',
+      '/0/include/0',
+      '/0/include/0/include/0',
+      '/1',
+      '/1/include/0',
+      '/1/include/1',
     ])
     expect(importModule).toHaveBeenCalledWith('noop', pathToFileURL(`${childDir}/`).href, {})
     expect(result['x-cordis'].diagnostics).toEqual([{ level: 'warning', path: '/1', message: 'patch: entry "unknown" not found' }])
   })
 
   it('expands initial entries in memory without writing missing include files', async () => {
-    const result = await collectConfigSchemas(profile, [row('cordis:include', {
-      path: './missing.yml', initial: [row('noop')], patches: [{ insert: [row('noop')] }],
-    })], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', {
+          path: './missing.yml',
+          initial: [row('noop')],
+          patches: [{ insert: [row('noop')] }],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(true)
     expect(result['x-cordis'].entries).toHaveLength(3)
     const { existsSync } = await import('node:fs')
@@ -309,15 +399,20 @@ describe('collectConfigSchemas', () => {
     writeFileSync(join(dir, 'cycle.yml'), '- name: cordis:include\n  config:\n    path: ./cycle.yml\n')
     writeFileSync(join(dir, 'bad.yml'), '[')
     writeFileSync(join(dir, 'object.json'), '{}')
-    const result = await collectConfigSchemas(profile, [
-      row('cordis:include', { path: './cycle.yml' }),
-      row('cordis:include', { path: './missing.yml' }),
-      row('cordis:include', { path: './bad.yml', initial: [row('noop')] }),
-      row('cordis:include', { path: './object.json' }), row('noop'),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', { path: './cycle.yml' }),
+        row('cordis:include', { path: './missing.yml' }),
+        row('cordis:include', { path: './bad.yml', initial: [row('noop')] }),
+        row('cordis:include', { path: './object.json' }),
+        row('noop'),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].entries.at(-1)!.name).toBe('noop')
-    expect(result['x-cordis'].diagnostics.map(diagnostic => diagnostic.path)).toEqual(['/0/include/0', '/1', '/2', '/3'])
+    expect(result['x-cordis'].diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['/0/include/0', '/1', '/2', '/3'])
     expect(result['x-cordis'].diagnostics[0]!.message).toContain('include cycle')
     expect(result['x-cordis'].diagnostics[1]!.message).toContain('include file not found')
   })
@@ -335,9 +430,16 @@ describe('collectConfigSchemas', () => {
 
   it.each(['realpath', 'readFile'] as const)('preserves non-missing include %s failures instead of using initial', async (operation) => {
     vi.spyOn(fs, operation).mockRejectedValueOnce(Object.assign(new Error('access denied'), { code: 'EACCES' }))
-    const result = await collectConfigSchemas(profile, [row('cordis:include', {
-      path: './missing.yml', initial: [row('noop')],
-    })], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', {
+          path: './missing.yml',
+          initial: [row('noop')],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].entries).toHaveLength(1)
     expect(result['x-cordis'].diagnostics[0]!.message).toBe('access denied')
@@ -374,9 +476,17 @@ describe('collectConfigSchemas', () => {
     { insert: [{ name: 'noop', id: { __jsExpr: 'PRIVATE_EXPRESSION' } }] },
     { insert: [{ name: 'noop', group: { __jsExpr: 'PRIVATE_EXPRESSION' } }] },
   ])('rejects dynamic include patch structure without printing its expression: %j', async (patch) => {
-    const result = await collectConfigSchemas(profile, [row('cordis:include', {
-      path: './missing.yml', initial: [row('noop')], patches: [patch],
-    })], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', {
+          path: './missing.yml',
+          initial: [row('noop')],
+          patches: [patch],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].diagnostics).toHaveLength(1)
     expect(result['x-cordis'].diagnostics[0]!.level).toBe('error')
@@ -384,32 +494,54 @@ describe('collectConfigSchemas', () => {
   })
 
   it('preserves null group overrides and disabled/config expressions in include patches', async () => {
-    const result = await collectConfigSchemas(profile, [row('cordis:include', {
-      path: './missing.yml', initial: [row('noop')], patches: [{
-        id: 'noop', group: null, config: { __jsExpr: 'never' }, disabled: { __jsExpr: 'never' },
-      }],
-    })], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', {
+          path: './missing.yml',
+          initial: [row('noop')],
+          patches: [
+            {
+              id: 'noop',
+              group: null,
+              config: { __jsExpr: 'never' },
+              disabled: { __jsExpr: 'never' },
+            },
+          ],
+        }),
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(true)
     expect(result['x-cordis'].entries).toHaveLength(2)
     expect(result['x-cordis'].diagnostics).toEqual([])
   })
 
   it('rejects malformed and dynamic child groups', async () => {
-    const result = await collectConfigSchemas(profile, [
-      row('cordis:group', { __jsExpr: 'never' }), row('cordis:group', [{ name: 3 }]),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [row('cordis:group', { __jsExpr: 'never' }), row('cordis:group', [{ name: 3 }])],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
-    expect(result['x-cordis'].diagnostics.map(diagnostic => diagnostic.path)).toEqual(['/0', '/1/config/0'])
+    expect(result['x-cordis'].diagnostics.map((diagnostic) => diagnostic.path)).toEqual(['/0', '/1/config/0'])
   })
 
   it('keeps valid siblings and original positions when composed rows are malformed', async () => {
     modules.set('good', { Config: Schema.number() })
-    const result = await collectConfigSchemas(profile, [
-      row('good'), {}, { name: 17 }, null, { id: 'bad', name: 'noop', group: 'invalid' }, row('good'),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [row('good'), {}, { name: 17 }, null, { id: 'bad', name: 'noop', group: 'invalid' }, row('good')],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
-    expect(result['x-cordis'].entries.map(entry => [entry.path, entry.status])).toEqual([
-      ['/0', 'schema'], ['/1', 'error'], ['/2', 'error'], ['/3', 'error'], ['/4', 'error'], ['/5', 'schema'],
+    expect(result['x-cordis'].entries.map((entry) => [entry.path, entry.status])).toEqual([
+      ['/0', 'schema'],
+      ['/1', 'error'],
+      ['/2', 'error'],
+      ['/3', 'error'],
+      ['/4', 'error'],
+      ['/5', 'schema'],
     ])
     expect(result['x-cordis'].entries[1]).not.toHaveProperty('name')
     expect(result['x-cordis'].entries[2]).not.toHaveProperty('name')
@@ -420,13 +552,16 @@ describe('collectConfigSchemas', () => {
 
   it('keeps healthy group and include siblings after malformed child rows', async () => {
     modules.set('good', { Config: Schema.string() })
-    const result = await collectConfigSchemas(profile, [
-      row('cordis:group', [{ name: false }, row('good')]),
-      row('cordis:include', { path: './missing.yml', initial: [null, row('good')] }),
-    ], resolution)
-    expect(result['x-cordis'].diagnostics.map(item => item.path)).toEqual(['/0/config/0', '/1/include/0'])
-    expect(result['x-cordis'].entries.filter(entry => entry.status === 'schema').map(entry => entry.path))
-      .toEqual(['/0/config/1', '/1/include/1'])
+    const result = await collectConfigSchemas(
+      profile,
+      [row('cordis:group', [{ name: false }, row('good')]), row('cordis:include', { path: './missing.yml', initial: [null, row('good')] })],
+      resolution,
+    )
+    expect(result['x-cordis'].diagnostics.map((item) => item.path)).toEqual(['/0/config/0', '/1/include/0'])
+    expect(result['x-cordis'].entries.filter((entry) => entry.status === 'schema').map((entry) => entry.path)).toEqual([
+      '/0/config/1',
+      '/1/include/1',
+    ])
   })
 
   it.each([
@@ -434,8 +569,12 @@ describe('collectConfigSchemas', () => {
     { initial: [], patches: [{ insert: [null] }] },
     { initial: [{ ...row('cordis:group', [null]), group: true }], patches: [{ id: 'noop', disabled: true }] },
   ])('reports unavailable include children when composition fails', async (config) => {
-    const result = await collectConfigSchemas(profile, [row('cordis:include', { path: './missing.yml', ...config }), row('noop')], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.path)).toEqual(['/0', '/1'])
+    const result = await collectConfigSchemas(
+      profile,
+      [row('cordis:include', { path: './missing.yml', ...config }), row('noop')],
+      resolution,
+    )
+    expect(result['x-cordis'].entries.map((entry) => entry.path)).toEqual(['/0', '/1'])
     expect(result['x-cordis'].diagnostics).toHaveLength(1)
     expect(result['x-cordis'].diagnostics[0]).toMatchObject({ level: 'error', path: '/0' })
     expect(result['x-cordis'].diagnostics[0]?.message).toContain('child declarations are unavailable')
@@ -443,12 +582,20 @@ describe('collectConfigSchemas', () => {
   })
 
   it('does not validate contents of an insertion that Loader skips', async () => {
-    const result = await collectConfigSchemas(profile, [row('cordis:include', {
-      path: './missing.yml', initial: [row('noop')], patches: [{ id: 'missing', insert: [null] }, { config: {} }],
-    })], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.path)).toEqual(['/0', '/0/include/0'])
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        row('cordis:include', {
+          path: './missing.yml',
+          initial: [row('noop')],
+          patches: [{ id: 'missing', insert: [null] }, { config: {} }],
+        }),
+      ],
+      resolution,
+    )
+    expect(result['x-cordis'].entries.map((entry) => entry.path)).toEqual(['/0', '/0/include/0'])
     expect(result['x-cordis'].complete).toBe(true)
-    expect(result['x-cordis'].diagnostics.every(item => item.level === 'warning')).toBe(true)
+    expect(result['x-cordis'].diagnostics.every((item) => item.level === 'warning')).toBe(true)
     for (const definition of ['patchList', 'includePatch']) {
       for (const value of [{}, { config: {} }, { id: '', config: {} }]) {
         expect(validates(result, definition === 'patchList' ? [value] : value, definition)).toBe(true)
@@ -471,20 +618,31 @@ describe('collectConfigSchemas', () => {
     expect(validates(result, [{ name: 'cordis:group', disabled: true, config: children }])).toBe(true)
     expect(validates(result, [{ name: 'cordis:group', disabled: true, group: true, config: children }])).toBe(false)
     expect(validates(result, [{ name: 'cordis:include', config: { path: './plugins.yml', initial: children } }])).toBe(false)
-    expect(validates(result, [{ name: 'cordis:include', disabled: { __jsExpr: 'ctx.disabled' }, config: { path: './plugins.yml', initial: children } }])).toBe(true)
+    expect(
+      validates(result, [
+        { name: 'cordis:include', disabled: { __jsExpr: 'ctx.disabled' }, config: { path: './plugins.yml', initial: children } },
+      ]),
+    ).toBe(true)
   })
 
   it('repeats projection limitations for every entry sharing a partial Config', async () => {
-    modules.set('partial', { Config: Schema.transform(Schema.string(), value => value) })
+    modules.set('partial', { Config: Schema.transform(Schema.string(), (value) => value) })
     const result = await collectConfigSchemas(profile, [row('partial'), row('noop'), { ...row('partial'), id: 'again' }], resolution)
-    expect(result['x-cordis'].entries.map(entry => entry.status)).toEqual(['partial', 'absent', 'partial'])
-    expect(result['x-cordis'].diagnostics.map(item => item.path)).toEqual(['/0', '/2'])
-    expect(new Set(result['x-cordis'].diagnostics.map(item => item.message)).size).toBe(1)
+    expect(result['x-cordis'].entries.map((entry) => entry.status)).toEqual(['partial', 'absent', 'partial'])
+    expect(result['x-cordis'].diagnostics.map((item) => item.path)).toEqual(['/0', '/2'])
+    expect(new Set(result['x-cordis'].diagnostics.map((item) => item.message)).size).toBe(1)
   })
 
   it('does not retain a stale patch constraint after an invalid duplicate-id row', async () => {
     modules.set('good', { Config: Schema.number() })
-    const result = await collectConfigSchemas(profile, [{ ...row('good'), id: 'same' }, { id: 'same', name: 17 }], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        { ...row('good'), id: 'same' },
+        { id: 'same', name: 17 },
+      ],
+      resolution,
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(validates(result, [{ id: 'same', config: 'unknown' }], 'patchList')).toBe(true)
     const unnamed: CollectedConfigEntry = { path: '/0', id: 'bad', status: 'error' }
@@ -512,7 +670,17 @@ describe('collectConfigSchemas', () => {
     const result = await collectConfigSchemas(profile, [{ ...row('cordis:group', [row('server')]), id: 'group', group: true }], resolution)
     expect(validates(result, [{ id: 'group', insert: [{ name: 'server', config: { port: 8080 } }] }], 'patchList')).toBe(true)
     expect(validates(result, [{ id: 'group', config: { __jsExpr: 'not a literal group' } }], 'patchList')).toBe(false)
-    expect(validates(result, [{ name: 'server', config: { port: 8080 }, inject: { tools: { required: false } }, isolate: { tools: true, llm: 'shared' }, intercept: null }])).toBe(true)
+    expect(
+      validates(result, [
+        {
+          name: 'server',
+          config: { port: 8080 },
+          inject: { tools: { required: false } },
+          isolate: { tools: true, llm: 'shared' },
+          intercept: null,
+        },
+      ]),
+    ).toBe(true)
     expect(validates(result, [{ name: 'server', config: { port: 8080 }, isolate: { tools: false } }])).toBe(false)
     expect(validates(result, [{ name: 'server', config: { port: 8080 }, inject: 1 }])).toBe(false)
     expect(validates(result, [{ name: 'server', config: { port: 8080 }, id: { __jsExpr: 'not literal' } }])).toBe(false)
@@ -521,11 +689,17 @@ describe('collectConfigSchemas', () => {
   it('allows config and disabled expressions but keeps Include and Group containers literal', async () => {
     modules.set('server', { Config: Schema.object({ ports: Schema.array(Number).required() }) })
     const result = await collectConfigSchemas(profile, [row('server')], resolution)
-    expect(validates(result, [{ name: 'server', config: { ports: [{ __jsExpr: 'ctx.port' }] }, disabled: { __jsExpr: 'ctx.disabled' } }])).toBe(true)
+    expect(
+      validates(result, [{ name: 'server', config: { ports: [{ __jsExpr: 'ctx.port' }] }, disabled: { __jsExpr: 'ctx.disabled' } }]),
+    ).toBe(true)
     expect(validates(result, [{ name: 'server', config: { __jsExpr: 'ctx.config' } }])).toBe(true)
     expect(validates(result, [{ name: 'cordis:group', config: { __jsExpr: 'ctx.entries' } }])).toBe(false)
     expect(validates(result, [{ name: 'cordis:include', config: { path: { __jsExpr: 'ctx.path' } } }])).toBe(false)
-    expect(validates(result, [{ name: 'cordis:include', config: { path: './plugins.yml', initial: [{ name: 'server', config: { __jsExpr: 'ctx.config' } }] } }])).toBe(true)
+    expect(
+      validates(result, [
+        { name: 'cordis:include', config: { path: './plugins.yml', initial: [{ name: 'server', config: { __jsExpr: 'ctx.config' } }] } },
+      ]),
+    ).toBe(true)
   })
 
   it('uses last root-tree ids without importing include-local ids into overlay targeting', async () => {
@@ -533,10 +707,11 @@ describe('collectConfigSchemas', () => {
     modules.set('string', { Config: Schema.string() })
     modules.set('boolean', { Config: Schema.boolean() })
     writeFileSync(join(dir, 'local.json'), JSON.stringify([{ ...row('boolean'), id: 'same' }]))
-    const result = await collectConfigSchemas(profile, [
-      { ...row('number'), id: 'same' }, { ...row('string'), id: 'same' },
-      row('cordis:include', { path: './local.json' }),
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [{ ...row('number'), id: 'same' }, { ...row('string'), id: 'same' }, row('cordis:include', { path: './local.json' })],
+      resolution,
+    )
     expect(validates(result, [{ id: 'same', config: 'value' }], 'patchList')).toBe(true)
     expect(validates(result, [{ id: 'same', config: true }], 'patchList')).toBe(false)
     expect(validates(result, [{ id: 'same', config: 3 }], 'patchList')).toBe(false)
@@ -546,17 +721,27 @@ describe('collectConfigSchemas', () => {
 
   it('does not keep stale target constraints when an unmounted group-metadata child replaces an indexed id', async () => {
     modules.set('number', { Config: Schema.number() })
-    const result = await collectConfigSchemas(profile, [
-      { ...row('number'), id: 'same' }, { ...row('noop', [{ ...row('noop'), id: 'same' }]), group: true },
-    ], resolution)
+    const result = await collectConfigSchemas(
+      profile,
+      [
+        { ...row('number'), id: 'same' },
+        { ...row('noop', [{ ...row('noop'), id: 'same' }]), group: true },
+      ],
+      resolution,
+    )
     expect(validates(result, [{ id: 'same', config: 'not-number' }], 'patchList')).toBe(true)
   })
 
   it('keeps different resolutions of one plugin name explicit instead of selecting one arbitrarily', async () => {
-    const result = await buildConfigSchemaDocument('test', [
-      { path: '/0', name: './plugin.js', status: 'schema', native: Schema.number() },
-      { path: '/1/include/0', name: './plugin.js', status: 'schema', native: Schema.string() },
-    ], new Map(), [])
+    const result = await buildConfigSchemaDocument(
+      'test',
+      [
+        { path: '/0', name: './plugin.js', status: 'schema', native: Schema.number() },
+        { path: '/1/include/0', name: './plugin.js', status: 'schema', native: Schema.string() },
+      ],
+      new Map(),
+      [],
+    )
     expect(result['x-cordis'].complete).toBe(false)
     expect(result['x-cordis'].entries[0]!.configRef).not.toBe(result['x-cordis'].entries[1]!.configRef)
     expect(validates(result, [{ name: './plugin.js', config: 3 }])).toBe(true)
@@ -565,16 +750,19 @@ describe('collectConfigSchemas', () => {
     expect(result['x-cordis'].diagnostics[0]!.message).toContain('multiple collected schemas')
   })
 
-  it.each(['unsupported', 'error'] as const)('keeps an %s alternate resolution open without weakening a known patch target', async (status) => {
-    const known: CollectedConfigEntry = { path: '/0', id: 'known', name: './plugin.js', status: 'schema', native: Schema.number() }
-    const other: CollectedConfigEntry = { path: '/1/include/0', name: './plugin.js', status }
-    const result = await buildConfigSchemaDocument('test', [known, other], new Map([['known', known]]), [])
-    expect(result['x-cordis'].complete).toBe(false)
-    expect(result['x-cordis'].entries[1]!.configRef).toBe('#/$defs/unknownConfig')
-    expect(validates(result, [{ name: './plugin.js', config: 'value' }])).toBe(true)
-    expect(validates(result, [{ id: 'known', config: 'value' }], 'patchList')).toBe(false)
-    expect(result['x-cordis'].diagnostics.some(item => item.message.includes('multiple collected schemas'))).toBe(true)
-  })
+  it.each(['unsupported', 'error'] as const)(
+    'keeps an %s alternate resolution open without weakening a known patch target',
+    async (status) => {
+      const known: CollectedConfigEntry = { path: '/0', id: 'known', name: './plugin.js', status: 'schema', native: Schema.number() }
+      const other: CollectedConfigEntry = { path: '/1/include/0', name: './plugin.js', status }
+      const result = await buildConfigSchemaDocument('test', [known, other], new Map([['known', known]]), [])
+      expect(result['x-cordis'].complete).toBe(false)
+      expect(result['x-cordis'].entries[1]!.configRef).toBe('#/$defs/unknownConfig')
+      expect(validates(result, [{ name: './plugin.js', config: 'value' }])).toBe(true)
+      expect(validates(result, [{ id: 'known', config: 'value' }], 'patchList')).toBe(false)
+      expect(result['x-cordis'].diagnostics.some((item) => item.message.includes('multiple collected schemas'))).toBe(true)
+    },
+  )
 
   it('uses an unknown schema for an indexed target without a collected declaration', async () => {
     const missing: CollectedConfigEntry = { path: '/0', id: 'missing', name: 'missing', status: 'error' }

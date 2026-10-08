@@ -1,15 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-agent-preset",
-  "description": "Agent-preset surfaces: the default for later sessions, this session's seat, and the composition editor",
   "version": "0.2.1-alpha.1",
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Agent-preset surfaces: the default for later sessions, this session's seat, and the composition editor",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/client/ui-agent-preset"
   },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -25,29 +28,14 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "dsh": {
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-api-session-controller",
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-session",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-api-remotes"
-      ],
-      "platform": "web"
-    }
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "vp pack",
+    "watch": "vp pack --watch"
   },
-  "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
@@ -70,10 +58,22 @@
     "@types/react": "~18.3.1",
     "react": "^18.2.0"
   },
-  "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.d.ts"
-  ],
-  "dependencies": {}
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  }
 }

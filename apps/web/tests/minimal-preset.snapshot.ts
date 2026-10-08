@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -29,8 +29,8 @@ const PROMPT = "Use the bash tool to run exactly: printf 'MINIMAL_BASH_CARD_OK\\
 
 /** Rendered text of the system prompt surface node, or undefined when the surface carries none. */
 function systemPromptText(session: Session): string | undefined {
-  const message = session.deriveMessages().find(candidate => candidate.role === 'system')
-  return message?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+  const message = session.deriveMessages().find((candidate) => candidate.role === 'system')
+  return message?.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
 }
 
 describe('minimal agent preset', () => {
@@ -52,12 +52,14 @@ describe('minimal agent preset', () => {
       sessionId: SessionId('minimal-preset-smoke'),
       meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-      setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
+      setup: (agentCtx) => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
     })
-    agentHandle.agent.followup(createUserMessage({
-      content: [{ type: 'text', text: PROMPT }],
-      source: { kind: 'user' },
-    }))
+    agentHandle.agent.followup(
+      createUserMessage({
+        content: [{ type: 'text', text: PROMPT }],
+        source: { kind: 'user' },
+      }),
+    )
     await agentHandle.agent.whenIdle()
   })
 
@@ -81,8 +83,11 @@ describe('minimal agent preset', () => {
     if (requestHeader === undefined) throw new Error('the minimal agent issued no model request')
     const systemPrompt = systemPromptText(agentHandle.agent.session)
     if (systemPrompt === undefined) throw new Error('the minimal agent issued no system prompt')
-    expect(agentHandle.agent.session.snapshotEvents().some(event => event.type === 'user/message'
-      && event.data.source.kind === 'runtime-context')).toBe(false)
+    expect(
+      agentHandle.agent.session
+        .snapshotEvents()
+        .some((event) => event.type === 'user/message' && event.data.source.kind === 'runtime-context'),
+    ).toBe(false)
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'fs')).toBeUndefined()
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'compaction')).toBeUndefined()
 
@@ -103,16 +108,17 @@ describe('minimal agent preset', () => {
       arguments: { command: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"' },
       agent: agentHandle.agent,
     })
-    const text = (result: typeof bash): string => result.content
-      .filter(block => block.type === 'text')
-      .map(block => block.text)
-      .join('')
-      .replaceAll(scaffold.workspaceCwd, '{{cwd}}')
-      .trimEnd()
+    const text = (result: typeof bash): string =>
+      result.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('')
+        .replaceAll(scaffold.workspaceCwd, '{{cwd}}')
+        .trimEnd()
 
     expect({
       prompt: systemPrompt,
-      tools: requestHeader.tools?.map(tool => tool.name),
+      tools: requestHeader.tools?.map((tool) => tool.name),
       goalCommand: scaffold.ctx.commands.find(agentHandle.agent, 'goal') !== undefined,
       bash: text(bash),
     }).toMatchInlineSnapshot(`
@@ -126,56 +132,66 @@ describe('minimal agent preset', () => {
         ],
       }
     `)
-    expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name)))
-      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
+    expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name))).toEqual(
+      scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)),
+    )
   })
 
-  it.skipIf(MODE === 'record')('expands the completed persistent Bash call in the Web conversation', async () => {
-    onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-persistent-bash-card') })
-    browser = await chromium.launch()
-    page = await newEnglishPage(browser)
-    tripwire = watchConsole(page)
-    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+  it.skipIf(MODE === 'record')(
+    'expands the completed persistent Bash call in the Web conversation',
+    async () => {
+      onTestFailed(() => {
+        if (page !== undefined) void saveFailureShot(page, 'web-minimal-persistent-bash-card')
+      })
+      browser = await chromium.launch()
+      page = await newEnglishPage(browser)
+      tripwire = watchConsole(page)
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
 
-    const groupRow = page.locator('[role="treeitem"]').first()
-    await groupRow.waitFor({ timeout: 15_000 })
-    await groupRow.click()
-    const sessionRow = page.locator('[role="treeitem"]').nth(1)
-    await sessionRow.waitFor({ timeout: 10_000 })
-    await sessionRow.click()
-    await page.getByText('MINIMAL_PRESET_REQUEST_OK', { exact: true }).waitFor({ timeout: 15_000 })
+      const groupRow = page.locator('[role="treeitem"]').first()
+      await groupRow.waitFor({ timeout: 15_000 })
+      await groupRow.click()
+      const sessionRow = page.locator('[role="treeitem"]').nth(1)
+      await sessionRow.waitFor({ timeout: 10_000 })
+      await sessionRow.click()
+      await page.getByText('MINIMAL_PRESET_REQUEST_OK', { exact: true }).waitFor({ timeout: 15_000 })
 
-    const process = page.locator('[data-turn-process]')
-    await process.waitFor({ timeout: 15_000 })
-    await expect.poll(() => process.getAttribute('aria-expanded')).toBe('false')
-    await process.click()
-    await expect.poll(() => process.getAttribute('aria-expanded')).toBe('true')
+      const process = page.locator('[data-turn-process]')
+      await process.waitFor({ timeout: 15_000 })
+      await expect.poll(() => process.getAttribute('aria-expanded')).toBe('false')
+      await process.click()
+      await expect.poll(() => process.getAttribute('aria-expanded')).toBe('true')
 
-    const group = page.locator('[data-chat-group-key]').filter({ has: page.locator('[data-sample="bash"]') }).first()
-    const groupControl = group.locator('[data-process-activity]')
-    await groupControl.waitFor({ timeout: 15_000 })
-    await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('false')
-    const row = group.locator('[data-sample="bash"]').first()
-    expect(await row.isVisible()).toBe(false)
-    await groupControl.click()
-    await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('true')
-    await row.waitFor({ timeout: 15_000 })
-    await expect.poll(() => row.getAttribute('aria-expanded')).toBe('false')
-    await row.click()
+      const group = page
+        .locator('[data-chat-group-key]')
+        .filter({ has: page.locator('[data-sample="bash"]') })
+        .first()
+      const groupControl = group.locator('[data-process-activity]')
+      await groupControl.waitFor({ timeout: 15_000 })
+      await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('false')
+      const row = group.locator('[data-sample="bash"]').first()
+      expect(await row.isVisible()).toBe(false)
+      await groupControl.click()
+      await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('true')
+      await row.waitFor({ timeout: 15_000 })
+      await expect.poll(() => row.getAttribute('aria-expanded')).toBe('false')
+      await row.click()
 
-    await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
-    const call = row.locator('xpath=..')
-    await call.getByText('IN', { exact: true }).waitFor()
-    await call.getByText('OUT', { exact: true }).waitFor()
-    await call.getByText('MINIMAL_BASH_CARD_OK\n[Command finished with exit code 0]', { exact: true }).waitFor()
-    await call.getByText(/"command": "printf 'MINIMAL_BASH_CARD_OK/).waitFor()
+      await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
+      const call = row.locator('xpath=..')
+      await call.getByText('IN', { exact: true }).waitFor()
+      await call.getByText('OUT', { exact: true }).waitFor()
+      await call.getByText('MINIMAL_BASH_CARD_OK\n[Command finished with exit code 0]', { exact: true }).waitFor()
+      await call.getByText(/"command": "printf 'MINIMAL_BASH_CARD_OK/).waitFor()
 
-    const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
-    expect(tripwire.pageErrors).toEqual([])
-    expect(tripwire.warnings).toEqual([])
-  }, 60_000)
+      const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
+      await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    },
+    60_000,
+  )
 
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [

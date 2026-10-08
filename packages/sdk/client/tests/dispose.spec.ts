@@ -6,7 +6,7 @@
 
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { disposeRuntimeProcess } from '../src/dispose.ts'
 
 /** What fells a scripted {@link FakeChild}. */
@@ -41,9 +41,15 @@ class FakeChild extends EventEmitter {
 
   constructor(private readonly script: FakeChildScript = {}) {
     super()
-    this.stdin = script.stdin === false
-      ? null
-      : { end: () => { this.stdinEnded = true; this.maybeDie('eof') } }
+    this.stdin =
+      script.stdin === false
+        ? null
+        : {
+            end: () => {
+              this.stdinEnded = true
+              this.maybeDie('eof')
+            },
+          }
   }
 
   kill(signal: NodeJS.Signals): boolean {
@@ -173,11 +179,7 @@ describe('disposeRuntimeProcess', () => {
       return false
     })
 
-    await expect(disposeRuntimeProcess(
-      asChild(fake),
-      { disposeEofGraceMs: 1, disposeGraceMs: 1000 },
-      'win32',
-    )).rejects.toBe(failure)
+    await expect(disposeRuntimeProcess(asChild(fake), { disposeEofGraceMs: 1, disposeGraceMs: 1000 }, 'win32')).rejects.toBe(failure)
     expect(fake.kills).toEqual(['SIGKILL'])
     expect(fake.listenerCount('error')).toBe(0)
     expect(fake.listenerCount('exit')).toBe(0)
@@ -186,13 +188,14 @@ describe('disposeRuntimeProcess', () => {
   it('wraps a synchronous forced-termination exception and removes its listeners', async () => {
     const fake = new FakeChild()
     const failure = new Error('invalid signal state')
-    vi.spyOn(fake, 'kill').mockImplementation(() => { throw failure })
+    vi.spyOn(fake, 'kill').mockImplementation(() => {
+      throw failure
+    })
 
-    await expect(disposeRuntimeProcess(
-      asChild(fake),
-      { disposeEofGraceMs: 1, disposeGraceMs: 1000 },
-      'win32',
-    )).rejects.toMatchObject({ message: 'SIGKILL failed', cause: failure })
+    await expect(disposeRuntimeProcess(asChild(fake), { disposeEofGraceMs: 1, disposeGraceMs: 1000 }, 'win32')).rejects.toMatchObject({
+      message: 'SIGKILL failed',
+      cause: failure,
+    })
     expect(fake.listenerCount('error')).toBe(0)
     expect(fake.listenerCount('exit')).toBe(0)
   })
@@ -204,11 +207,9 @@ describe('disposeRuntimeProcess', () => {
       return false
     })
 
-    await expect(disposeRuntimeProcess(
-      asChild(fake),
-      { disposeEofGraceMs: 1, disposeGraceMs: 10 },
-      'win32',
-    )).rejects.toThrow('runtime process did not exit within 10ms after SIGKILL was refused')
+    await expect(disposeRuntimeProcess(asChild(fake), { disposeEofGraceMs: 1, disposeGraceMs: 10 }, 'win32')).rejects.toThrow(
+      'runtime process did not exit within 10ms after SIGKILL was refused',
+    )
     expect(fake.listenerCount('error')).toBe(0)
     expect(fake.listenerCount('exit')).toBe(0)
   })
@@ -220,11 +221,9 @@ describe('disposeRuntimeProcess', () => {
       return true
     })
 
-    await expect(disposeRuntimeProcess(
-      asChild(fake),
-      { disposeEofGraceMs: 1, disposeGraceMs: 10 },
-      'win32',
-    )).rejects.toThrow('runtime process did not exit within 10ms after SIGKILL was accepted')
+    await expect(disposeRuntimeProcess(asChild(fake), { disposeEofGraceMs: 1, disposeGraceMs: 10 }, 'win32')).rejects.toThrow(
+      'runtime process did not exit within 10ms after SIGKILL was accepted',
+    )
     expect(fake.listenerCount('error')).toBe(0)
     expect(fake.listenerCount('exit')).toBe(0)
   })

@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
@@ -47,7 +47,10 @@ async function repository(): Promise<string> {
 
 /** The sequence of the latest announcement for one session. */
 function announcedSeq(session: Session): number {
-  const event = session.snapshotEvents().filter(event => event.type === 'workspace/changes').at(-1)
+  const event = session
+    .snapshotEvents()
+    .filter((event) => event.type === 'workspace/changes')
+    .at(-1)
   if (event === undefined) throw new Error('no workspace/changes announcement')
   return event.seq
 }
@@ -63,8 +66,15 @@ describe('workspace-changes in a repository', () => {
     startTurn(session, 1)
     await settle(ctx, session)
 
-    await mutate(ctx, session, 1, 'edit', { file_path: 'a.txt', old_string: 'l2', new_string: 'l2 model' },
-      () => writeFile(join(cwd, 'a.txt'), 'l1\nl2 model\nl3\nl4\n'), { meta: { diffs: [{ path: 'a.txt', oldText: 'l2', newText: 'l2 model' }] } })
+    await mutate(
+      ctx,
+      session,
+      1,
+      'edit',
+      { file_path: 'a.txt', old_string: 'l2', new_string: 'l2 model' },
+      () => writeFile(join(cwd, 'a.txt'), 'l1\nl2 model\nl3\nl4\n'),
+      { meta: { diffs: [{ path: 'a.txt', oldText: 'l2', newText: 'l2 model' }] } },
+    )
     await mkdir(join(cwd, 'sub', 'dir'), { recursive: true })
     await writeFile(join(cwd, 'sub', 'dir', 'c.txt'), 'c\n')
     await writeFile(join(cwd, 'new.txt'), 'n1\nn2\n')
@@ -72,7 +82,9 @@ describe('workspace-changes in a repository', () => {
     toolCall(session, 1, 'bash', { command: 'printf > files' })
     // An ignored file is captured before its first edit and read again at turn end; repeated edits count once.
     await mutate(ctx, session, 1, 'write', { file_path: '.env', content: 'A=1\n' }, () => writeFile(join(cwd, '.env'), 'A=1\n'))
-    await mutate(ctx, session, 1, 'edit', { file_path: '.env', old_string: 'A=1', new_string: 'A=1\nB=2' }, () => writeFile(join(cwd, '.env'), 'A=1\nB=2\n'))
+    await mutate(ctx, session, 1, 'edit', { file_path: '.env', old_string: 'A=1', new_string: 'A=1\nB=2' }, () =>
+      writeFile(join(cwd, '.env'), 'A=1\nB=2\n'),
+    )
     await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, () => Promise.resolve())
     await mutate(ctx, session, 1, 'write', { file_path: 'failed.txt', content: 'x' }, () => Promise.resolve(), { isError: true })
     // A created ignored file that is gone again by turn end is not a change.
@@ -82,8 +94,8 @@ describe('workspace-changes in a repository', () => {
     endTurn(session, 1)
     await settle(ctx, session)
 
-    const events = session.snapshotEvents().filter(event => event.type === 'workspace/changes')
-    expect(events.map(event => event.data)).toEqual([{ turn: 1 }])
+    const events = session.snapshotEvents().filter((event) => event.type === 'workspace/changes')
+    expect(events.map((event) => event.data)).toEqual([{ turn: 1 }])
     const [recorded, ...rest] = changes(ctx, session)
     expect(rest).toEqual([])
     expect(recorded).toMatchObject({ turn: 1, cwd, total: 5, added: 7, deleted: 1 })
@@ -97,7 +109,12 @@ describe('workspace-changes in a repository', () => {
       { path: 'sub/dir/c.txt', display: 'sub/dir/c.txt', added: 1, deleted: 0 },
     ])
     expect(git(cwd, 'status', '--porcelain').split('\n').filter(Boolean).sort()).toEqual([
-      ' M a.txt', ' M b.txt', '?? bin.dat', '?? new.txt', '?? sub/', '?? u.txt',
+      ' M a.txt',
+      ' M b.txt',
+      '?? bin.dat',
+      '?? new.txt',
+      '?? sub/',
+      '?? u.txt',
     ])
     // Snapshot objects live in the recorder's temporary directory; the repository's own store is untouched.
     expect(looseObjects(cwd)).toBe(repositoryObjects)
@@ -113,7 +130,8 @@ describe('workspace-changes in a repository', () => {
   it('serves each listed file’s comparison from the snapshots or the captured copies', async () => {
     const cwd = await repository()
     await writeFile(join(cwd, 'long.txt'), `${'0123456789'.repeat(10)}\n`)
-    git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '-m', 'long')
+    git(cwd, 'add', '-A')
+    git(cwd, 'commit', '-q', '-m', 'long')
     const { ctx } = await boot({ maxFileBytes: 64 })
     const session = ctx.sessions.create(SessionId('compare'), { meta: { cwd } })
     startTurn(session, 1)
@@ -130,14 +148,24 @@ describe('workspace-changes in a repository', () => {
     await settle(ctx, session)
     const seq = announcedSeq(session)
     const [recorded] = changes(ctx, session)
-    expect(recorded!.files.map(file => file.display)).toEqual(['.env', 'a.txt', 'b.txt', 'bin.dat', 'long.txt', 'moved.txt', 'new.txt'])
+    expect(recorded!.files.map((file) => file.display)).toEqual(['.env', 'a.txt', 'b.txt', 'bin.dat', 'long.txt', 'moved.txt', 'new.txt'])
     const diff = (index: number) => ctx.workspaceChanges.diff(session.id, seq, index, signal)
     expect(await diff(0)).toEqual({
-      kind: 'text', path: '.env', display: '.env', before: false, after: true, coarse: false,
+      kind: 'text',
+      path: '.env',
+      display: '.env',
+      before: false,
+      after: true,
+      coarse: false,
       hunks: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 2, lines: ['+A=1', '+B=2'] }],
     })
     expect(await diff(1)).toEqual({
-      kind: 'text', path: 'a.txt', display: 'a.txt', before: true, after: true, coarse: false,
+      kind: 'text',
+      path: 'a.txt',
+      display: 'a.txt',
+      before: true,
+      after: true,
+      coarse: false,
       hunks: [{ oldStart: 1, oldLines: 3, newStart: 1, newLines: 3, lines: [' l1', '-l2', '+l2 model', ' l3'] }],
     })
     expect(await diff(2)).toMatchObject({ kind: 'text', path: 'b.txt', before: true, after: false, hunks: [{ lines: ['-x'] }] })
@@ -146,7 +174,15 @@ describe('workspace-changes in a repository', () => {
     expect(recorded!.files[4]).toMatchObject({ path: 'long.txt', added: 1, deleted: 0 })
     expect(await diff(4)).toEqual({ kind: 'oversized', path: 'long.txt', display: 'long.txt' })
     // A rename compares the old path's turn-start content with the new path's turn-end content.
-    expect(await diff(5)).toEqual({ kind: 'text', path: 'moved.txt', display: 'moved.txt', before: true, after: true, coarse: false, hunks: [] })
+    expect(await diff(5)).toEqual({
+      kind: 'text',
+      path: 'moved.txt',
+      display: 'moved.txt',
+      before: true,
+      after: true,
+      coarse: false,
+      hunks: [],
+    })
     expect(await diff(6)).toMatchObject({ kind: 'text', path: 'new.txt', before: false, after: true, hunks: [{ lines: ['+n1'] }] })
     expect(await diff(7)).toBeUndefined()
     expect(await ctx.workspaceChanges.diff(session.id, seq + 1, 0, signal)).toBeUndefined()
@@ -173,7 +209,7 @@ describe('workspace-changes in a repository', () => {
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toEqual([])
-    expect(warn.mock.calls.filter(call => String(call[0]).startsWith('workspace-changes:'))).toHaveLength(1)
+    expect(warn.mock.calls.filter((call) => String(call[0]).startsWith('workspace-changes:'))).toHaveLength(1)
   })
 
   it('places files above the working directory and outside the repository by their display rule', async () => {
@@ -188,17 +224,33 @@ describe('workspace-changes in a repository', () => {
     await settle(ctx, session)
     await writeFile(join(root, 'a.txt'), 'changed\n')
     await writeFile(join(cwd, 'inner.txt'), 'inner\n')
-    await mutate(ctx, session, 1, 'str_replace_editor', { command: 'insert', path: join(outside, 'note.txt'), insert_line: 0, new_str: 'one\ntwo\nthree\n' },
-      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\nthree\n'))
+    await mutate(
+      ctx,
+      session,
+      1,
+      'str_replace_editor',
+      { command: 'insert', path: join(outside, 'note.txt'), insert_line: 0, new_str: 'one\ntwo\nthree\n' },
+      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\nthree\n'),
+    )
     endTurn(session, 1, 'blocked')
     await settle(ctx, session)
     const [recorded] = changes(ctx, session)
     expect(recorded!.files).toEqual([
       { path: join(await realpath(root), 'a.txt'), display: '../a.txt', added: 1, deleted: 3 },
       { path: 'inner.txt', display: 'inner.txt', added: 1, deleted: 0 },
-      { path: join(await realpath(outside), 'note.txt'), display: `~/${outside.slice(homedir().length + 1)}/note.txt`, added: 3, deleted: 0 },
+      {
+        path: join(await realpath(outside), 'note.txt'),
+        display: `~/${outside.slice(homedir().length + 1)}/note.txt`,
+        added: 3,
+        deleted: 0,
+      },
     ])
-    expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 2, signal)).toMatchObject({ kind: 'text', before: false, after: true, hunks: [{ lines: ['+one', '+two', '+three'] }] })
+    expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 2, signal)).toMatchObject({
+      kind: 'text',
+      before: false,
+      after: true,
+      hunks: [{ lines: ['+one', '+two', '+three'] }],
+    })
   })
 
   it('records inside the turn when the agent stops, and again after turn/end only when tools settled later', async () => {
@@ -213,12 +265,12 @@ describe('workspace-changes in a repository', () => {
     toolCall(session, 1, 'bash', { command: 'x' })
     await ctx.serial('agent/turn-stopping', { agent, turn: 7, signal })
     await ctx.serial('agent/turn-stopping', { agent, turn: 1, signal })
-    const inTurn = session.snapshotEvents().find(event => event.type === 'workspace/changes')
+    const inTurn = session.snapshotEvents().find((event) => event.type === 'workspace/changes')
     expect(ctx.workspaceChanges.summary(session.id, inTurn!.seq)).toMatchObject({ turn: 1, total: 1 })
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toHaveLength(1)
-    expect(session.snapshotEvents().find(event => event.type === 'turn/end')!.seq).toBeGreaterThan(inTurn!.seq)
+    expect(session.snapshotEvents().find((event) => event.type === 'turn/end')!.seq).toBeGreaterThan(inTurn!.seq)
 
     startTurn(session, 2)
     await settle(ctx, session)
@@ -229,8 +281,8 @@ describe('workspace-changes in a repository', () => {
     toolCall(session, 2, 'bash', { command: 'steered' })
     endTurn(session, 2)
     await settle(ctx, session)
-    const second = changes(ctx, session).filter(data => data.turn === 2)
-    expect(second.map(data => data.files.map(file => file.path))).toEqual([['two.txt'], []])
+    const second = changes(ctx, session).filter((data) => data.turn === 2)
+    expect(second.map((data) => data.files.map((file) => file.path))).toEqual([['two.txt'], []])
     expect(second[1]).toMatchObject({ total: 0 })
 
     startTurn(session, 3)
@@ -238,7 +290,7 @@ describe('workspace-changes in a repository', () => {
     toolCall(session, 3, 'read', { file_path: 'a.txt' })
     endTurn(session, 3)
     await settle(ctx, session)
-    expect(changes(ctx, session).filter(data => data.turn === 3)).toEqual([])
+    expect(changes(ctx, session).filter((data) => data.turn === 3)).toEqual([])
   })
 
   it('keeps an interrupted turn’s record when the next turn starts before it settles', async () => {
@@ -256,7 +308,10 @@ describe('workspace-changes in a repository', () => {
     toolCall(session, 2, 'bash', { command: 'x' })
     endTurn(session, 2)
     await settle(ctx, session)
-    expect(changes(ctx, session).map(data => [data.turn, data.files.map(file => file.display)])).toEqual([[1, ['one.txt']], [2, ['two.txt']]])
+    expect(changes(ctx, session).map((data) => [data.turn, data.files.map((file) => file.display)])).toEqual([
+      [1, ['one.txt']],
+      [2, ['two.txt']],
+    ])
   })
 
   it('caps the file list while reporting the complete count', async () => {
@@ -272,7 +327,7 @@ describe('workspace-changes in a repository', () => {
     await settle(ctx, session)
     const [recorded] = changes(ctx, session)
     expect(recorded!.total).toBe(3)
-    expect(recorded!.files.map(file => file.display)).toEqual(['c.txt', 'd.txt'])
+    expect(recorded!.files.map((file) => file.display)).toEqual(['c.txt', 'd.txt'])
     expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 2, signal)).toBeUndefined()
   })
 
@@ -291,7 +346,7 @@ describe('workspace-changes in a repository', () => {
     endTurn(session, 1)
     await settle(ctx, session)
     expect(changes(ctx, session)).toEqual([])
-    const own = warn.mock.calls.map(call => String(call[0])).filter(message => message.startsWith('workspace-changes:'))
+    const own = warn.mock.calls.map((call) => String(call[0])).filter((message) => message.startsWith('workspace-changes:'))
     expect(own).toHaveLength(1)
     expect(own[0]).toContain('missing-git')
   })
@@ -302,19 +357,22 @@ describe('workspace-changes in a repository', () => {
     await mkdir(sub)
     git(sub, 'init', '-q', '-b', 'main')
     await writeFile(join(sub, 'inner.txt'), 'inner\n')
-    git(sub, 'add', '-A'); git(sub, 'commit', '-q', '-m', 'inner')
-    git(cwd, 'add', 'sub'); git(cwd, 'commit', '-q', '-m', 'gitlink')
+    git(sub, 'add', '-A')
+    git(sub, 'commit', '-q', '-m', 'inner')
+    git(cwd, 'add', 'sub')
+    git(cwd, 'commit', '-q', '-m', 'gitlink')
     const { ctx } = await boot()
     const session = ctx.sessions.create(SessionId('gitlink'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'edit', { file_path: 'sub/inner.txt', old_string: 'inner', new_string: 'inner\nedited' },
-      () => writeFile(join(sub, 'inner.txt'), 'inner\nedited\n'))
+    await mutate(ctx, session, 1, 'edit', { file_path: 'sub/inner.txt', old_string: 'inner', new_string: 'inner\nedited' }, () =>
+      writeFile(join(sub, 'inner.txt'), 'inner\nedited\n'),
+    )
     await mutate(ctx, session, 1, 'write', { file_path: 'top.txt', content: 'top\n' }, () => writeFile(join(cwd, 'top.txt'), 'top\n'))
     await mutate(ctx, session, 1, 'write', { file_path: 'same.txt', content: 'same\n' }, () => writeFile(join(cwd, 'same.txt'), 'same\n'))
     endTurn(session, 1)
     await settle(ctx, session)
-    expect(changes(ctx, session).map(summary => summary.files.map(file => file.display))).toEqual([['top.txt']])
+    expect(changes(ctx, session).map((summary) => summary.files.map((file) => file.display))).toEqual([['top.txt']])
   })
 
   it('rejects non-positive bounds at load', async () => {
@@ -323,7 +381,9 @@ describe('workspace-changes in a repository', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(LocalSubprocessRuntime)
     await expect(ctx.plugin(WorkspaceChanges, { maxFiles: 0 } as WorkspaceChanges.Config)).rejects.toThrow('positive integer maxFiles')
-    await expect(ctx.plugin(WorkspaceChanges, { diffTimeoutMs: 1.5 } as WorkspaceChanges.Config)).rejects.toThrow('positive integer diffTimeoutMs')
+    await expect(ctx.plugin(WorkspaceChanges, { diffTimeoutMs: 1.5 } as WorkspaceChanges.Config)).rejects.toThrow(
+      'positive integer diffTimeoutMs',
+    )
   })
 })
 
@@ -339,34 +399,60 @@ describe('workspace-changes without a repository', () => {
     const session = ctx.sessions.create(SessionId('plain'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'write', { file_path: 'existing.txt', content: 'after\nmore\n' }, () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\n'))
-    await mutate(ctx, session, 1, 'edit', { file_path: 'existing.txt', old_string: 'more', new_string: 'more\nagain' }, () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\nagain\n'))
+    await mutate(ctx, session, 1, 'write', { file_path: 'existing.txt', content: 'after\nmore\n' }, () =>
+      writeFile(join(cwd, 'existing.txt'), 'after\nmore\n'),
+    )
+    await mutate(ctx, session, 1, 'edit', { file_path: 'existing.txt', old_string: 'more', new_string: 'more\nagain' }, () =>
+      writeFile(join(cwd, 'existing.txt'), 'after\nmore\nagain\n'),
+    )
     // Shell edits and scratch files under a temporary root stay out; a file elsewhere outside the workspace counts.
     await writeFile(join(cwd, 'shell.txt'), 'shell\nedited\n')
     toolCall(session, 1, 'bash', { command: 'x' })
     await mutate(ctx, session, 1, 'write', { file_path: join(tmpdir(), 'scratch.txt'), content: 'scratch\n' }, () => Promise.resolve())
-    await mutate(ctx, session, 1, 'str_replace_editor', { command: 'create', path: join(outside, 'note.txt'), file_text: 'one\ntwo\n' },
-      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\n'))
+    await mutate(
+      ctx,
+      session,
+      1,
+      'str_replace_editor',
+      { command: 'create', path: join(outside, 'note.txt'), file_text: 'one\ntwo\n' },
+      () => writeFile(join(outside, 'note.txt'), 'one\ntwo\n'),
+    )
     // A file the shell edits after a file tool touched it is compared by its final content.
     await mutate(ctx, session, 1, 'write', { file_path: 'mixed.txt', content: 'tool\n' }, () => writeFile(join(cwd, 'mixed.txt'), 'tool\n'))
     await writeFile(join(cwd, 'mixed.txt'), 'tool\nshell\n')
     toolCall(session, 1, 'bash', { command: 'x' })
     endTurn(session, 1)
     await settle(ctx, session)
-    expect(changes(ctx, session)).toEqual([{
-      turn: 1, cwd, total: 3, added: 7, deleted: 1,
-      files: [
-        { path: 'existing.txt', display: 'existing.txt', added: 3, deleted: 1 },
-        { path: 'mixed.txt', display: 'mixed.txt', added: 2, deleted: 0 },
-        { path: join(await realpath(outside), 'note.txt'), display: `~/${outside.slice(homedir().length + 1)}/note.txt`, added: 2, deleted: 0 },
-      ],
-    }])
+    expect(changes(ctx, session)).toEqual([
+      {
+        turn: 1,
+        cwd,
+        total: 3,
+        added: 7,
+        deleted: 1,
+        files: [
+          { path: 'existing.txt', display: 'existing.txt', added: 3, deleted: 1 },
+          { path: 'mixed.txt', display: 'mixed.txt', added: 2, deleted: 0 },
+          {
+            path: join(await realpath(outside), 'note.txt'),
+            display: `~/${outside.slice(homedir().length + 1)}/note.txt`,
+            added: 2,
+            deleted: 0,
+          },
+        ],
+      },
+    ])
     const seq = announcedSeq(session)
     expect(await ctx.workspaceChanges.diff(session.id, seq, 0, signal)).toEqual({
-      kind: 'text', path: 'existing.txt', display: 'existing.txt', before: true, after: true, coarse: false,
+      kind: 'text',
+      path: 'existing.txt',
+      display: 'existing.txt',
+      before: true,
+      after: true,
+      coarse: false,
       hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 3, lines: ['-before', '+after', '+more', '+again'] }],
     })
-    expect(warn.mock.calls.filter(call => String(call[0]).startsWith('workspace-changes:'))).toEqual([])
+    expect(warn.mock.calls.filter((call) => String(call[0]).startsWith('workspace-changes:'))).toEqual([])
     await expect(stat(join(cwd, '.git'))).rejects.toThrow()
   })
 
@@ -379,11 +465,13 @@ describe('workspace-changes without a repository', () => {
     for (const name of ['TMPDIR', 'TMP', 'TEMP'] as const) process.env[name] = tempRoot
     cleanups.push(async () => {
       for (const name of ['TMPDIR', 'TMP', 'TEMP'] as const) {
-        if (previous[name] === undefined) Reflect.deleteProperty(process.env, name); else process.env[name] = previous[name]
+        if (previous[name] === undefined) Reflect.deleteProperty(process.env, name)
+        else process.env[name] = previous[name]
       }
     })
     // Other tooling may create its own directories under the redirected temp root; only the recorder's count.
-    const recorderDirs = async (): Promise<string[]> => (await readdir(tempRoot)).filter(name => name.startsWith('dsh-workspace-changes-'))
+    const recorderDirs = async (): Promise<string[]> =>
+      (await readdir(tempRoot)).filter((name) => name.startsWith('dsh-workspace-changes-'))
     await writeFile(join(cwd, 'grows.txt'), 'small\n')
     await writeFile(join(cwd, 'huge.txt'), 'a'.repeat(20))
     await writeFile(join(cwd, 'mixed.dat'), Uint8Array.of(65, 0, 66))
@@ -392,13 +480,19 @@ describe('workspace-changes without a repository', () => {
     const session = ctx.sessions.create(SessionId('bounds'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
-    await mutate(ctx, session, 1, 'write', { file_path: 'grows.txt', content: 'x' }, () => writeFile(join(cwd, 'grows.txt'), 'x'.repeat(17)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'grows.txt', content: 'x' }, () =>
+      writeFile(join(cwd, 'grows.txt'), 'x'.repeat(17)),
+    )
     // Both sides beyond the cap are never known to match, so the file is listed rather than dropped.
     await mutate(ctx, session, 1, 'write', { file_path: 'huge.txt', content: 'b' }, () => writeFile(join(cwd, 'huge.txt'), 'b'.repeat(20)))
     // An oversized side outranks a binary one in the card and the tab alike.
-    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.dat', content: 'x' }, () => writeFile(join(cwd, 'mixed.dat'), 'x'.repeat(17)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'mixed.dat', content: 'x' }, () =>
+      writeFile(join(cwd, 'mixed.dat'), 'x'.repeat(17)),
+    )
     await mutate(ctx, session, 1, 'write', { file_path: 'shrinks.txt', content: 'x' }, () => writeFile(join(cwd, 'shrinks.txt'), 'x'))
-    await mutate(ctx, session, 1, 'write', { file_path: 'bin.dat', content: 'x' }, () => writeFile(join(cwd, 'bin.dat'), Uint8Array.of(65, 0, 66)))
+    await mutate(ctx, session, 1, 'write', { file_path: 'bin.dat', content: 'x' }, () =>
+      writeFile(join(cwd, 'bin.dat'), Uint8Array.of(65, 0, 66)),
+    )
     // A directory at the path, before or after the call, is neither absent nor a file, so the path is not tracked.
     await mutate(ctx, session, 1, 'write', { file_path: 'dir', content: 'x' }, () => mkdir(join(cwd, 'dir')))
     await mutate(ctx, session, 1, 'write', { file_path: 'already-dir', content: 'x' }, () => Promise.resolve())
@@ -415,16 +509,26 @@ describe('workspace-changes without a repository', () => {
     const seq = announcedSeq(session)
     expect(await ctx.workspaceChanges.diff(session.id, seq, 0, signal)).toEqual({ kind: 'binary', path: 'bin.dat', display: 'bin.dat' })
     for (const index of [1, 2, 3]) {
-      expect(await ctx.workspaceChanges.diff(session.id, seq, index, signal)).toMatchObject({ kind: 'oversized', path: recorded!.files[index]!.path })
+      expect(await ctx.workspaceChanges.diff(session.id, seq, index, signal)).toMatchObject({
+        kind: 'oversized',
+        path: recorded!.files[index]!.path,
+      })
     }
-    expect(await ctx.workspaceChanges.diff(session.id, seq, 4, signal)).toMatchObject({ kind: 'text', before: false, after: true, hunks: [{ lines: ['+x'] }] })
+    expect(await ctx.workspaceChanges.diff(session.id, seq, 4, signal)).toMatchObject({
+      kind: 'text',
+      before: false,
+      after: true,
+      hunks: [{ lines: ['+x'] }],
+    })
     // Every copy lives under the Session's temporary directory and goes with it.
     const [scratch, ...others] = await recorderDirs()
     expect(others).toEqual([])
     expect(scratch).toBeDefined()
     expect((await readdir(join(tempRoot, scratch as string, 'captures'))).length).toBeGreaterThan(0)
     ctx.emit('session/disposed', session)
-    await vi.waitFor(async () => { expect(await recorderDirs()).toEqual([]) })
+    await vi.waitFor(async () => {
+      expect(await recorderDirs()).toEqual([])
+    })
   })
 
   it('drops a disposed session’s recorder and starts afresh on its next turn', async () => {
@@ -445,7 +549,7 @@ describe('workspace-changes without a repository', () => {
     toolCall(session, 2, 'bash', { command: 'x' })
     endTurn(session, 2)
     await settle(ctx, session)
-    expect(changes(ctx, session).map(data => data.files.map(file => file.display))).toEqual([['two.txt']])
+    expect(changes(ctx, session).map((data) => data.files.map((file) => file.display))).toEqual([['two.txt']])
 
     startTurn(session, 3)
     await settle(ctx, session)
@@ -454,7 +558,7 @@ describe('workspace-changes without a repository', () => {
     toolCall(session, 3, 'bash', { command: 'x' })
     endTurn(session, 3)
     await settle(ctx, session)
-    expect(session.snapshotEvents().filter(event => event.type === 'workspace/changes' && event.data.turn === 3)).toEqual([])
+    expect(session.snapshotEvents().filter((event) => event.type === 'workspace/changes' && event.data.turn === 3)).toEqual([])
   })
 
   it('ignores subagent sessions and sessions without a working directory', async () => {
@@ -490,12 +594,20 @@ describe('workspace-changes without git', () => {
       await settle(ctx, session)
       await writeFile(join(cwd, `${turn}.txt`), 'x\n')
       toolCall(session, turn, 'bash', { command: 'x' })
-      if (turn === 2) await mutate(ctx, session, turn, 'write', { file_path: 'w.txt', content: 'w\n' }, () => writeFile(join(cwd, 'w.txt'), 'w\n'))
+      if (turn === 2)
+        await mutate(ctx, session, turn, 'write', { file_path: 'w.txt', content: 'w\n' }, () => writeFile(join(cwd, 'w.txt'), 'w\n'))
       endTurn(session, turn)
       await settle(ctx, session)
     }
-    expect(changes(ctx, session)).toEqual([{ turn: 2, cwd, total: 1, added: 1, deleted: 0, files: [{ path: 'w.txt', display: 'w.txt', added: 1, deleted: 0 }] }])
-    expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 0, signal)).toMatchObject({ kind: 'text', before: false, after: true, hunks: [{ lines: ['+w'] }] })
+    expect(changes(ctx, session)).toEqual([
+      { turn: 2, cwd, total: 1, added: 1, deleted: 0, files: [{ path: 'w.txt', display: 'w.txt', added: 1, deleted: 0 }] },
+    ])
+    expect(await ctx.workspaceChanges.diff(session.id, announcedSeq(session), 0, signal)).toMatchObject({
+      kind: 'text',
+      before: false,
+      after: true,
+      hunks: [{ lines: ['+w'] }],
+    })
     expect(info).toHaveBeenCalledTimes(1)
     expect(info.mock.calls[0]![0]).toContain('git is unavailable')
   })
@@ -503,7 +615,9 @@ describe('workspace-changes without git', () => {
   it('treats the macOS developer-tools stub as absent until a developer directory is selected', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    cleanups.push(async () => { Object.defineProperty(process, 'platform', platform) })
+    cleanups.push(async () => {
+      Object.defineProperty(process, 'platform', platform)
+    })
     const probes: Array<{ done: Promise<{ exitCode: number | null; signal: null }>; available: boolean; executable?: string }> = [
       { done: Promise.reject(new Error('spawn failed')), available: false },
       { done: Promise.resolve({ exitCode: 1, signal: null }), available: false },
@@ -516,14 +630,15 @@ describe('workspace-changes without git', () => {
       const { ctx } = await boot()
       vi.spyOn(ctx.subprocess, 'resolveExecutable').mockResolvedValue(probe.executable ?? '/usr/bin/git')
       const real = ctx.subprocess.spawn.bind(ctx.subprocess)
-      const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation(spec =>
-        spec.argv[0] === '/usr/bin/xcode-select' ? { done: probe.done } as never : real(spec))
+      const spawn = vi
+        .spyOn(ctx.subprocess, 'spawn')
+        .mockImplementation((spec) => (spec.argv[0] === '/usr/bin/xcode-select' ? ({ done: probe.done } as never) : real(spec)))
       const info = vi.spyOn(ctx.logger, 'info').mockImplementation(() => undefined)
       vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
       const session = ctx.sessions.create(SessionId('stub'), { meta: { cwd } })
       startTurn(session, 1)
       await settle(ctx, session)
-      expect(spawn.mock.calls.some(call => call[0].argv[0] === '/usr/bin/xcode-select')).toBe(probe.executable === undefined)
+      expect(spawn.mock.calls.some((call) => call[0].argv[0] === '/usr/bin/xcode-select')).toBe(probe.executable === undefined)
       expect(info).toHaveBeenCalledTimes(probe.available ? 0 : 1)
       await ctx.fiber.dispose()
     }

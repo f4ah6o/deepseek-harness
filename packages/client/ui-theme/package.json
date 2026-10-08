@@ -1,15 +1,19 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-theme",
-  "description": "Theme plugin: Host bootstrap for the pre-plugin palette; DOM-free ThemeRuntime for light/dark/system state; --dsw-* token styles and Appearance settings row",
   "version": "0.2.1-alpha.1",
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Theme plugin: Host bootstrap for the pre-plugin palette; DOM-free ThemeRuntime for light/dark/system state; --dsw-* token styles and Appearance settings row",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/client/ui-theme"
   },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/styles",
+    "lib/types/**/*.d.ts"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -26,22 +30,15 @@
     "./package.json": "./package.json",
     "./brand-font.css": "./lib/styles/brand-font.css"
   },
-  "dsh": {
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-api-remotes"
-      ],
-      "platform": "web",
-      "immediately": true
-    }
+  "publishConfig": {
+    "access": "public"
   },
-  "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
+  "scripts": {
+    "bundle": "vp pack",
+    "watch": "vp pack --watch"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -55,22 +52,25 @@
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-settings": "workspace:*",
     "@types/react": "~18.3.1",
-    "react": "^18.2.0",
     "clsx": "^2.0.0",
-    "@deepseek-ai/dsh-settings": "workspace:*"
+    "react": "^18.2.0"
   },
-  "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/styles",
-    "lib/types/**/*.d.ts"
-  ],
-  "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
   },
-  "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:~"
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
   }
 }

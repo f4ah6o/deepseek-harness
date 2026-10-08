@@ -1,5 +1,5 @@
 /** Target-scoped watch streams with explicit delivery and asynchronous release barriers. */
-import { vi } from 'vitest'
+import { vi } from 'vite-plus/test'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WatchWorkspaceDirectory } from '../src/client/face.ts'
 
@@ -16,7 +16,11 @@ export class DirectoryWatch implements AsyncIterable<Event> {
   private wake: (() => void) | undefined
   private releaseGate: PromiseWithResolvers<undefined> | undefined
 
-  constructor(readonly sessionId: SessionId, readonly path: string, readonly signal: AbortSignal) {
+  constructor(
+    readonly sessionId: SessionId,
+    readonly path: string,
+    readonly signal: AbortSignal,
+  ) {
     this.lifetime = AbortSignal.any([signal, this.controller.signal])
   }
 
@@ -33,7 +37,7 @@ export class DirectoryWatch implements AsyncIterable<Event> {
   }
 
   holdRelease(): PromiseWithResolvers<undefined> {
-    return this.releaseGate ??= Promise.withResolvers<undefined>()
+    return (this.releaseGate ??= Promise.withResolvers<undefined>())
   }
 
   stop(): void {
@@ -42,13 +46,17 @@ export class DirectoryWatch implements AsyncIterable<Event> {
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<Event> {
-    const abort = (): void => { this.wake?.() }
+    const abort = (): void => {
+      this.wake?.()
+    }
     this.lifetime.addEventListener('abort', abort, { once: true })
     try {
       while (!this.lifetime.aborted) {
         const next = this.queue.shift()
         if (next === undefined) {
-          await new Promise<void>((resolve) => { this.wake = resolve })
+          await new Promise<void>((resolve) => {
+            this.wake = resolve
+          })
           this.wake = undefined
           continue
         }
@@ -81,7 +89,7 @@ export class DirectoryWatches {
   })
 
   forPath(path: string, occurrence = 0): Promise<DirectoryWatch> {
-    const current = (): DirectoryWatch | undefined => this.opened.filter(stream => stream.path === path)[occurrence]
+    const current = (): DirectoryWatch | undefined => this.opened.filter((stream) => stream.path === path)[occurrence]
     const stream = current()
     if (stream !== undefined) return Promise.resolve(stream)
     return new Promise((resolve) => {
@@ -103,7 +111,7 @@ export class DirectoryWatches {
 
   async dispose(): Promise<void> {
     for (const stream of this.opened) stream.stop()
-    await Promise.all(this.opened.map(stream => stream.released.promise))
+    await Promise.all(this.opened.map((stream) => stream.released.promise))
     this.waiters.clear()
   }
 }

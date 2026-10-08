@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { verifyCurrentGenerationInWorker } from '../src/migration-verifier.ts'
 
 const state = vi.hoisted(() => ({ workers: [] as unknown[] }))
@@ -8,7 +8,10 @@ vi.mock('node:worker_threads', () => ({
     readonly listeners = new Map<string, (value: never) => void>()
     readonly terminate = vi.fn<() => Promise<number>>(() => Promise.resolve(0))
 
-    constructor(readonly entry: string | URL, readonly options: unknown) {
+    constructor(
+      readonly entry: string | URL,
+      readonly options: unknown,
+    ) {
       state.workers.push(this)
     }
 
@@ -52,7 +55,10 @@ describe('migration verifier Worker lifecycle', () => {
     const verification = verifyCurrentGenerationInWorker('/stage', 'none', 'session', 2, expectedPrefix)
     const instance = worker()
     expect(instance.options.workerData).toEqual({
-      path: '/stage', compression: 'none', expectedId: 'session', expectedEventCount: 2,
+      path: '/stage',
+      compression: 'none',
+      expectedId: 'session',
+      expectedEventCount: 2,
       expectedPrefix,
     })
     instance.emit('message', { ok: true, result })
@@ -134,7 +140,9 @@ describe('migration verifier Worker lifecycle', () => {
 
     worker(0).emit('message', { ok: true, result })
     await first
-    await vi.waitFor(() => { expect(state.workers).toHaveLength(3) })
+    await vi.waitFor(() => {
+      expect(state.workers).toHaveLength(3)
+    })
 
     worker(1).emit('message', { ok: true, result })
     worker(2).emit('message', { ok: true, result })
@@ -158,12 +166,16 @@ describe('migration verifier Worker lifecycle', () => {
 
     worker(0).emit('message', { ok: true, result })
     await first
-    await vi.waitFor(() => { expect(state.workers).toHaveLength(3) })
+    await vi.waitFor(() => {
+      expect(state.workers).toHaveLength(3)
+    })
     expect(worker(2).options.workerData).toMatchObject({ path: '/third' })
 
     worker(1).emit('message', { ok: true, result })
     await second
-    await vi.waitFor(() => { expect(state.workers).toHaveLength(4) })
+    await vi.waitFor(() => {
+      expect(state.workers).toHaveLength(4)
+    })
     expect(worker(3).options.workerData).toMatchObject({ path: '/fourth' })
     if (fourth === undefined) throw new Error('fourth verification was not scheduled')
 
@@ -177,9 +189,7 @@ describe('migration verifier Worker lifecycle', () => {
     const second = verifyCurrentGenerationInWorker('/second', 'none', 'session', 0)
     const controller = new AbortController()
     const reason = new Error('queued verification cancelled')
-    const queued = verifyCurrentGenerationInWorker(
-      '/queued', 'none', 'session', 0, undefined, controller.signal,
-    )
+    const queued = verifyCurrentGenerationInWorker('/queued', 'none', 'session', 0, undefined, controller.signal)
 
     controller.abort(reason)
     await expect(queued).rejects.toBe(reason)
@@ -194,18 +204,22 @@ describe('migration verifier Worker lifecycle', () => {
   it('terminates an active Worker before rejecting cancellation', async () => {
     const controller = new AbortController()
     const reason = new Error('active verification cancelled')
-    const verification = verifyCurrentGenerationInWorker(
-      '/stage', 'none', 'session', 0, undefined, controller.signal,
-    )
+    const verification = verifyCurrentGenerationInWorker('/stage', 'none', 'session', 0, undefined, controller.signal)
     const instance = worker()
     let finishTermination: ((value: number) => void) | undefined
-    instance.terminate.mockReturnValueOnce(new Promise((resolve) => {
-      finishTermination = resolve
-    }))
+    instance.terminate.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishTermination = resolve
+      }),
+    )
     let settled = false
     void verification.then(
-      () => { settled = true },
-      () => { settled = true },
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
     )
 
     controller.abort(reason)
@@ -219,9 +233,7 @@ describe('migration verifier Worker lifecycle', () => {
 
   it('wraps a non-Error active cancellation reason', async () => {
     const controller = new AbortController()
-    const verification = verifyCurrentGenerationInWorker(
-      '/stage', 'none', 'session', 0, undefined, controller.signal,
-    )
+    const verification = verifyCurrentGenerationInWorker('/stage', 'none', 'session', 0, undefined, controller.signal)
 
     controller.abort('cancelled')
     await expect(verification).rejects.toMatchObject({

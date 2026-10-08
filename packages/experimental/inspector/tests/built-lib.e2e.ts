@@ -4,14 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { pnpmInvocation } from '../../../../scripts/pnpm-invocation.ts'
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url))
-const built = [
-  'lib/index.js',
-  'node_modules/@deepseek-ai/schemastery/lib/index.mjs',
-].every(file => existsSync(join(packageDirectory, file)))
+const built = ['lib/index.js', 'node_modules/@deepseek-ai/schemastery/lib/index.mjs'].every((file) =>
+  existsSync(join(packageDirectory, file)),
+)
 
 describe.skipIf(!built)('experimental Inspector built artifact', () => {
   it('packs its sibling Worker and evaluates the Host from the tarball through plain Node', { retry: 0 }, async (test) => {
@@ -47,7 +46,7 @@ describe.skipIf(!built)('experimental Inspector built artifact', () => {
     }
     const invocation = pnpmInvocation(['pack', '--pack-destination', root])
     await run(invocation.command, invocation.args, packageDirectory)
-    const archives = (await readdir(root)).filter(name => name.endsWith('.tgz'))
+    const archives = (await readdir(root)).filter((name) => name.endsWith('.tgz'))
     expect(archives).toHaveLength(1)
     await run('tar', ['-xzf', join(root, archives[0]!), '-C', root], root)
     expect(existsSync(join(consumer, 'lib/worker.js'))).toBe(true)

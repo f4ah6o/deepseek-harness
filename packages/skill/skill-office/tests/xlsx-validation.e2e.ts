@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
@@ -75,7 +75,11 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('Excel validation sco
       sourceImport: 'tsx/esm',
       tsconfigPath: join(repo, 'tsconfig.base.json'),
       configPath: 'office.patch.json',
-      binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
+      binArgs: [
+        '--profile',
+        'headless',
+        '--patch',
+        'office.patch.json',
         `${task} Use input.xlsx and save the finished workbook as result.xlsx. Preserve the Notes sheet and leave input.xlsx unchanged. Respond briefly in English.`,
       ],
       processTimeoutMs: 110_000,
@@ -92,7 +96,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('Excel validation sco
         if (kind === 'blank') {
           await mkdir(dirname(fixtureCli))
           const kit = join(dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json'))), 'lib/cli.js')
-          await writeFile(fixtureCli, `
+          await writeFile(
+            fixtureCli,
+            `
 const { spawnSync } = require('node:child_process');
 const { appendFileSync } = require('node:fs');
 const { join } = require('node:path');
@@ -111,31 +117,64 @@ appendFileSync(join(__dirname, 'calls.jsonl'), JSON.stringify({ args, status: re
 process.stdout.write(result.stdout);
 process.stderr.write(result.stderr);
 process.exitCode = result.status ?? 1;
-`)
+`,
+          )
         }
-        await writeFile(join(cwd, 'office.patch.json'), JSON.stringify([
-          { insert: [
-            { id: 'office-validation', name: '@deepseek-ai/dsh-skill-office', ...kind === 'blank' ? { config: { cli: fixtureCli } } : {} },
-            { id: 'office-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime } },
-          ] },
-          ...completions ? [
-            { id: 'llm-deepseek', disabled: true },
-            { id: 'llm-pi-ai', config: { providers: { 'office-test': {
-              api: 'openai-completions', apiKeyEnv: 'DEEPSEEK_API_KEY', baseURL: process.env.DEEPSEEK_BASE_URL,
-              compat: { thinkingFormat: 'deepseek' },
-              models: [{ id: model, contextWindow: 128000, maxTokens: 8192, input: ['text', 'image'] }],
-            } } } },
-          ] : [{ id: 'llm-deepseek', config: { thinking: 'enabled', reasoningEffort: 'high', maxTokens: 8192,
-            models: [{ id: model, contextWindow: 128000, maxTokens: 8192, inputModalities: ['text', 'image'] }],
-          } }],
-          { id: 'agent-default-model', config: { provider: completions ? 'office-test' : 'deepseek-official', model } },
-          { id: 'attachment-local', config: { dshHome: join(cwd, '.image-store') } },
-          { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
-        ]))
+        await writeFile(
+          join(cwd, 'office.patch.json'),
+          JSON.stringify([
+            {
+              insert: [
+                {
+                  id: 'office-validation',
+                  name: '@deepseek-ai/dsh-skill-office',
+                  ...(kind === 'blank' ? { config: { cli: fixtureCli } } : {}),
+                },
+                { id: 'office-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime } },
+              ],
+            },
+            ...(completions
+              ? [
+                  { id: 'llm-deepseek', disabled: true },
+                  {
+                    id: 'llm-pi-ai',
+                    config: {
+                      providers: {
+                        'office-test': {
+                          api: 'openai-completions',
+                          apiKeyEnv: 'DEEPSEEK_API_KEY',
+                          baseURL: process.env.DEEPSEEK_BASE_URL,
+                          compat: { thinkingFormat: 'deepseek' },
+                          models: [{ id: model, contextWindow: 128000, maxTokens: 8192, input: ['text', 'image'] }],
+                        },
+                      },
+                    },
+                  },
+                ]
+              : [
+                  {
+                    id: 'llm-deepseek',
+                    config: {
+                      thinking: 'enabled',
+                      reasoningEffort: 'high',
+                      maxTokens: 8192,
+                      models: [{ id: model, contextWindow: 128000, maxTokens: 8192, inputModalities: ['text', 'image'] }],
+                    },
+                  },
+                ]),
+            { id: 'agent-default-model', config: { provider: completions ? 'office-test' : 'deepseek-official', model } },
+            { id: 'attachment-local', config: { dshHome: join(cwd, '.image-store') } },
+            { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
+          ]),
+        )
       },
       async inspect(cwd) {
         expect(await readFile(join(cwd, 'input.xlsx'))).toEqual(original)
-        const verified = await execa(python!, ['-c', `
+        const verified = await execa(
+          python!,
+          [
+            '-c',
+            `
 from openpyxl import load_workbook
 w = load_workbook('result.xlsx', data_only=False)
 s = w['Revenue']
@@ -160,25 +199,34 @@ else:
     else:
         assert s['B4'].value.upper() == '=SUM(B2:B3)'
         assert load_workbook('result.xlsx', data_only=True)['Revenue']['B4'].value == 38
-`], { cwd })
+`,
+          ],
+          { cwd },
+        )
         expect(verified.exitCode).toBe(0)
         const paths = await readdir(join(cwd, '.sessions'), { recursive: true })
-        const logs = paths.filter(path => /session\.v\d+\.jsonl$/u.test(path))
+        const logs = paths.filter((path) => /session\.v\d+\.jsonl$/u.test(path))
         expect(logs).toHaveLength(1)
         events = parseSessionLog(await readFile(join(cwd, '.sessions', logs[0]!), 'utf8'))
         if (kind === 'blank') {
-          fixtureCalls = (await readFile(join(cwd, '.fixture/calls.jsonl'), 'utf8')).trim().split('\n')
-            .map(line => JSON.parse(line) as { args: string[]; status: number | null })
-          expect(fixtureCalls.some(call => call.args[0] === 'convert')).toBe(false)
+          fixtureCalls = (await readFile(join(cwd, '.fixture/calls.jsonl'), 'utf8'))
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line) as { args: string[]; status: number | null })
+          expect(fixtureCalls.some((call) => call.args[0] === 'convert')).toBe(false)
         }
-        const imageBlocks = events.flatMap(event => event.type === 'tool/result'
-          ? event.data.message.content.filter(block => block.type === 'image') : [])
+        const imageBlocks = events.flatMap((event) =>
+          event.type === 'tool/result' ? event.data.message.content.filter((block) => block.type === 'image') : [],
+        )
         if (kind === 'layout' && imageBlocks.length === 0) {
           const kit = join(dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json'))), 'lib/cli.js')
           const previewDir = join(cwd, '.verification-preview')
-          await execa(process.execPath, [kit, 'render', '--input', join(cwd, 'result.xlsx'),
-            '--output-dir', previewDir, '--sheet', 'Revenue', '--range', 'A1:B3'], { cwd })
-          const pngs = (await readdir(previewDir, { recursive: true })).filter(path => path.endsWith('.png'))
+          await execa(
+            process.execPath,
+            [kit, 'render', '--input', join(cwd, 'result.xlsx'), '--output-dir', previewDir, '--sheet', 'Revenue', '--range', 'A1:B3'],
+            { cwd },
+          )
+          const pngs = (await readdir(previewDir, { recursive: true })).filter((path) => path.endsWith('.png'))
           expect(pngs.length).toBeGreaterThan(0)
           for (const path of pngs) {
             const pixels = await execa(python!, ['-c', previewPixels], { input: await readFile(join(previewDir, path)) })
@@ -192,11 +240,13 @@ else:
         }
       },
     })
-    const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data] : [])
-    expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-xlsx'))).toBe(true)
-    expect(calls.some(call => call.name === 'load_workspace_dependencies')).toBe(true)
-    const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
-      .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
+    const calls = events.flatMap((event) => (event.type === 'tool/call' ? [event.data] : []))
+    expect(calls.some((call) => call.name === 'skill' && call.arguments.includes('office-xlsx'))).toBe(true)
+    expect(calls.some((call) => call.name === 'load_workspace_dependencies')).toBe(true)
+    const commands = calls
+      .filter((call) => call.name === 'bash' || call.name === 'pwsh')
+      .map((call) => (JSON.parse(call.arguments) as { command: string }).command)
+      .join('\n')
     expect(commands).toContain('check_office.py')
     expect(commands).not.toMatch(/\b(?:which|whereis|command -v)[^\n;]*\b(?:libreoffice|soffice)\b/iu)
     expect(commands).not.toMatch(/\bfind[^\n;]*-(?:i?name|path)\s+["']?[*?]*(?:libreoffice|soffice)\b/iu)
@@ -206,30 +256,40 @@ else:
       expect(commands).toContain('--sheet')
       expect(commands).toContain('--range')
       expect(commands).not.toMatch(/cli\.js["']?\s+convert\b/u)
-      const reads = calls.filter(call => call.name === 'read_image')
-      const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-      if (previewHasContent) expect(results.some(result => !result.isError && reads.some(call => call.callId === result.toolCallId)
-        && result.content.some(block => block.type === 'image'))).toBe(true)
+      const reads = calls.filter((call) => call.name === 'read_image')
+      const results = events.flatMap((event) => (event.type === 'tool/result' ? [event.data.message] : []))
+      if (previewHasContent)
+        expect(
+          results.some(
+            (result) =>
+              !result.isError &&
+              reads.some((call) => call.callId === result.toolCallId) &&
+              result.content.some((block) => block.type === 'image'),
+          ),
+        ).toBe(true)
       if (kind === 'blank') expect(previewHasContent).toBe(false)
       if (!previewHasContent) {
-        const answer = events.findLast(event => event.type === 'assistant/message')
+        const answer = events.findLast((event) => event.type === 'assistant/message')
         if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')
-        const text = answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+        const text = answer.data.message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
         expect(text).toMatch(/blank|transparent|unavailable|could not|couldn't|unable|failed/iu)
         expect(text).not.toMatch(/visually (?:verified|validated|confirmed)|visual (?:check|inspection) (?:passed|successful)/iu)
         expect(reads.length).toBeLessThanOrEqual(1)
         if (kind === 'blank') {
-          const firstBlank = fixtureCalls.findIndex(call => call.args[0] === 'render' && call.status === 0)
+          const firstBlank = fixtureCalls.findIndex((call) => call.args[0] === 'render' && call.status === 0)
           expect(firstBlank, JSON.stringify(fixtureCalls)).toBeGreaterThanOrEqual(0)
-          expect(fixtureCalls.slice(firstBlank + 1).filter(call => call.args[0] === 'render'), JSON.stringify(fixtureCalls)).toEqual([])
+          expect(
+            fixtureCalls.slice(firstBlank + 1).filter((call) => call.args[0] === 'render'),
+            JSON.stringify(fixtureCalls),
+          ).toEqual([])
         }
       }
     } else {
-      expect(calls.some(call => call.name === 'read_image' || call.name === 'render_document')).toBe(false)
+      expect(calls.some((call) => call.name === 'read_image' || call.name === 'render_document')).toBe(false)
       expect(commands).not.toMatch(/\b(?:render|convert)\b|\.pdf\b|\.png\b/iu)
-      const answer = events.findLast(event => event.type === 'assistant/message')
+      const answer = events.findLast((event) => event.type === 'assistant/message')
       if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')
-      const text = answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+      const text = answer.data.message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
       expect(text).not.toMatch(/(?:visual|layout).{0,60}(?:not|skip|omit)|(?:not|skip|omit).{0,60}(?:visual|render)/iu)
     }
   })

@@ -1,14 +1,9 @@
 import { spawnSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { afterEach, beforeAll, afterAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, afterAll, describe, expect, it } from 'vite-plus/test'
 import { getGlobalDispatcher } from 'undici'
-import {
-  clearedProxyEnv,
-  installProxyFromEnvironment,
-  proxyEnvironmentForChild,
-  proxyRouteFor,
-} from '../src/index.ts'
+import { clearedProxyEnv, installProxyFromEnvironment, proxyEnvironmentForChild, proxyRouteFor } from '../src/index.ts'
 import { PROXY_ENV_NAMES } from '../src/policy.ts'
 
 /** Absolute-form request targets the fake proxy received; a populated entry proves a request was tunnelled. */
@@ -27,12 +22,18 @@ const proxyTarget = 'http://origin.test/probe'
 
 function listen(server: Server): Promise<AddressInfo> {
   return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => { resolve(server.address() as AddressInfo) })
+    server.listen(0, '127.0.0.1', () => {
+      resolve(server.address() as AddressInfo)
+    })
   })
 }
 
 function close(server: Server): Promise<void> {
-  return new Promise((resolve) => { server.close(() => { resolve() }) })
+  return new Promise((resolve) => {
+    server.close(() => {
+      resolve()
+    })
+  })
 }
 
 beforeAll(async () => {
@@ -45,7 +46,9 @@ beforeAll(async () => {
     proxied.push(`CONNECT ${request.url ?? ''}`)
     socket.end()
   })
-  origin = createServer((_request, response) => { response.end('DIRECT') })
+  origin = createServer((_request, response) => {
+    response.end('DIRECT')
+  })
   const [proxyAddress, originAddress] = await Promise.all([listen(proxy), listen(origin)])
   proxyUrl = `http://127.0.0.1:${String(proxyAddress.port)}`
   originUrl = `http://127.0.0.1:${String(originAddress.port)}/probe`
@@ -64,26 +67,28 @@ const nestedUrl = 'http://127.0.0.1:9'
 
 /** A launch environment built from the names a user would export, in the casings they wrote. */
 function env(values: Record<string, string>): { get(name: string): { value: string } | undefined } {
-  return { get: name => (name in values ? { value: values[name] as string } : undefined) }
+  return { get: (name) => (name in values ? { value: values[name] as string } : undefined) }
 }
 
 /** The environment of a user who exported one proxy for both schemes. */
 function proxyAll(noProxy?: string): { get(name: string): { value: string } | undefined } {
-  return env({ HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ...noProxy === undefined ? {} : { NO_PROXY: noProxy } })
+  return env({ HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ...(noProxy === undefined ? {} : { NO_PROXY: noProxy }) })
 }
 
 /** Install and collect whatever the resolution reported, so a case can assert on both. */
-async function install(
-  lookup: { get(name: string): { value: string } | undefined },
-): Promise<{ dispose: () => Promise<void>; reported: string[] }> {
+async function install(lookup: {
+  get(name: string): { value: string } | undefined
+}): Promise<{ dispose: () => Promise<void>; reported: string[] }> {
   const reported: string[] = []
-  const dispose = await installProxyFromEnvironment(lookup, (message) => { reported.push(message) })
+  const dispose = await installProxyFromEnvironment(lookup, (message) => {
+    reported.push(message)
+  })
   return { dispose, reported }
 }
 
 /** Run one case from a known-empty proxy environment, then restore what the machine had. */
 async function withCleanProxyEnv(run: () => Promise<void>): Promise<void> {
-  const saved = Object.fromEntries(PROXY_ENV_NAMES.map(name => [name, process.env[name]]))
+  const saved = Object.fromEntries(PROXY_ENV_NAMES.map((name) => [name, process.env[name]]))
   for (const name of PROXY_ENV_NAMES) Reflect.deleteProperty(process.env, name)
   try {
     await run()
@@ -258,7 +263,7 @@ describe('proxyEnvironmentForChild', () => {
     }
   })
 
-  it('hands a child the values the user exported, not this process\'s normalization', async () => {
+  it("hands a child the values the user exported, not this process's normalization", async () => {
     await withCleanProxyEnv(async () => {
       // A user who set only HTTP_PROXY, plus a SOCKS proxy this package refuses but `curl` uses.
       process.env.HTTP_PROXY = proxyUrl
@@ -334,7 +339,7 @@ describe('proxyEnvironmentForChild', () => {
     },
   )
 
-  it('keeps the outermost install\'s record of what the user exported across a nested one', async () => {
+  it("keeps the outermost install's record of what the user exported across a nested one", async () => {
     await withCleanProxyEnv(async () => {
       // The user exported one name, in one casing.
       process.env.HTTP_PROXY = proxyUrl
@@ -389,7 +394,7 @@ describe('installing over an existing installation', () => {
 })
 
 describe('the environment while a direct policy is layered over a proxied one', () => {
-  it('hands a child the user\'s own values, and the outer normalization again afterwards', async () => {
+  it("hands a child the user's own values, and the outer normalization again afterwards", async () => {
     await withCleanProxyEnv(async () => {
       // The user exported one usable proxy and one this package refuses.
       process.env.HTTP_PROXY = proxyUrl
@@ -453,6 +458,6 @@ describe('clearedProxyEnv', () => {
   it('names every proxy variable for removal, so a replay reaches its own fixture server', () => {
     const cleared = clearedProxyEnv()
     expect(Object.keys(cleared).sort()).toEqual([...PROXY_ENV_NAMES].sort())
-    expect(Object.values(cleared).every(value => value === undefined)).toBe(true)
+    expect(Object.values(cleared).every((value) => value === undefined)).toBe(true)
   })
 })

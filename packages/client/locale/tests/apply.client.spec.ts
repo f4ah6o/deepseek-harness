@@ -2,20 +2,20 @@
  * Language row registration, snapshot projection into the row store, and
  * recovery after an HMR collapse of the declaring entry. */
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import {
-  apply, inject, SETTINGS_NS,
-} from '@deepseek-ai/dsh-client-locale/client'
+import { apply, inject, SETTINGS_NS } from '@deepseek-ai/dsh-client-locale/client'
 import type { LanguageRowInjected, LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from '../src/locale-settings.ts'
 import { LanguageRow } from '../src/client/LanguageRow.tsx'
 import type { createLanguageRowStore } from '../src/client/settings-store.ts'
 
 const SLOT = 'settings.general.item'
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 async function bench(preference?: string) {
   const ctx = new Context()
@@ -25,7 +25,8 @@ async function bench(preference?: string) {
     ns: LOCALE_SETTINGS_NAMESPACE,
     schema: LocaleSettingsSchema.toJSON(),
     value: preference === undefined ? {} : { preference },
-    autoGenerate: true, applies: 'live' as const,
+    autoGenerate: true,
+    applies: 'live' as const,
     secrets: [],
     revision,
   })
@@ -41,23 +42,27 @@ async function bench(preference?: string) {
   const events = new TestRemote(ctx, { settings: { describe, mutate } })
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, describe, mutate, events,
-    setHostPreference: (next: string | undefined) => { preference = next; revision += 1 },
+    ctx,
+    slots: ctx.get('slots') as SlotRegistry,
+    describe,
+    mutate,
+    events,
+    setHostPreference: (next: string | undefined) => {
+      preference = next
+      revision += 1
+    },
   }
 }
 
 /** Stand in for the settings shell: declare the General item slot from root. */
 function declareItems(slots: SlotRegistry): () => void {
-  return slots.register(
-    { name: 'root', children: { [SLOT]: { kind: 'list', scope: 'root' } } } as never,
-    () => null,
-  )
+  return slots.register({ name: 'root', children: { [SLOT]: { kind: 'list', scope: 'root' } } } as never, () => null)
 }
 
 /** Mirror the framework's inject choreography: bake a real instance from the
  * declared handle and hand its actions to the entry's inject factory. */
 function faceOf(slots: SlotRegistry) {
-  const entry = slots.entries(SLOT).find(e => e.component === LanguageRow)!
+  const entry = slots.entries(SLOT).find((e) => e.component === LanguageRow)!
   const handle = entry.store as ReturnType<typeof createLanguageRowStore>
   const instance = handle.create()
   const face = (entry.inject as unknown as (a: typeof instance.actions) => LanguageRowInjected)(instance.actions)
@@ -73,7 +78,9 @@ describe('locale apply', () => {
     vi.stubGlobal('__DSH_LOCALE__', { read, onChange })
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     try {
-      await vi.waitFor(() => { expect(read).toHaveBeenCalledOnce() })
+      await vi.waitFor(() => {
+        expect(read).toHaveBeenCalledOnce()
+      })
       const disposal = fiber.dispose()
       if (outcome === 'resolve') ready.resolve({ languages: ['zh-CN'], preference: null })
       else ready.reject(new Error('native window closed'))
@@ -132,7 +139,7 @@ describe('locale apply', () => {
     // service opens on FALLBACK_LOCALE (en); read the zh side explicitly.
     locale.setLocale('zh')
     expect(locale.bind(SETTINGS_NS)('language.title')).toBe('语言')
-    const entry = before.slots.entries(SLOT).find(e => e.component === LanguageRow)!
+    const entry = before.slots.entries(SLOT).find((e) => e.component === LanguageRow)!
     expect(entry.options).toMatchObject({ id: 'language', order: 0 })
 
     const after = await bench()
@@ -141,7 +148,7 @@ describe('locale apply', () => {
     expect(after.slots.entries(SLOT)).toHaveLength(0)
     declareItems(after.slots)
     await Promise.resolve()
-    expect(after.slots.entries(SLOT).some(e => e.component === LanguageRow)).toBe(true)
+    expect(after.slots.entries(SLOT).some((e) => e.component === LanguageRow)).toBe(true)
   })
 
   it('projects service snapshots into the row store and routes face writes back', async () => {
@@ -155,7 +162,7 @@ describe('locale apply', () => {
     const { entry, instance, face } = faceOf(b.slots)
     // The inject-time re-sync sealed the init window: the mirror is current.
     expect(instance.getSnapshot().active).toBe('en')
-    expect(instance.getSnapshot().options.map(o => o.id)).toEqual(['zh', 'en'])
+    expect(instance.getSnapshot().options.map((o) => o.id)).toEqual(['zh', 'en'])
     // Copy rides the standard locale seat: the entry declares the namespace.
     expect(entry.locale).toBe(SETTINGS_NS)
     expect(locale.bind(SETTINGS_NS)('language.title')).toBe('Language')
@@ -164,7 +171,9 @@ describe('locale apply', () => {
     expect(locale.getLocale().active).toBe('zh')
     expect(instance.getSnapshot().active).toBe('zh')
     expect(locale.bind(SETTINGS_NS)('language.title')).toBe('语言')
-    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => {
+      expect(b.mutate).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('projects external locale registration and disposal into the Language row', async () => {
@@ -175,10 +184,8 @@ describe('locale apply', () => {
 
     const languagePack = b.ctx.plugin({
       inject: ['locale'],
-      apply: packCtx => packCtx.effect(
-        () => packCtx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }),
-        'test language pack registration',
-      ),
+      apply: (packCtx) =>
+        packCtx.effect(() => packCtx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }), 'test language pack registration'),
     })
     await languagePack.await()
     expect(instance.getSnapshot().options).toEqual([
@@ -188,7 +195,7 @@ describe('locale apply', () => {
     ])
 
     await languagePack.dispose()
-    expect(instance.getSnapshot().options.map(option => option.id)).toEqual(['zh', 'en'])
+    expect(instance.getSnapshot().options.map((option) => option.id)).toEqual(['zh', 'en'])
   })
 
   it('loads and refreshes the explicit Host preference after nonblocking activation', async () => {
@@ -202,16 +209,22 @@ describe('locale apply', () => {
     declareItems(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const locale = b.ctx.get('locale') as LocaleRuntime
-    await vi.waitFor(() => { expect(locale.getLocale().active).toBe('zh') })
+    await vi.waitFor(() => {
+      expect(locale.getLocale().active).toBe('zh')
+    })
     // Cleared preference falls back to the provisional locale.
     b.setHostPreference(undefined)
     b.events.emit('settings/document-updated', [LOCALE_SETTINGS_NAMESPACE, 0])
-    await vi.waitFor(() => { expect(locale.getLocale().active).toBe('en') })
+    await vi.waitFor(() => {
+      expect(locale.getLocale().active).toBe('en')
+    })
     // Re-selecting zh after the clear is an explicit pick of the provisional
     // value and must persist as a written preference.
     b.setHostPreference('zh')
     b.events.emit('settings/document-updated', [LOCALE_SETTINGS_NAMESPACE, 0])
-    await vi.waitFor(() => { expect(locale.getLocale().active).toBe('zh') })
+    await vi.waitFor(() => {
+      expect(locale.getLocale().active).toBe('zh')
+    })
     expect(b.describe).toHaveBeenCalledTimes(4)
   })
 
@@ -228,7 +241,7 @@ describe('locale apply', () => {
 
     declareItems(b.slots)
     await Promise.resolve()
-    expect(b.slots.entries(SLOT).some(e => e.component === LanguageRow)).toBe(true)
+    expect(b.slots.entries(SLOT).some((e) => e.component === LanguageRow)).toBe(true)
   })
 
   it('teardown removes the row; teardown without a declaration is quiet', async () => {

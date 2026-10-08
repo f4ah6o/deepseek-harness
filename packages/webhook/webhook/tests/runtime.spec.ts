@@ -1,17 +1,12 @@
 import { Context } from '@deepseek-ai/cordis'
 import { readFileSync } from 'node:fs'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebhookRuntime, {
-  WebhookDeliveryId,
-  WebhookRuleId,
-  WebhookSourceId,
-  type VerifiedWebhookDelivery,
-} from '../src/index.ts'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import WebhookRuntime, { WebhookDeliveryId, WebhookRuleId, WebhookSourceId, type VerifiedWebhookDelivery } from '../src/index.ts'
 
 const contexts: Context[] = []
 
 afterEach(async () => {
-  await Promise.allSettled(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.allSettled(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 /** Construct the runtime directly so callback-only tests need no Agent stack. */
@@ -61,7 +56,9 @@ describe('WebhookRuntime', () => {
     const { runtime } = harness()
     const started: string[] = []
     const both = Promise.withResolvers<boolean>()
-    const maybeDone = (): void => { if (started.length === 2) both.resolve(true) }
+    const maybeDone = (): void => {
+      if (started.length === 2) both.resolve(true)
+    }
     runtime.register({
       id: WebhookRuleId('throws'),
       kind: 'fixture',
@@ -92,18 +89,13 @@ describe('WebhookRuntime', () => {
 
   it('rejects malformed registrations and duplicate ids', async () => {
     const { runtime } = harness()
-    expect(() => runtime.register({ id: WebhookRuleId(''), kind: 'fixture', run: () => null }))
-      .toThrow(/id must be a non-empty string/)
-    expect(() => runtime.register({ id: WebhookRuleId('bad-kind'), kind: '', run: () => null }))
-      .toThrow(/kind must be a non-empty string/)
-    expect(() => runtime.register({ id: WebhookRuleId('bad-run'), kind: 'fixture', run: 1 as never }))
-      .toThrow(/requires run/)
+    expect(() => runtime.register({ id: WebhookRuleId(''), kind: 'fixture', run: () => null })).toThrow(/id must be a non-empty string/)
+    expect(() => runtime.register({ id: WebhookRuleId('bad-kind'), kind: '', run: () => null })).toThrow(/kind must be a non-empty string/)
+    expect(() => runtime.register({ id: WebhookRuleId('bad-run'), kind: 'fixture', run: 1 as never })).toThrow(/requires run/)
     const dispose = runtime.register({ id: WebhookRuleId('same'), kind: 'fixture', run: () => null })
-    expect(() => runtime.register({ id: WebhookRuleId('same'), kind: 'fixture', run: () => null }))
-      .toThrow(/already registered/)
+    expect(() => runtime.register({ id: WebhookRuleId('same'), kind: 'fixture', run: () => null })).toThrow(/already registered/)
     await dispose()
-    expect(() => runtime.register({ id: WebhookRuleId('same'), kind: 'fixture', run: () => null }))
-      .not.toThrow()
+    expect(() => runtime.register({ id: WebhookRuleId('same'), kind: 'fixture', run: () => null })).not.toThrow()
   })
 
   it('hides, aborts, and drains a registration before disposal resolves', async () => {
@@ -119,7 +111,13 @@ describe('WebhookRuntime', () => {
         calls++
         entered.resolve(signal)
         await new Promise<void>((resolve) => {
-          signal.addEventListener('abort', () => { resolve() }, { once: true })
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve()
+            },
+            { once: true },
+          )
         })
         finished.resolve(true)
         return null
@@ -146,7 +144,13 @@ describe('WebhookRuntime', () => {
       async run(_input, signal) {
         entered.resolve(signal)
         await new Promise<void>((resolve) => {
-          signal.addEventListener('abort', () => { resolve() }, { once: true })
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve()
+            },
+            { once: true },
+          )
         })
         return null
       },
@@ -155,9 +159,10 @@ describe('WebhookRuntime', () => {
     const signal = await entered.promise
     await ctx.fiber.dispose()
     expect(signal.aborted).toBe(true)
-    expect(() => { runtime.dispatch(delivery()) }).toThrow(/closing/)
-    expect(() => runtime.register({ id: WebhookRuleId('late'), kind: 'fixture', run: () => null }))
-      .toThrow(/closing/)
+    expect(() => {
+      runtime.dispatch(delivery())
+    }).toThrow(/closing/)
+    expect(() => runtime.register({ id: WebhookRuleId('late'), kind: 'fixture', run: () => null })).toThrow(/closing/)
   })
 
   it.each([
@@ -168,7 +173,9 @@ describe('WebhookRuntime', () => {
     [{ ...delivery(), event: { invalid: undefined } }, /lossless JSON/],
   ] as const)('rejects malformed deliveries synchronously', (input, message) => {
     const { runtime } = harness()
-    expect(() => { runtime.dispatch(input as never) }).toThrow(message)
+    expect(() => {
+      runtime.dispatch(input as never)
+    }).toThrow(message)
   })
 
   it('intentionally invokes a rule again for a repeated delivery', async () => {
@@ -191,12 +198,9 @@ describe('WebhookRuntime', () => {
   })
 
   it('keeps execution-state, retry, dedupe, and completion machinery out of the runtime', () => {
-    const production = [
-      '../src/brand.ts',
-      '../src/types.ts',
-      '../src/session.ts',
-      '../src/index.ts',
-    ].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
+    const production = ['../src/brand.ts', '../src/types.ts', '../src/session.ts', '../src/index.ts']
+      .map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+      .join('\n')
     const forbidden: ReadonlyArray<readonly [string, RegExp]> = [
       ['execution records', /\bWebhook(?:Execution|Status)\b/],
       ['delivery storage domains', /@deepseek-ai\/dsh-storage|\bstorageDomain\b|\bDomainSpec\b/],

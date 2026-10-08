@@ -2,7 +2,7 @@
 /** The web-search page as the Plugins page renders it: its key control, its two fields, and their resets. */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsFieldState, SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -43,7 +43,12 @@ describe('WebSearchCard', () => {
 
   it('renders its one-liner alone in the summary view', () => {
     const store = createSnapshotStore<WebSearchCardState>({
-      ...settled, baseURL: field(''), maxUses: field('5'), apiKey: field(''), apiKeyConfigured: false, apiKeyWritable: true,
+      ...settled,
+      baseURL: field(''),
+      maxUses: field('5'),
+      apiKey: field(''),
+      apiKeyConfigured: false,
+      apiKeyWritable: true,
     })
     const props = { ...cardActions(), view: 'summary', t, useWebSearchCard: bindSnapshotSelector(store) } as WebSearchCardProps
     render(<WebSearchCard {...props} />)

@@ -8,13 +8,20 @@ import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { WEB_SEARCH_MAX_RESULTS } from '@deepseek-ai/dsh-tool-web'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  fixtureUserPrompts,
+  launchWebScaffold,
+  recordFixture,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -59,17 +66,19 @@ function resultPageAge(ordinal: number): string {
 const RESULT_ORDINALS = Array.from({ length: PROVIDER_RESULT_COUNT }, (_value, index) => index + 1)
 
 /** Sources kept after round-robin merging reaches the shipped combined cap. */
-const KEPT_SOURCES = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map((_query, queryIndex) => ({
-  url: resultUrl(queryIndex, ordinal),
-  title: resultTitle(queryIndex, ordinal),
-  snippet: resultSnippet(queryIndex, ordinal),
-  publishedAt: resultPageAge(ordinal),
-}))).slice(0, WEB_SEARCH_MAX_RESULTS)
+const KEPT_SOURCES = RESULT_ORDINALS.flatMap((ordinal) =>
+  QUERIES.map((_query, queryIndex) => ({
+    url: resultUrl(queryIndex, ordinal),
+    title: resultTitle(queryIndex, ordinal),
+    snippet: resultSnippet(queryIndex, ordinal),
+    publishedAt: resultPageAge(ordinal),
+  })),
+).slice(0, WEB_SEARCH_MAX_RESULTS)
 
 /** URLs omitted after the combined source cap is reached. */
-const DROPPED_SOURCE_URLS = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map(
-  (_query, queryIndex) => resultUrl(queryIndex, ordinal),
-)).slice(WEB_SEARCH_MAX_RESULTS)
+const DROPPED_SOURCE_URLS = RESULT_ORDINALS.flatMap((ordinal) => QUERIES.map((_query, queryIndex) => resultUrl(queryIndex, ordinal))).slice(
+  WEB_SEARCH_MAX_RESULTS,
+)
 
 interface CapturedSearchRequest {
   path: string
@@ -82,7 +91,9 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
   const server = createServer((request, response) => {
     let body = ''
     request.setEncoding('utf8')
-    request.on('data', (chunk: string) => { body += chunk })
+    request.on('data', (chunk: string) => {
+      body += chunk
+    })
     request.on('end', () => {
       const parsedBody: unknown = JSON.parse(body)
       captured.push({
@@ -91,35 +102,37 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
         body: parsedBody,
       })
       const serializedBody = JSON.stringify(parsedBody)
-      const queryIndex = QUERIES.findIndex(query => serializedBody.includes(`Perform a web search for the query: ${query}`))
+      const queryIndex = QUERIES.findIndex((query) => serializedBody.includes(`Perform a web search for the query: ${query}`))
       if (queryIndex < 0) {
         response.writeHead(400, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: 'unknown fixture query' }))
         return
       }
       response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({
-        content: [
-          {
-            type: 'text',
-            text: `Found ${PROVIDER_RESULT_COUNT} sources.`,
-            citations: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result_location',
-              url: resultUrl(queryIndex, ordinal),
-              cited_text: resultSnippet(queryIndex, ordinal),
-            })),
-          },
-          {
-            type: 'web_search_tool_result',
-            content: RESULT_ORDINALS.map(ordinal => ({
-              type: 'web_search_result',
-              url: resultUrl(queryIndex, ordinal),
-              title: resultTitle(queryIndex, ordinal),
-              page_age: resultPageAge(ordinal),
-            })),
-          },
-        ],
-      }))
+      response.end(
+        JSON.stringify({
+          content: [
+            {
+              type: 'text',
+              text: `Found ${PROVIDER_RESULT_COUNT} sources.`,
+              citations: RESULT_ORDINALS.map((ordinal) => ({
+                type: 'web_search_result_location',
+                url: resultUrl(queryIndex, ordinal),
+                cited_text: resultSnippet(queryIndex, ordinal),
+              })),
+            },
+            {
+              type: 'web_search_tool_result',
+              content: RESULT_ORDINALS.map((ordinal) => ({
+                type: 'web_search_result',
+                url: resultUrl(queryIndex, ordinal),
+                title: resultTitle(queryIndex, ordinal),
+                page_age: resultPageAge(ordinal),
+              })),
+            },
+          ],
+        }),
+      )
     })
   })
   await new Promise<void>((resolve, reject) => {
@@ -156,7 +169,9 @@ describe('web e2e: shipped default web search', () => {
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })
     await scaffold.ctx.credentials.set(SEARCH_CREDENTIAL_REF, SEARCH_CREDENTIAL)
-    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
+    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => {
+      sessionEvents.push(event)
+    })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -197,14 +212,16 @@ describe('web e2e: shipped default web search', () => {
   it.skipIf(MODE === 'record')('uses the real provider and persists the capped structured result', () => {
     expect(searchRequests).toHaveLength(QUERIES.length)
     for (const query of QUERIES) {
-      const request = searchRequests.find(candidate => JSON.stringify(candidate.body).includes(query))
+      const request = searchRequests.find((candidate) => JSON.stringify(candidate.body).includes(query))
       if (request === undefined) throw new Error(`missing provider request for query: ${query}`)
       expect(request).toMatchObject({ path: '/messages', apiKey: SEARCH_CREDENTIAL })
       expect(request.body).toMatchObject({
-        messages: [{
-          role: 'user',
-          content: [{ type: 'text', text: `Perform a web search for the query: ${query}` }],
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: `Perform a web search for the query: ${query}` }],
+          },
+        ],
       })
       const tools = (request.body as { tools?: unknown }).tools
       expect(tools).toHaveLength(1)
@@ -217,8 +234,8 @@ describe('web e2e: shipped default web search', () => {
     )
     expect(auxiliaryRequests).toHaveLength(QUERIES.length)
     for (const query of QUERIES) {
-      const request = searchRequests.find(candidate => JSON.stringify(candidate.body).includes(query))
-      const auxiliaryRequest = auxiliaryRequests.find(event => JSON.stringify(event.data.body).includes(query))
+      const request = searchRequests.find((candidate) => JSON.stringify(candidate.body).includes(query))
+      const auxiliaryRequest = auxiliaryRequests.find((event) => JSON.stringify(event.data.body).includes(query))
       if (request === undefined || auxiliaryRequest === undefined) {
         throw new Error(`missing paired provider request for query: ${query}`)
       }
@@ -230,8 +247,7 @@ describe('web e2e: shipped default web search', () => {
     }
 
     const searchCall = sessionEvents.find(
-      (event): event is Extract<SessionEvent, { type: 'tool/call' }> =>
-        event.type === 'tool/call' && event.data.name === 'web_search',
+      (event): event is Extract<SessionEvent, { type: 'tool/call' }> => event.type === 'tool/call' && event.data.name === 'web_search',
     )
     if (searchCall === undefined) throw new Error('the replayed turn did not call web_search')
     const searchResult = sessionEvents.find(
@@ -241,7 +257,10 @@ describe('web e2e: shipped default web search', () => {
     if (searchResult === undefined) throw new Error('web_search produced no durable result')
     const message = searchResult.data.message
     expect(message.isError).toBe(false)
-    const rendered = message.content.filter(block => block.type === 'text').map(block => block.text).join('')
+    const rendered = message.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
     // The tool interleaves sources from both seam results before applying the
     // combined cap, so each query remains represented in model-visible output.
     for (const source of KEPT_SOURCES) {
@@ -250,9 +269,7 @@ describe('web e2e: shipped default web search', () => {
     for (const url of DROPPED_SOURCE_URLS) {
       expect(rendered).not.toContain(url)
     }
-    expect(rendered).toContain(
-      `(Showing the first ${WEB_SEARCH_MAX_RESULTS} sources. Refine the query for more.)`,
-    )
+    expect(rendered).toContain(`(Showing the first ${WEB_SEARCH_MAX_RESULTS} sources. Refine the query for more.)`)
     expect(searchResult.data.meta).toMatchObject({
       sources: KEPT_SOURCES,
       truncated: true,
@@ -261,8 +278,7 @@ describe('web e2e: shipped default web search', () => {
 
   it.skipIf(MODE === 'record')('matches the settled search card aria golden', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-search-aria'))
-    await expect.poll(() => page.getByText('SEARCH_DONE', { exact: true }).count(), { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(1)
+    await expect.poll(() => page.getByText('SEARCH_DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
     const searchTool = page.locator('[data-tool="web_search"]')
     await expandOwningTurnProcess(page, searchTool)
     await searchTool.waitFor({ timeout: 10_000 })

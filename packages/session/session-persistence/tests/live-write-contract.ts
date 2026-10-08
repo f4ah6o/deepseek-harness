@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh-session-persistence/tests/live-write-contract
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -40,11 +40,7 @@ async function readAll(persistence: SessionPersistence, id: ReturnType<typeof Se
  * @param make - factory producing one fresh mounted backend per test; every
  *   created context is disposed by the test that made it.
  */
-export function runLiveWritePathContract(
-  name: string,
-  batchDelayMs: number,
-  make: () => Promise<LiveWriteBackend>,
-): void {
+export function runLiveWritePathContract(name: string, batchDelayMs: number, make: () => Promise<LiveWriteBackend>): void {
   describe(`live session write path: ${name}`, () => {
     it('routes published events into the active write handle within one batching window', async ({ task, signal }) => {
       const { ctx } = await make()
@@ -63,15 +59,20 @@ export function runLiveWritePathContract(
         vi.useRealTimers()
       }
       // The deadline started a background write; wait for its durability.
-      await expect.poll(async () => {
-        signal.throwIfAborted()
-        const events = await readAll(ctx.sessionPersistence, session.id)
-        signal.throwIfAborted()
-        return events.map(event => [event.type, event.seq])
-      }, { timeout: task.timeout }).toEqual([
-        ['turn/start', 0],
-        ['turn/end', 1],
-      ])
+      await expect
+        .poll(
+          async () => {
+            signal.throwIfAborted()
+            const events = await readAll(ctx.sessionPersistence, session.id)
+            signal.throwIfAborted()
+            return events.map((event) => [event.type, event.seq])
+          },
+          { timeout: task.timeout },
+        )
+        .toEqual([
+          ['turn/start', 0],
+          ['turn/end', 1],
+        ])
       await handle.close()
       await ctx.fiber.dispose()
     })
@@ -93,7 +94,8 @@ export function runLiveWritePathContract(
       const failure = new Error('backend write refused')
       // Inject at the service's storage primitive: the routed drain writes
       // through the handle's internal chain, not the public append.
-      const persist = vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
+      const persist = vi
+        .spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
         .mockRejectedValue(failure)
 
       vi.useFakeTimers()
@@ -109,7 +111,7 @@ export function runLiveWritePathContract(
       // ...and once the backend recovers, the same events land exactly once.
       persist.mockRestore()
       await expect(ctx.sessions.flush(session)).resolves.toBe(true)
-      expect((await readAll(ctx.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0])
+      expect((await readAll(ctx.sessionPersistence, session.id)).map((event) => event.seq)).toEqual([0])
       warned.mockRestore()
       await handle.close()
       await ctx.fiber.dispose()
@@ -126,8 +128,9 @@ export function runLiveWritePathContract(
       }
       const original = service.persistBatch.bind(service)
       const failure = new Error('backend write refused')
-      const persist = vi.spyOn(service, 'persistBatch').mockImplementation((header, ...rest) =>
-        header.id === failing.id ? Promise.reject(failure) : original(header, ...rest))
+      const persist = vi
+        .spyOn(service, 'persistBatch')
+        .mockImplementation((header, ...rest) => (header.id === failing.id ? Promise.reject(failure) : original(header, ...rest)))
 
       vi.useFakeTimers()
       try {
@@ -135,17 +138,18 @@ export function runLiveWritePathContract(
         failing.append('turn/start', { turn: 1 })
         // No batching window elapses: the service barrier itself drains both
         // buffers and reports the one failure without abandoning the sweep.
-        await expect(ctx.sessionPersistence.flush()).rejects.toSatisfy((error: unknown) =>
-          error instanceof AggregateError && error.errors.length === 1 && error.errors[0] === failure)
+        await expect(ctx.sessionPersistence.flush()).rejects.toSatisfy(
+          (error: unknown) => error instanceof AggregateError && error.errors.length === 1 && error.errors[0] === failure,
+        )
       } finally {
         vi.useRealTimers()
       }
       // The healthy session flushed durably despite its neighbor's failure...
-      expect((await readAll(ctx.sessionPersistence, healthy.id)).map(event => event.seq)).toEqual([0])
+      expect((await readAll(ctx.sessionPersistence, healthy.id)).map((event) => event.seq)).toEqual([0])
       // ...and the failed batch is retained: a recovered backend flushes it exactly once.
       persist.mockRestore()
       await ctx.sessionPersistence.flush()
-      expect((await readAll(ctx.sessionPersistence, failing.id)).map(event => event.seq)).toEqual([0])
+      expect((await readAll(ctx.sessionPersistence, failing.id)).map((event) => event.seq)).toEqual([0])
       await healthyHandle.close()
       await failingHandle.close()
       await ctx.fiber.dispose()
@@ -154,16 +158,21 @@ export function runLiveWritePathContract(
     it('session/disposed drains buffered events and closes the handle', async () => {
       const { ctx } = await make()
       let session: ReturnType<Context['sessions']['create']> | undefined
-      const owner = await ctx.plugin(Object.assign((inner: Context) => {
-        session = inner.sessions.create(SessionId('disposed-drains'))
-      }, { inject: ['sessions'] }))
+      const owner = await ctx.plugin(
+        Object.assign(
+          (inner: Context) => {
+            session = inner.sessions.create(SessionId('disposed-drains'))
+          },
+          { inject: ['sessions'] },
+        ),
+      )
       if (session === undefined) throw new Error('session was not created')
       const handle = await ctx.sessionPersistence.create(session.header)
       session.append('turn/start', { turn: 1 })
       // Buffered, not yet written: disposal must drain before the close.
       await owner.dispose()
       await vi.waitFor(async () => {
-        expect((await readAll(ctx.sessionPersistence, SessionId('disposed-drains'))).map(event => event.seq)).toEqual([0])
+        expect((await readAll(ctx.sessionPersistence, SessionId('disposed-drains'))).map((event) => event.seq)).toEqual([0])
       })
       await expect(handle.append([])).rejects.toThrow(/closed handle/)
       await ctx.fiber.dispose()
@@ -172,9 +181,14 @@ export function runLiveWritePathContract(
     it('a failing final drain on disposal is warned, not thrown', async () => {
       const { ctx } = await make()
       let session: ReturnType<Context['sessions']['create']> | undefined
-      const owner = await ctx.plugin(Object.assign((inner: Context) => {
-        session = inner.sessions.create(SessionId('disposed-drain-fails'))
-      }, { inject: ['sessions'] }))
+      const owner = await ctx.plugin(
+        Object.assign(
+          (inner: Context) => {
+            session = inner.sessions.create(SessionId('disposed-drain-fails'))
+          },
+          { inject: ['sessions'] },
+        ),
+      )
       if (session === undefined) throw new Error('session was not created')
       const handle = await ctx.sessionPersistence.create(session.header)
       const warned = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
@@ -199,7 +213,7 @@ export function runLiveWritePathContract(
       await expect(handle.append([])).rejects.toThrow(/closed handle/)
 
       const verify = await backend.remount()
-      expect((await readAll(verify.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0])
+      expect((await readAll(verify.sessionPersistence, session.id)).map((event) => event.seq)).toEqual([0])
       await verify.fiber.dispose()
     })
 
@@ -208,8 +222,7 @@ export function runLiveWritePathContract(
       const session = ctx.sessions.create(SessionId('close-drain-fails'))
       const handle = await ctx.sessionPersistence.create(session.header)
       const failure = new Error('storage refused the drain')
-      vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
-        .mockRejectedValue(failure)
+      vi.spyOn(ctx.sessionPersistence as unknown as { persistBatch: () => Promise<void> }, 'persistBatch').mockRejectedValue(failure)
       session.append('turn/start', { turn: 1 })
       await expect(handle.close()).rejects.toBe(failure)
       // Ownership was released despite the failed drain: the id is claimable.
@@ -257,7 +270,7 @@ export function runLiveWritePathContract(
 
       persist.mockImplementation(real)
       await expect(ctx.sessions.flush(session)).resolves.toBe(true)
-      expect((await readAll(ctx.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0, 1, 2, 3])
+      expect((await readAll(ctx.sessionPersistence, session.id)).map((event) => event.seq)).toEqual([0, 1, 2, 3])
       warned.mockRestore()
       await handle.close()
       await ctx.fiber.dispose()
@@ -274,7 +287,7 @@ export function runLiveWritePathContract(
       const second = await ctx.sessionPersistence.open(session.id, 'write')
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await ctx.sessions.flush(session)
-      expect((await readAll(ctx.sessionPersistence, session.id)).map(event => event.seq)).toEqual([0, 1])
+      expect((await readAll(ctx.sessionPersistence, session.id)).map((event) => event.seq)).toEqual([0, 1])
       await second.close()
       await ctx.fiber.dispose()
     })

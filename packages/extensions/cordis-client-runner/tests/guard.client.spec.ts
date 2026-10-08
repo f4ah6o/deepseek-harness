@@ -8,7 +8,7 @@
  * CALLING fiber, so disposing it must remove them (HMR safety).
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import type { FC } from 'react'
 import type {
   CordisDynamicPackageId,
@@ -76,7 +76,9 @@ async function boot(inject: string[], extras: Record<string, unknown> = {}): Pro
       facade = dynamicCordisContext(own, {
         pkg: pkg(),
         ledger,
-        claim: (component) => { claimed.push(component) },
+        claim: (component) => {
+          claimed.push(component)
+        },
         allocatePriority: () => --nextPriority,
         reportFailure: () => {},
       }) as unknown as Facade
@@ -90,7 +92,9 @@ async function boot(inject: string[], extras: Record<string, unknown> = {}): Pro
     facade,
     ledger,
     claimed,
-    dispose: async () => { await fiber.dispose() },
+    dispose: async () => {
+      await fiber.dispose()
+    },
     overrideTokens,
     themeLayerDispose,
   }
@@ -101,7 +105,7 @@ describe('facade surface', () => {
     const bench = await boot([])
     const seen: string[] = []
     const on = bench.facade.on as (event: string, listener: (key: string) => void) => void
-    on('slots/changed', key => seen.push(key))
+    on('slots/changed', (key) => seen.push(key))
     bench.ctx.emit('slots/changed', 'root')
     expect(seen).toEqual(['root'])
   })
@@ -127,7 +131,9 @@ describe('facade surface', () => {
     expect('registry' in bench.facade).toBe(false)
     expect(Symbol.iterator in bench.facade).toBe(false)
     expect((bench.facade as Record<symbol, unknown>)[Symbol.iterator]).toBeUndefined()
-    expect(() => { bench.facade.slots = 1 }).toThrow(/dynamic ctx is read-only/)
+    expect(() => {
+      bench.facade.slots = 1
+    }).toThrow(/dynamic ctx is read-only/)
   })
 
   it('denies a service value or return that is a cordis Context', async () => {
@@ -157,7 +163,7 @@ describe('slots seat', () => {
       { slot: 'root', priority: -2 },
     ])
     // Newest-wins ordering is what "registering IS shadowing" means.
-    const priorities = bench.slots.entries('root').map(entry => entry.options.priority)
+    const priorities = bench.slots.entries('root').map((entry) => entry.options.priority)
     expect(priorities).toContain(-1)
     expect(priorities).toContain(-2)
   })
@@ -180,9 +186,13 @@ describe('slots seat', () => {
 
     expect(bench.ledger).toEqual([{ slot: 'factory:guard.factory', priority: undefined }])
     expect(bench.claimed).toEqual([C])
-    expect(bench.slots.snapshot('factory:guard.factory')).toMatchObject([{
-      type: 'factory', name: 'guard.factory', scope: 'root',
-    }])
+    expect(bench.slots.snapshot('factory:guard.factory')).toMatchObject([
+      {
+        type: 'factory',
+        name: 'guard.factory',
+        scope: 'root',
+      },
+    ])
     await bench.dispose()
     expect(bench.slots.snapshot('factory:guard.factory')).toEqual([])
   })
@@ -234,8 +244,9 @@ describe('theme seat', () => {
   it('teaches the two-argument shape when the token map arrives first', async () => {
     const bench = await boot(['theme'])
     const theme = bench.facade.theme as { overrideTokens(source: unknown, tokens?: unknown): () => void }
-    expect(() => theme.overrideTokens({ '--x': { light: 'a', dark: 'b' } }))
-      .toThrow(/takes two arguments; source is replaced with your package id/)
+    expect(() => theme.overrideTokens({ '--x': { light: 'a', dark: 'b' } })).toThrow(
+      /takes two arguments; source is replaced with your package id/,
+    )
     expect(bench.overrideTokens).not.toHaveBeenCalled()
   })
 

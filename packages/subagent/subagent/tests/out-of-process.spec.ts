@@ -7,7 +7,7 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertPositiveFinite,
@@ -34,11 +34,21 @@ describe('NO_START_CAPABILITIES', () => {
 
 describe('assertPositiveFinite', () => {
   it('accepts positive finite bounds and rejects zero, negatives, and NaN', () => {
-    expect(() => { assertPositiveFinite('p', 'graceMs', 1) }).not.toThrow()
-    expect(() => { assertPositiveFinite('p', 'graceMs', 0) }).toThrow('p: graceMs must be a positive finite number')
-    expect(() => { assertPositiveFinite('p', 'graceMs', -5) }).toThrow('positive finite')
-    expect(() => { assertPositiveFinite('p', 'graceMs', Number.NaN) }).toThrow('positive finite')
-    expect(() => { assertPositiveFinite('p', 'graceMs', Number.POSITIVE_INFINITY) }).toThrow('positive finite')
+    expect(() => {
+      assertPositiveFinite('p', 'graceMs', 1)
+    }).not.toThrow()
+    expect(() => {
+      assertPositiveFinite('p', 'graceMs', 0)
+    }).toThrow('p: graceMs must be a positive finite number')
+    expect(() => {
+      assertPositiveFinite('p', 'graceMs', -5)
+    }).toThrow('positive finite')
+    expect(() => {
+      assertPositiveFinite('p', 'graceMs', Number.NaN)
+    }).toThrow('positive finite')
+    expect(() => {
+      assertPositiveFinite('p', 'graceMs', Number.POSITIVE_INFINITY)
+    }).toThrow('positive finite')
   })
 })
 
@@ -122,7 +132,9 @@ describe('settleRunResult', () => {
   it('reads an in-flight rejection as aborted when cancellation already settled', async () => {
     const { controller, onAbort } = wiring()
     const result = await settleRunResult({
-      attempt: async () => { throw new Error('pipe torn mid-cancel') },
+      attempt: async () => {
+        throw new Error('pipe torn mid-cancel')
+      },
       collectOutput: () => [{ type: 'text', text: 'partial' }],
       cancelled: () => true,
       signal: controller.signal,
@@ -135,7 +147,9 @@ describe('settleRunResult', () => {
     const { controller, onAbort } = wiring()
     const seen: string[] = []
     const result = await settleRunResult({
-      attempt: async () => { throw new Error('transport died') },
+      attempt: async () => {
+        throw new Error('transport died')
+      },
       collectOutput: () => [],
       cancelled: () => false,
       onError: (error, stopReason) => {
@@ -152,7 +166,9 @@ describe('settleRunResult', () => {
   it('flattens a failure without a sink', async () => {
     const { controller, onAbort } = wiring()
     const result = await settleRunResult({
-      attempt: async () => { throw new Error('no sink configured') },
+      attempt: async () => {
+        throw new Error('no sink configured')
+      },
       collectOutput: () => [],
       cancelled: () => false,
       signal: controller.signal,

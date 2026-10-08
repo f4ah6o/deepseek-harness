@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 const entry = (path: string) => ({
   entry: [path],
@@ -12,7 +12,4 @@ const entry = (path: string) => ({
 })
 
 /** Build self-contained Loader entries so the package needs no private chunks. */
-export default defineConfig([
-  entry('lib/types/index.js'),
-  entry('lib/types/model-selection-settings.js'),
-])
+export default defineConfig([entry('lib/types/index.js'), entry('lib/types/model-selection-settings.js')])

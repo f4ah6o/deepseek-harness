@@ -6,7 +6,7 @@ import OTel from '@deepseek-ai/dsh-otel'
  * for the default-exported Service class.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vite-plus/test'
 import { createServer, type Server } from 'node:http'
 import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -78,7 +78,7 @@ async function mockCollector(
   let requestIndex = 0
   const server = createServer((request, response) => {
     const chunks: Buffer[] = []
-    request.on('data', chunk => chunks.push(chunk as Buffer))
+    request.on('data', (chunk) => chunks.push(chunk as Buffer))
     request.on('end', () => {
       const index = requestIndex++
       void (async () => {
@@ -113,16 +113,18 @@ async function boot(url: string) {
 }
 
 function allRecords(captures: Capture[]) {
-  return captures.flatMap(c => c.body.resourceLogs.flatMap(r => r.scopeLogs.flatMap(s =>
-    s.logRecords.map(record => ({ scope: s.scope.name, record })))))
+  return captures.flatMap((c) =>
+    c.body.resourceLogs.flatMap((r) => r.scopeLogs.flatMap((s) => s.logRecords.map((record) => ({ scope: s.scope.name, record })))),
+  )
 }
 
 function eventTypes(captures: Capture[]): string[] {
-  return allRecords(captures).flatMap(({ record }) =>
-    record.attributes?.flatMap(attribute =>
-      attribute.key === 'event.type' && typeof attribute.value['stringValue'] === 'string'
-        ? [attribute.value['stringValue']]
-        : []) ?? [])
+  return allRecords(captures).flatMap(
+    ({ record }) =>
+      record.attributes?.flatMap((attribute) =>
+        attribute.key === 'event.type' && typeof attribute.value['stringValue'] === 'string' ? [attribute.value['stringValue']] : [],
+      ) ?? [],
+  )
 }
 
 describe('OpenTelemetrySessionBackend wire', () => {
@@ -132,24 +134,28 @@ describe('OpenTelemetrySessionBackend wire', () => {
     const session = ctx.sessions.create(SessionId('wire'), { meta: { cwd: '/tmp/w' } })
     session.append('request/header', { header: { config: { provider: 'mock', model: 'mock' } }, reason: 'initial' })
     session.append('turn/start', { turn: 1 })
-    session.append('assistant/message', {
-      turn: 1,
-      step: 1,
-      message: createAssistantMessage({
-        content: [{ type: 'text', text: 'first complete chunksecond complete chunk' }],
-        source: { provider: 'mock', model: 'mock' },
-      }),
-      stream: [
-        {
-          type: 'text-chunks',
-          time0: 1_000,
-          index: 0,
-          dt: [7],
-          texts: ['first complete chunk', 'second complete chunk'],
-        },
-        { type: 'chunk', time: 1_007, chunk: { type: 'finish', reason: { kind: 'stop' } } },
-      ],
-    }, { surfaceOp: 'append' })
+    session.append(
+      'assistant/message',
+      {
+        turn: 1,
+        step: 1,
+        message: createAssistantMessage({
+          content: [{ type: 'text', text: 'first complete chunksecond complete chunk' }],
+          source: { provider: 'mock', model: 'mock' },
+        }),
+        stream: [
+          {
+            type: 'text-chunks',
+            time0: 1_000,
+            index: 0,
+            dt: [7],
+            texts: ['first complete chunk', 'second complete chunk'],
+          },
+          { type: 'chunk', time: 1_007, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+        ],
+      },
+      { surfaceOp: 'append' },
+    )
     session.append('turn/end', { turn: 1, reason: { kind: 'error', error: { message: 'boom', code: 'UNKNOWN' } } })
     ctx.sessionTelemetry.emit({
       channel: 'ledger',
@@ -171,33 +177,36 @@ describe('OpenTelemetrySessionBackend wire', () => {
     expect(resource).toContainEqual({ key: 'user.id', value: { stringValue: getOrCreateAnonymousUserId() } })
 
     const records = allRecords(captures)
-    const ledger = records.filter(r => r.scope === '@deepseek-ai/dsh-session-telemetry-otel')
-    const ops = records.filter(r => r.scope === '@deepseek-ai/dsh-session-telemetry-otel/ops')
+    const ledger = records.filter((r) => r.scope === '@deepseek-ai/dsh-session-telemetry-otel')
+    const ops = records.filter((r) => r.scope === '@deepseek-ai/dsh-session-telemetry-otel/ops')
 
-    const start = ledger.find(r => r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'turn/start'))
+    const start = ledger.find((r) => r.record.attributes?.some((a) => a.key === 'event.type' && a.value.stringValue === 'turn/start'))
     expect(start).toBeDefined()
     expect(start?.record.severityNumber).toBe(9)
-    expect(BigInt(start!.record.timeUnixNano)).toBe(BigInt(session.snapshotEvents().find(event => event.type === 'turn/start')!.time) * 1_000_000n)
+    expect(BigInt(start!.record.timeUnixNano)).toBe(
+      BigInt(session.snapshotEvents().find((event) => event.type === 'turn/start')!.time) * 1_000_000n,
+    )
     expect(start?.record.attributes).toContainEqual({
       key: 'session.format_version',
       value: { intValue: SESSION_FORMAT_VERSION },
     })
     expect(start?.record.attributes).toContainEqual({ key: 'session.cwd', value: { stringValue: '/tmp/w' } })
 
-    const end = ledger.find(r => r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'turn/end'))
+    const end = ledger.find((r) => r.record.attributes?.some((a) => a.key === 'event.type' && a.value.stringValue === 'turn/end'))
     expect(end?.record.severityNumber).toBe(17)
     expect(end?.record.severityText).toBe('ERROR')
-    const assistant = ledger.find(r =>
-      r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'assistant/message'))
-    const content = assistant?.record.attributes?.find(a => a.key === 'content')?.value.stringValue
+    const assistant = ledger.find((r) =>
+      r.record.attributes?.some((a) => a.key === 'event.type' && a.value.stringValue === 'assistant/message'),
+    )
+    const content = assistant?.record.attributes?.find((a) => a.key === 'content')?.value.stringValue
     expect(typeof content).toBe('string')
-    expect(JSON.parse(content as string)).toEqual(session.snapshotEvents().find(event => event.type === 'assistant/message'))
+    expect(JSON.parse(content as string)).toEqual(session.snapshotEvents().find((event) => event.type === 'assistant/message'))
     for (const { record } of ledger) {
       expect(record).toMatchObject({ eventName: 'session-log', body: { stringValue: 'session-log' } })
       expect(record.attributes).toContainEqual({ key: 'sessionId', value: { stringValue: session.id } })
     }
     expect(eventTypes(captures)).not.toContain('manual')
-    expect(eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
+    expect(eventTypes(captures)).toEqual(session.snapshotEvents().map((event) => event.type))
     expect(ops).toHaveLength(0)
   })
 
@@ -235,7 +244,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
 
     expect(eventTypes(captures)).toEqual(['request/header', 'turn/start', 'feedback/record', 'feedback/record'])
     expect(JSON.stringify(captures)).toContain('second report')
-    expect(allRecords(captures).some(r => r.scope.endsWith('/ops'))).toBe(false)
+    expect(allRecords(captures).some((r) => r.scope.endsWith('/ops'))).toBe(false)
   })
 
   it('stops queued sends at the shutdown deadline while observing the active transport', async () => {
@@ -296,8 +305,9 @@ describe('OpenTelemetrySessionBackend wire', () => {
 
     expect(captures.length).toBeGreaterThan(0)
     expect(captures[0]!.headers['content-encoding']).toBe('gzip')
-    const types = allRecords(captures).flatMap(({ record }) =>
-      record.attributes?.flatMap(a => a.key === 'event.type' ? [a.value.stringValue] : []) ?? [])
+    const types = allRecords(captures).flatMap(
+      ({ record }) => record.attributes?.flatMap((a) => (a.key === 'event.type' ? [a.value.stringValue] : [])) ?? [],
+    )
     expect(types).toContain('turn/start')
   })
 
@@ -313,8 +323,9 @@ describe('OpenTelemetrySessionBackend wire', () => {
     expect('flush' in ctx.sessionTelemetry && ctx.sessionTelemetry.flush !== undefined).toBe(false)
     recordFeedback(session, { text: 'warning feedback' })
     await fiber.dispose()
-    const start = allRecords(captures).find(r =>
-      r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'turn/start'))
+    const start = allRecords(captures).find((r) =>
+      r.record.attributes?.some((a) => a.key === 'event.type' && a.value.stringValue === 'turn/start'),
+    )
     expect(start?.record.severityNumber).toBe(13)
   })
 
@@ -346,9 +357,10 @@ describe('OpenTelemetrySessionBackend wire', () => {
     session.append('turn/start', { turn: 2 })
     await fiber.dispose()
 
-    const types = allRecords(captures).flatMap(({ record }) =>
-      record.attributes?.flatMap(attribute =>
-        attribute.key === 'event.type' ? [attribute.value.stringValue] : []) ?? [])
+    const types = allRecords(captures).flatMap(
+      ({ record }) =>
+        record.attributes?.flatMap((attribute) => (attribute.key === 'event.type' ? [attribute.value.stringValue] : [])) ?? [],
+    )
     expect(types).toEqual(['request/header', 'turn/start', 'feedback/record', 'turn/end', 'feedback/record'])
     expect(JSON.stringify(captures)).toContain('first report')
     expect(JSON.stringify(captures)).toContain('second report')
@@ -379,9 +391,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
     ctx.emit('session/event', session, { ...envelope, type: 'feedback/record', data: { text: 'not committed' } })
     await fiber.dispose()
 
-    expect(warn).toHaveBeenCalledWith(
-      'session telemetry ignored an event absent from the canonical session log',
-    )
+    expect(warn).toHaveBeenCalledWith('session telemetry ignored an event absent from the canonical session log')
     expect(captures).toEqual([])
   })
 
@@ -401,9 +411,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
     session.append('turn/start', { turn: 1 })
     recordFeedback(session, { text: 'local report' })
 
-    expect(warn).toHaveBeenCalledWith(
-      'OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry',
-    )
+    expect(warn).toHaveBeenCalledWith('OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry')
     ctx.sessionTelemetry.emit({
       channel: 'ledger',
       time: 0,
@@ -464,7 +472,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
       session.append('turn/start', { turn: 1 })
       expect(captures).toEqual([])
       recordFeedback(session, { text: 'explicit report' })
-      const submitted = session.snapshotEvents().map(event => event.type)
+      const submitted = session.snapshotEvents().map((event) => event.type)
       await expect.poll(() => eventTypes(captures)).toEqual(submitted)
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await ctx.sessionTelemetry.shutdown()
@@ -483,14 +491,16 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     try {
       await ctx.plugin(SessionStore)
       await ctx.plugin(OpenTelemetrySessionBackend, {
-        mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url }, processor: { scheduledDelayMillis: 1 },
+        mode: SessionTelemetryMode.FEEDBACK_ONLY,
+        exporter: { url },
+        processor: { scheduledDelayMillis: 1 },
       })
       const session = ctx.sessions.create(SessionId('text-feedback'))
       if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
       session.append('turn/start', { turn: 1 })
       expect(captures).toEqual([])
       recordFeedback(session, { text: 'explicit report' })
-      const expected = session.snapshotEvents().map(event => event.type)
+      const expected = session.snapshotEvents().map((event) => event.type)
       await expect.poll(() => eventTypes(captures)).toEqual(expected)
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       session.append('request/header', { header: { config: { provider: 'deepseek-official', model: 'm' } }, reason: 'change' })
@@ -518,7 +528,7 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
         session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'change' })
       }
       const child = ctx.sessions.fork(restored, undefined, SessionId('child'))
-      const inherited = child.snapshotEvents().find(event => event.type === 'feedback/record')!
+      const inherited = child.snapshotEvents().find((event) => event.type === 'feedback/record')!
       ctx.emit('session/event', child, inherited)
       const opened = ctx.sessions.create(SessionId('opened'), { seed: donor.snapshotEvents() })
       ctx.emit('session/created', opened)
@@ -530,68 +540,79 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     expect(captures).toEqual([])
   })
 
-  it.each(['deepseek-official', 'mock', undefined])('uploads live ratings, notes and withdrawal for %s without further interaction', async (provider) => {
-    const { url, captures } = await mockCollector()
-    const root = mkdtempSync(join(tmpdir(), 'dsh-otel-live-'))
-    const ctx = new Context()
-    ctx.plugin(OTel)
-    try {
-      await ctx.plugin(SessionStore)
-      await ctx.plugin(JsonlPersistence, { root, compression: 'none' })
-      await ctx.plugin(MessageFeedbackService, { maxNoteBytes: 1024 })
-      await ctx.plugin(OpenTelemetrySessionBackend, {
-        mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url }, processor: { scheduledDelayMillis: 1 },
-      })
-      const session = ctx.sessions.create(SessionId('live-ratings'))
-      const handle = await ctx.sessionPersistence.create(session.header)
+  it.each(['deepseek-official', 'mock', undefined])(
+    'uploads live ratings, notes and withdrawal for %s without further interaction',
+    async (provider) => {
+      const { url, captures } = await mockCollector()
+      const root = mkdtempSync(join(tmpdir(), 'dsh-otel-live-'))
+      const ctx = new Context()
+      ctx.plugin(OTel)
       try {
-        session.append('turn/start', { turn: 1 })
-        session.append('step/start', { turn: 1, step: 1 })
-        if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
-        const message = createAssistantMessage({ content: [{ type: 'text', text: 'answer' }], source: { provider: provider ?? 'mock', model: 'm' } })
-        session.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
-        session.append('step/end', { turn: 1, step: 1 })
-        session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-        const request = { sessionId: session.id, messageId: message.id, rating: 'positive' as const, ifVersion: null }
-        const before = session.seq
-        expect((await ctx.messageFeedback.put({ ...request, note: ' ' })).ok).toBe(false)
-        expect(session.seq).toBe(before)
-        expect(captures).toEqual([])
-        const put = await ctx.messageFeedback.put(request)
-        if (!put.ok) throw new Error('live put failed')
-        await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
-        const throughPut = session.seq
-        await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version })
-        expect((await ctx.messageFeedback.put(request)).ok).toBe(false)
-        expect(session.seq).toBe(throughPut)
-        const edit = await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version, note: 'edited note' })
-        if (!edit.ok) throw new Error('live note failed')
-        await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
-        await ctx.messageFeedback.delete({ sessionId: session.id, messageId: message.id, ifVersion: edit.value.version })
-        await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
-        const submitted = eventTypes(captures)
-        const throughDelete = session.seq
-        await ctx.messageFeedback.delete({ sessionId: session.id, messageId: message.id, ifVersion: edit.value.version })
-        expect(session.seq).toBe(throughDelete)
-        session.append('turn/start', { turn: 2 })
-        await ctx.sessionTelemetry.shutdown()
-        expect(eventTypes(captures)).toEqual(submitted)
+        await ctx.plugin(SessionStore)
+        await ctx.plugin(JsonlPersistence, { root, compression: 'none' })
+        await ctx.plugin(MessageFeedbackService, { maxNoteBytes: 1024 })
+        await ctx.plugin(OpenTelemetrySessionBackend, {
+          mode: SessionTelemetryMode.FEEDBACK_ONLY,
+          exporter: { url },
+          processor: { scheduledDelayMillis: 1 },
+        })
+        const session = ctx.sessions.create(SessionId('live-ratings'))
+        const handle = await ctx.sessionPersistence.create(session.header)
+        try {
+          session.append('turn/start', { turn: 1 })
+          session.append('step/start', { turn: 1, step: 1 })
+          if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
+          const message = createAssistantMessage({
+            content: [{ type: 'text', text: 'answer' }],
+            source: { provider: provider ?? 'mock', model: 'm' },
+          })
+          session.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
+          session.append('step/end', { turn: 1, step: 1 })
+          session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+          const request = { sessionId: session.id, messageId: message.id, rating: 'positive' as const, ifVersion: null }
+          const before = session.seq
+          expect((await ctx.messageFeedback.put({ ...request, note: ' ' })).ok).toBe(false)
+          expect(session.seq).toBe(before)
+          expect(captures).toEqual([])
+          const put = await ctx.messageFeedback.put(request)
+          if (!put.ok) throw new Error('live put failed')
+          await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map((event) => event.type))
+          const throughPut = session.seq
+          await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version })
+          expect((await ctx.messageFeedback.put(request)).ok).toBe(false)
+          expect(session.seq).toBe(throughPut)
+          const edit = await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version, note: 'edited note' })
+          if (!edit.ok) throw new Error('live note failed')
+          await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map((event) => event.type))
+          await ctx.messageFeedback.delete({ sessionId: session.id, messageId: message.id, ifVersion: edit.value.version })
+          await expect.poll(() => eventTypes(captures)).toEqual(session.snapshotEvents().map((event) => event.type))
+          const submitted = eventTypes(captures)
+          const throughDelete = session.seq
+          await ctx.messageFeedback.delete({ sessionId: session.id, messageId: message.id, ifVersion: edit.value.version })
+          expect(session.seq).toBe(throughDelete)
+          session.append('turn/start', { turn: 2 })
+          await ctx.sessionTelemetry.shutdown()
+          expect(eventTypes(captures)).toEqual(submitted)
+        } finally {
+          await handle.close()
+        }
       } finally {
-        await handle.close()
+        await ctx.fiber.dispose()
+        rmSync(root, { recursive: true, force: true })
       }
-    } finally {
-      await ctx.fiber.dispose()
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
+    },
+  )
 
   it('ignores cold snapshots without a last own feedback event and foreign live ratings', async () => {
     const { url, captures } = await mockCollector()
     const { ctx, fiber } = await boot(url)
     const session = Session.create(SessionId('cold-not-submitted'))
-    const notify = async () => ctx.parallel('feedback/committed', {
-      meta: session.header, events: session.snapshotEvents(), inheritedEventCount: session.inheritedEventCount,
-    })
+    const notify = async () =>
+      ctx.parallel('feedback/committed', {
+        meta: session.header,
+        events: session.snapshotEvents(),
+        inheritedEventCount: session.inheritedEventCount,
+      })
     await notify()
     recordFeedback(session, { text: 'older feedback' })
     session.append('turn/start', { turn: 1 })
@@ -601,7 +622,8 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
     child.append('feedback/message-delete', { sessionId: session.id, messageId: message.id })
     await ctx.parallel('feedback/committed', {
       meta: { ...session.header, id: SessionId('inherited-cold'), parentSession: session.id, isSeeded: true },
-      events: session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(1)), inheritedEventCount: SessionLogOffset(1),
+      events: session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(1)),
+      inheritedEventCount: SessionLogOffset(1),
     })
     await fiber.dispose()
     expect(captures).toEqual([])
@@ -621,13 +643,24 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       parent.append('turn/start', { turn: 1 })
       parent.append('step/start', { turn: 1, step: 1 })
       parent.append('request/header', { header: { config: { provider: 'mock', model: 'm' } }, reason: 'initial' })
-      const message = createAssistantMessage({ content: [{ type: 'text', text: 'inherited answer' }], source: { provider: 'mock', model: 'm' } })
+      const message = createAssistantMessage({
+        content: [{ type: 'text', text: 'inherited answer' }],
+        source: { provider: 'mock', model: 'm' },
+      })
       parent.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
       parent.append('step/end', { turn: 1, step: 1 })
       parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-      const child = Session.create(SessionId('cold-child'), parent.snapshotEvents(), {
-        ...parent.header, id: SessionId('cold-child'), parentSession: parent.id, isSeeded: true,
-      }, parent.seq)
+      const child = Session.create(
+        SessionId('cold-child'),
+        parent.snapshotEvents(),
+        {
+          ...parent.header,
+          id: SessionId('cold-child'),
+          parentSession: parent.id,
+          isSeeded: true,
+        },
+        parent.seq,
+      )
       recordFeedback(child, { text: 'child-owned stored feedback' })
       const handle = await ctx.sessionPersistence.create(child.header, { inheritedEventCount: child.inheritedEventCount })
       try {
@@ -652,10 +685,17 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       rmSync(root, { recursive: true, force: true })
     }
     expect(eventTypes(captures)).toEqual([
-      'turn/start', 'step/start', 'request/header', 'assistant/message', 'step/end', 'turn/end',
-      'session/end-seed', 'feedback/record', 'feedback/message-put',
+      'turn/start',
+      'step/start',
+      'request/header',
+      'assistant/message',
+      'step/end',
+      'turn/end',
+      'session/end-seed',
+      'feedback/record',
+      'feedback/message-put',
     ])
-    expect(allRecords(captures).some(record => record.scope.endsWith('/ops'))).toBe(false)
+    expect(allRecords(captures).some((record) => record.scope.endsWith('/ops'))).toBe(false)
   })
 
   it.each([
@@ -678,7 +718,10 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       session.append('turn/start', { turn: 1 })
       session.append('step/start', { turn: 1, step: 1 })
       if (provider !== undefined) session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
-      const message = createAssistantMessage({ content: [{ type: 'text', text: 'answer' }], source: { provider: provider ?? 'mock', model: 'm' } })
+      const message = createAssistantMessage({
+        content: [{ type: 'text', text: 'answer' }],
+        source: { provider: provider ?? 'mock', model: 'm' },
+      })
       session.append('assistant/message', { message, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
       session.append('step/end', { turn: 1, step: 1 })
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
@@ -690,17 +733,21 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       }
       const observer = vi.fn()
       ctx.on('feedback/committed', observer)
-      ctx.on('feedback/committed', () => { throw new Error('observer failure') })
+      ctx.on('feedback/committed', () => {
+        throw new Error('observer failure')
+      })
       const request = { sessionId: session.id, messageId: message.id, rating: 'positive' as const, ifVersion: null }
       expect(captures).toEqual([])
       const put = await ctx.messageFeedback.put(request)
       expect(put.ok).toBe(true)
       if (!put.ok) throw new Error('put failed')
-      if (mode !== SessionTelemetryMode.DISABLED) await expect.poll(() => eventTypes(captures).filter(type => type === 'feedback/message-put').length).toBe(1)
+      if (mode !== SessionTelemetryMode.DISABLED)
+        await expect.poll(() => eventTypes(captures).filter((type) => type === 'feedback/message-put').length).toBe(1)
       await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version })
       const edit = await ctx.messageFeedback.put({ ...request, ifVersion: put.value.version, note: 'explanation' })
       if (!edit.ok) throw new Error('edit failed')
-      if (mode !== SessionTelemetryMode.DISABLED) await expect.poll(() => eventTypes(captures).filter(type => type === 'feedback/message-put').length).toBe(3)
+      if (mode !== SessionTelemetryMode.DISABLED)
+        await expect.poll(() => eventTypes(captures).filter((type) => type === 'feedback/message-put').length).toBe(3)
       await ctx.messageFeedback.delete({ sessionId: session.id, messageId: message.id, ifVersion: edit.value.version })
       if (mode !== SessionTelemetryMode.DISABLED) await expect.poll(() => eventTypes(captures)).toContain('feedback/message-delete')
       expect(observer).toHaveBeenCalledTimes(3)
@@ -710,16 +757,14 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
       await ctx.fiber.dispose()
       rmSync(root, { recursive: true, force: true })
     }
-    expect(warn).not.toHaveBeenCalledWith(
-      'OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry',
-    )
+    expect(warn).not.toHaveBeenCalledWith('OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry')
     if (mode === SessionTelemetryMode.DISABLED) expect(captures).toEqual([])
     else {
       expect(eventTypes(captures)).toContain('feedback/message-put')
       expect(eventTypes(captures)).toContain('feedback/message-delete')
       expect(JSON.stringify(captures)).toContain('explanation')
       expect(eventTypes(captures)).not.toContain('session/end-seed')
-      expect(allRecords(captures).some(record => record.scope.endsWith('/ops'))).toBe(false)
+      expect(allRecords(captures).some((record) => record.scope.endsWith('/ops'))).toBe(false)
     }
   })
 })
@@ -745,10 +790,22 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     [{ mode: 'FULL' }, /FULL/],
     // The SDK accepts a non-positive batch size but its shutdown drain then
     // splices empty batches forever — dispose would hang, so reject at load.
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, processor: { maxExportBatchSize: 0 } }, /maxExportBatchSize/],
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, processor: { maxExportBatchSize: 0.5 } }, /maxExportBatchSize/],
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: 0 }, /shutdownTimeoutMillis/],
-    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: Number.POSITIVE_INFINITY }, /shutdownTimeoutMillis/],
+    [
+      { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, processor: { maxExportBatchSize: 0 } },
+      /maxExportBatchSize/,
+    ],
+    [
+      { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, processor: { maxExportBatchSize: 0.5 } },
+      /maxExportBatchSize/,
+    ],
+    [
+      { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: 0 },
+      /shutdownTimeoutMillis/,
+    ],
+    [
+      { mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: Number.POSITIVE_INFINITY },
+      /shutdownTimeoutMillis/,
+    ],
   ])('rejects %j at plugin load', async (config, message) => {
     const ctx = new Context()
     ctx.plugin(OTel)
@@ -831,10 +888,14 @@ it('reports oversized records without failing feedback or exporting their conten
     await ctx.plugin(SessionStore)
     const warn = vi.spyOn(ctx.logger, 'warn')
     const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
-      mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url }, maxRequestBytes: 1,
+      mode: SessionTelemetryMode.FEEDBACK_ONLY,
+      exporter: { url },
+      maxRequestBytes: 1,
     })
     const session = ctx.sessions.create(SessionId('oversized'))
-    expect(() => { recordFeedback(session, { text: 'feedback remains local' }) }).not.toThrow()
+    expect(() => {
+      recordFeedback(session, { text: 'feedback remains local' })
+    }).not.toThrow()
     await fiber.dispose()
     expect(captures).toEqual([])
     expect(warn).toHaveBeenCalledWith('Session log record rejected; content was not truncated', expect.any(Error))

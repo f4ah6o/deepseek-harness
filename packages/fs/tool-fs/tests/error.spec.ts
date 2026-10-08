@@ -3,7 +3,7 @@
  * failures, the stale-version remedy, code preservation, and passthrough.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { remediateFsError } from '../src/error.ts'
 
@@ -22,13 +22,13 @@ describe('remediateFsError', () => {
       new FsError('edit requires reading "x" first', 'FS_NOT_OBSERVED'),
       new FsError('cannot overwrite existing "x" without reading it first', 'FS_NOT_OBSERVED'),
     ]
-    const remedied = sources.map(error => remediateFsError(error, 'x') as FsError)
-    expect(remedied.map(error => error.message)).toEqual([
+    const remedied = sources.map((error) => remediateFsError(error, 'x') as FsError)
+    expect(remedied.map((error) => error.message)).toEqual([
       'cannot modify "x": file has not been read — read the file, then retry',
       'cannot modify "x": file has not been read — read the file, then retry',
     ])
-    expect(remedied.map(error => error.code)).toEqual(['FS_NOT_OBSERVED', 'FS_NOT_OBSERVED'])
-    expect(remedied.map(error => error.cause)).toEqual(sources)
+    expect(remedied.map((error) => error.code)).toEqual(['FS_NOT_OBSERVED', 'FS_NOT_OBSERVED'])
+    expect(remedied.map((error) => error.cause)).toEqual(sources)
   })
 
   it('leaves other FsError codes untouched', () => {

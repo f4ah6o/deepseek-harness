@@ -26,13 +26,20 @@ import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import type { Browser } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import {
-  composeProfile, configTrees, indexWorkspacePackages, packVfsImage, packPreviewFixture,
-  previewFixtures, WRAPPER_CONTRACT,
+  composeProfile,
+  configTrees,
+  indexWorkspacePackages,
+  packVfsImage,
+  packPreviewFixture,
+  previewFixtures,
+  WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'
 import {
-  IMAGE_FILE_NAME, PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
+  IMAGE_FILE_NAME,
+  PREVIEW_FIXTURE_MANIFEST_FILE,
+  PREVIEW_FIXTURE_MANIFEST_VERSION,
   type PreviewFixtureManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import {
@@ -159,9 +166,7 @@ function requireVfsAssets(): PreviewAssets {
   writeFileSync(join(cacheDirectory, 'session_projcache.json'), currentCache)
   const fixtures = fixtureDefinitions.map((fixture) => {
     const relativePath = `preview/fixtures/${fixture.id}.tar.gz`
-    const trees = fixture.id === 'vfs-example'
-      ? [...fixture.trees, { mount: 'home/storages', directory: cacheDirectory }]
-      : fixture.trees
+    const trees = fixture.id === 'vfs-example' ? [...fixture.trees, { mount: 'home/storages', directory: cacheDirectory }] : fixture.trees
     writeAsset(relativePath, packPreviewFixture(trees).image)
     return {
       id: fixture.id,
@@ -176,7 +181,12 @@ function requireVfsAssets(): PreviewAssets {
     fixtures,
   }
   writeAsset(`preview/${PREVIEW_FIXTURE_MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 2)}\n`)
-  return { overrides, cleanup: () => { rmSync(directory, { recursive: true, force: true }) } }
+  return {
+    overrides,
+    cleanup: () => {
+      rmSync(directory, { recursive: true, force: true })
+    },
+  }
 }
 
 /**
@@ -185,11 +195,7 @@ function requireVfsAssets(): PreviewAssets {
  * @param response - Response to write the bytes or the 404 to.
  * @param overrides - Generated deployment files served before `dist/`.
  */
-async function respond(
-  request: IncomingMessage,
-  response: ServerResponse,
-  overrides: ReadonlyMap<string, string>,
-): Promise<void> {
+async function respond(request: IncomingMessage, response: ServerResponse, overrides: ReadonlyMap<string, string>): Promise<void> {
   const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
   const relative = normalize(decodeURIComponent(path)).replace(/^\/+/, '')
   try {
@@ -211,7 +217,9 @@ async function respond(
  * @returns The origin to navigate, and its teardown.
  */
 async function serveDist(overrides: ReadonlyMap<string, string>): Promise<Site> {
-  const server = createServer((request, response) => { void respond(request, response, overrides) })
+  const server = createServer((request, response) => {
+    void respond(request, response, overrides)
+  })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const address = server.address()
@@ -243,7 +251,11 @@ async function within<T>(work: Promise<T>, ms: number, stalled: string): Promise
   try {
     return await Promise.race([
       work,
-      new Promise<never>((_, reject) => { timer = setTimeout(() => { reject(new Error(stalled)) }, ms) }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(stalled))
+        }, ms)
+      }),
     ])
   } finally {
     clearTimeout(timer)
@@ -280,7 +292,9 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
   const page = await newEnglishPage(browser)
   const pageErrors: Error[] = []
   const consoleErrors: string[] = []
-  page.on('pageerror', (error) => { pageErrors.push(error) })
+  page.on('pageerror', (error) => {
+    pageErrors.push(error)
+  })
   // Registered before navigation: the worker reports its tree long before the
   // tunnel serves the client, so a listener added later would miss the line.
   const treeActive = new Promise<string>((reported) => {
@@ -319,116 +333,125 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     const configureLater = page.getByRole('button', { name: 'Configure later' })
     await configureLater.waitFor({ timeout: 30_000 })
     await configureLater.click()
-    await page.locator('[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
+    await page
+      .locator('[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
       .waitFor({ timeout: 30_000 })
 
-    const exercised = await page.evaluate(async ({ seededSessionId, seededSessionTitle }) => {
-      type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { code: string; message: string } } }
-      interface PreviewTransport {
-        fetch(input: string, init: RequestInit): Promise<Response>
-      }
-      const transport = (globalThis as typeof globalThis & { __DSH_TRANSPORT__?: PreviewTransport }).__DSH_TRANSPORT__
-      if (transport === undefined) throw new Error('preview transport is absent after boot')
-      const response = await transport.fetch('/api/session/list', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'client-request', rpcId: 'preview-session-list', method: 'session/list',
-          payload: { args: { _request: {} } },
-        }),
-      })
-      const sessions = await response.json() as Result<{ items: Array<{ sessionId: string }> }>
-      if (!sessions.result.ok) throw new Error(`session/list failed: ${sessions.result.error.message}`)
-      const sessionId = sessions.result.value.items[0]?.sessionId
-      if (sessionId === undefined) throw new Error('workspace adoption created no Session')
-
-      // Remote namespaces answer over the same unary carrier; the args object
-      // keys every wire parameter by its name.
-      const remote = async <T>(endpoint: string, args: object): Promise<T> => {
-        const answered = await transport.fetch(`/api/${endpoint}`, {
+    const exercised = await page.evaluate(
+      async ({ seededSessionId, seededSessionTitle }) => {
+        type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { code: string; message: string } } }
+        interface PreviewTransport {
+          fetch(input: string, init: RequestInit): Promise<Response>
+        }
+        const transport = (globalThis as typeof globalThis & { __DSH_TRANSPORT__?: PreviewTransport }).__DSH_TRANSPORT__
+        if (transport === undefined) throw new Error('preview transport is absent after boot')
+        const response = await transport.fetch('/api/session/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            type: 'client-request', rpcId: `preview-${endpoint.replace('/', '-')}`,
-            method: endpoint, payload: { args },
+            type: 'client-request',
+            rpcId: 'preview-session-list',
+            method: 'session/list',
+            payload: { args: { _request: {} } },
           }),
         })
-        const body = await answered.json() as Result<T>
-        if (!body.result.ok) throw new Error(`${endpoint} failed: ${body.result.error.message}`)
-        return body.result.value
-      }
-      // Keep the fixture title stable for later UI assertions; increasing seqs
-      // prove that the cold Session acquired its write lease and appended.
-      const firstRename = await remote<{ title: string; seq: number }>('session/rename', {
-        request: { sessionId: seededSessionId, title: seededSessionTitle },
-      })
-      const secondRename = await remote<{ title: string; seq: number }>('session/rename', {
-        request: { sessionId: seededSessionId, title: seededSessionTitle },
-      })
-      const skills = await remote<{ skills: Array<{ name: string }> }>(
-        'skills/list', { request: { sessionId } },
-      )
-      const createDirectory = async (path: string, name: string): Promise<void> => {
-        await remote<string>('directoryPicker/createDirectory', { path, name })
-        await new Promise((resolve) => { setTimeout(resolve, 250) })
-        await remote<{ skills: Array<{ name: string }> }>(
-          'skills/list', { request: { sessionId } },
-        )
-      }
-      await createDirectory('/dsh/workspace/.agents/skills', 'runtime-created')
-      // Settings and credentials both answer over the Remote carrier, so this
-      // half of the sweep posts the generated endpoints directly like the
-      // session read above.
-      interface Setting { ns: string; revision: number; value: Record<string, unknown>; user: Record<string, unknown> }
-      const settings = await remote<{ writable: boolean; namespaces: Setting[] }>(
-        'settings/describe', {},
-      )
-      const shell = settings.namespaces.find(namespace => namespace.ns === 'bash-sandbox')
-      if (shell === undefined) throw new Error('settings/describe omitted the bash-sandbox namespace')
-      const saved = await remote<Setting>('settings/update', {
-        ns: 'bash-sandbox',
-        patch: { timeoutMs: 61_000 },
-        expectedRevision: shell.revision,
-      })
-      const reread = await remote<{ namespaces: Setting[] }>('settings/describe', {})
-      const reset = await remote<Setting>('settings/mutate', {
-        ns: 'bash-sandbox', ops: [{ op: 'unset', path: ['timeoutMs'] }], expectedRevision: saved.revision,
-      })
-      await remote('settings/update', { ns: 'ui-theme', patch: { fontSize: 17 } })
-      await remote('credentials/set', { ref: 'PREVIEW_TEST_SECRET', value: 'worker-only' })
-      const credentials = await remote<Record<string, { configured: boolean }>>(
-        'credentials/describe',
-        { refs: ['PREVIEW_TEST_SECRET'] },
-      )
-      await remote('credentials/unset', { ref: 'PREVIEW_TEST_SECRET' })
-      await new Promise((resolve) => { setTimeout(resolve, 250) })
-      return {
-        settingsWritable: settings.writable,
-        settingIds: settings.namespaces.map(namespace => namespace.ns),
-        savedTimeout: saved.value.timeoutMs,
-        rereadTimeout: reread.namespaces.find(namespace => namespace.ns === 'bash-sandbox')?.value.timeoutMs,
-        resetTimeout: reset.value.timeoutMs,
-        initialTimeout: shell.value.timeoutMs,
-        resetOverrides: reset.user,
-        renamedTitle: secondRename.title,
-        renameAdvanced: secondRename.seq > firstRename.seq,
-        skillCount: skills.skills.length,
-        credentialConfigured: credentials.PREVIEW_TEST_SECRET?.configured,
-      }
-    }, {
-      seededSessionId: VFS_EXAMPLE_SESSION_IDS.main,
-      seededSessionTitle: SHOWCASE_TITLE,
-    })
+        const sessions = (await response.json()) as Result<{ items: Array<{ sessionId: string }> }>
+        if (!sessions.result.ok) throw new Error(`session/list failed: ${sessions.result.error.message}`)
+        const sessionId = sessions.result.value.items[0]?.sessionId
+        if (sessionId === undefined) throw new Error('workspace adoption created no Session')
+
+        // Remote namespaces answer over the same unary carrier; the args object
+        // keys every wire parameter by its name.
+        const remote = async <T>(endpoint: string, args: object): Promise<T> => {
+          const answered = await transport.fetch(`/api/${endpoint}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              type: 'client-request',
+              rpcId: `preview-${endpoint.replace('/', '-')}`,
+              method: endpoint,
+              payload: { args },
+            }),
+          })
+          const body = (await answered.json()) as Result<T>
+          if (!body.result.ok) throw new Error(`${endpoint} failed: ${body.result.error.message}`)
+          return body.result.value
+        }
+        // Keep the fixture title stable for later UI assertions; increasing seqs
+        // prove that the cold Session acquired its write lease and appended.
+        const firstRename = await remote<{ title: string; seq: number }>('session/rename', {
+          request: { sessionId: seededSessionId, title: seededSessionTitle },
+        })
+        const secondRename = await remote<{ title: string; seq: number }>('session/rename', {
+          request: { sessionId: seededSessionId, title: seededSessionTitle },
+        })
+        const skills = await remote<{ skills: Array<{ name: string }> }>('skills/list', { request: { sessionId } })
+        const createDirectory = async (path: string, name: string): Promise<void> => {
+          await remote<string>('directoryPicker/createDirectory', { path, name })
+          await new Promise((resolve) => {
+            setTimeout(resolve, 250)
+          })
+          await remote<{ skills: Array<{ name: string }> }>('skills/list', { request: { sessionId } })
+        }
+        await createDirectory('/dsh/workspace/.agents/skills', 'runtime-created')
+        // Settings and credentials both answer over the Remote carrier, so this
+        // half of the sweep posts the generated endpoints directly like the
+        // session read above.
+        interface Setting {
+          ns: string
+          revision: number
+          value: Record<string, unknown>
+          user: Record<string, unknown>
+        }
+        const settings = await remote<{ writable: boolean; namespaces: Setting[] }>('settings/describe', {})
+        const shell = settings.namespaces.find((namespace) => namespace.ns === 'bash-sandbox')
+        if (shell === undefined) throw new Error('settings/describe omitted the bash-sandbox namespace')
+        const saved = await remote<Setting>('settings/update', {
+          ns: 'bash-sandbox',
+          patch: { timeoutMs: 61_000 },
+          expectedRevision: shell.revision,
+        })
+        const reread = await remote<{ namespaces: Setting[] }>('settings/describe', {})
+        const reset = await remote<Setting>('settings/mutate', {
+          ns: 'bash-sandbox',
+          ops: [{ op: 'unset', path: ['timeoutMs'] }],
+          expectedRevision: saved.revision,
+        })
+        await remote('settings/update', { ns: 'ui-theme', patch: { fontSize: 17 } })
+        await remote('credentials/set', { ref: 'PREVIEW_TEST_SECRET', value: 'worker-only' })
+        const credentials = await remote<Record<string, { configured: boolean }>>('credentials/describe', { refs: ['PREVIEW_TEST_SECRET'] })
+        await remote('credentials/unset', { ref: 'PREVIEW_TEST_SECRET' })
+        await new Promise((resolve) => {
+          setTimeout(resolve, 250)
+        })
+        return {
+          settingsWritable: settings.writable,
+          settingIds: settings.namespaces.map((namespace) => namespace.ns),
+          savedTimeout: saved.value.timeoutMs,
+          rereadTimeout: reread.namespaces.find((namespace) => namespace.ns === 'bash-sandbox')?.value.timeoutMs,
+          resetTimeout: reset.value.timeoutMs,
+          initialTimeout: shell.value.timeoutMs,
+          resetOverrides: reset.user,
+          renamedTitle: secondRename.title,
+          renameAdvanced: secondRename.seq > firstRename.seq,
+          skillCount: skills.skills.length,
+          credentialConfigured: credentials.PREVIEW_TEST_SECRET?.configured,
+        }
+      },
+      {
+        seededSessionId: VFS_EXAMPLE_SESSION_IDS.main,
+        seededSessionTitle: SHOWCASE_TITLE,
+      },
+    )
     expect(exercised.settingsWritable).toBe(true)
-    expect(exercised.settingIds).toEqual(expect.arrayContaining([
-      'bash-sandbox', 'locale', 'ui-theme', 'ui-chat', 'ui-conversation', 'ui-settings', 'ui-settings-general',
-    ]))
+    expect(exercised.settingIds).toEqual(
+      expect.arrayContaining(['bash-sandbox', 'locale', 'ui-theme', 'ui-chat', 'ui-conversation', 'ui-settings', 'ui-settings-general']),
+    )
     expect(exercised.savedTimeout).toBe(61_000)
     expect(exercised.rereadTimeout).toBe(61_000)
     expect(exercised.resetTimeout).toBe(exercised.initialTimeout)
     expect(exercised.resetOverrides).not.toHaveProperty('timeoutMs')
-    await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size')))
-      .toBe('17px')
+    await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--dsh-content-font-size'))).toBe('17px')
     expect(exercised.renamedTitle).toBe(SHOWCASE_TITLE)
     expect(exercised.renameAdvanced).toBe(true)
     expect(exercised.skillCount).toBeGreaterThan(0)
@@ -465,14 +488,15 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
 
     await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
     await page.getByText(SHOWCASE_OLDEST, { exact: true }).waitFor({ timeout: 15_000 })
-    expect(pageErrors.map(error => error.message)).toEqual([])
-    expect(consoleErrors.filter(line =>
-      /watchFile|failed to watch|node-addon-system\.probe|sandbox backend is usable|SANDBOX_UNAVAILABLE/i.test(line))).toEqual([])
+    expect(pageErrors.map((error) => error.message)).toEqual([])
+    expect(
+      consoleErrors.filter((line) =>
+        /watchFile|failed to watch|node-addon-system\.probe|sandbox backend is usable|SANDBOX_UNAVAILABLE/i.test(line),
+      ),
+    ).toEqual([])
   } catch (error) {
     await saveFailureShot(page, 'preview-boot')
-    throw pageErrors.length === 0
-      ? error
-      : new AggregateError([error, ...pageErrors], 'preview boot failed, with uncaught page errors')
+    throw pageErrors.length === 0 ? error : new AggregateError([error, ...pageErrors], 'preview boot failed, with uncaught page errors')
   }
 }
 
@@ -482,7 +506,9 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
   const pageErrors: Error[] = []
   const consoleErrors: string[] = []
   const failedResponses: string[] = []
-  page.on('pageerror', (error) => { pageErrors.push(error) })
+  page.on('pageerror', (error) => {
+    pageErrors.push(error)
+  })
   page.on('response', (response) => {
     if (response.status() >= 400) failedResponses.push(new URL(response.url()).pathname)
   })
@@ -496,42 +522,41 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
   try {
     await page.goto(`${origin}/preview.html?preview-fixture=none`, { waitUntil: 'domcontentloaded' })
     expect(await page.getByRole('heading', { name: '选择 Preview 数据源' }).count()).toBe(0)
-    const bootLine = await within(
-      treeActive,
-      BOOT_TIMEOUT_MS,
-      `empty preview boot: the worker never reported "${TREE_ACTIVE}"`,
-    )
+    const bootLine = await within(treeActive, BOOT_TIMEOUT_MS, `empty preview boot: the worker never reported "${TREE_ACTIVE}"`)
     expect(bootLine).toContain(`image lowering=${WRAPPER_CONTRACT}`)
     expect(bootLine).toContain('data overlays=0')
     await page.getByRole('textbox', { name: 'Choose workspace' }).waitFor({ timeout: HERO_TIMEOUT_MS })
     const sessionCount = await page.evaluate(async () => {
-      const transport = (globalThis as typeof globalThis & {
-        __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
-      }).__DSH_TRANSPORT__
+      const transport = (
+        globalThis as typeof globalThis & {
+          __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+        }
+      ).__DSH_TRANSPORT__
       if (transport === undefined) throw new Error('empty preview transport is absent after boot')
       const response = await transport.fetch('/api/session/list', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          type: 'client-request', rpcId: 'empty-preview-session-list', method: 'session/list',
+          type: 'client-request',
+          rpcId: 'empty-preview-session-list',
+          method: 'session/list',
           payload: { args: { _request: {} } },
         }),
       })
-      const body = await response.json() as {
+      const body = (await response.json()) as {
         result: { ok: true; value: { items: unknown[] } } | { ok: false; error: { message: string } }
       }
       if (!body.result.ok) throw new Error(`empty session/list failed: ${body.result.error.message}`)
       return body.result.value.items.length
     })
     expect(sessionCount).toBe(0)
-    expect(pageErrors.map(error => error.message)).toEqual([])
+    expect(pageErrors.map((error) => error.message)).toEqual([])
     // Two accepted static-host 404s, sorted (the boot fetches race): the HMR
     // event stream has no server here, and the open-in-app availability read
     // has no host routes — the controller publishes an empty list and the
     // header renders no button, which is that surface's designed degradation.
     expect([...failedResponses].sort()).toEqual(['/open-in-app/apps', '/plugins/events'])
-    expect(consoleErrors.filter(line => !line.includes('Failed to load resource: the server responded with a status of 404')))
-      .toEqual([])
+    expect(consoleErrors.filter((line) => !line.includes('Failed to load resource: the server responded with a status of 404'))).toEqual([])
   } catch (error) {
     await saveFailureShot(page, 'preview-boot-empty')
     throw pageErrors.length === 0

@@ -8,12 +8,12 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import WorkspaceGit from '../src/index.ts'
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
 function git(cwd: string, ...args: string[]): string {
@@ -39,9 +39,13 @@ function waitingForAbort(spec: SubprocessSpawnSpec): SubprocessHandle {
   const signal = spec.signal
   if (signal === undefined) throw new Error('workspace Git must cancel its subprocess')
   const done = new Promise<SubprocessOutcome>((_resolve, reject) => {
-    signal.addEventListener('abort', () => {
-      reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)))
-    }, { once: true })
+    signal.addEventListener(
+      'abort',
+      () => {
+        reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)))
+      },
+      { once: true },
+    )
   })
   return {
     stdin: undefined,
@@ -96,12 +100,20 @@ describe('workspaceGit.status', () => {
     git(ambientCwd, 'remote', 'add', 'origin', 'https://alice:ambient-secret@github.com/shiguredo/ambient.git')
 
     const names = [
-      'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0', 'GIT_CONFIG_PARAMETERS',
-      'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
-      'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CEILING_DIRECTORIES',
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_CONFIG_PARAMETERS',
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_COMMON_DIR',
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_CEILING_DIRECTORIES',
       'GIT_DISCOVERY_ACROSS_FILESYSTEM',
     ] as const
-    const original = new Map(names.map(name => [name, process.env[name]] as const))
+    const original = new Map(names.map((name) => [name, process.env[name]] as const))
     const ctx = new Context()
     ctx.provide('sandboxPolicy', { workspaceRoot: tmpdir() } as never)
     const sessions = await ctx.plugin(SessionStore)
@@ -179,8 +191,7 @@ describe('workspaceGit.status', () => {
         state: { kind: 'detached', repository: 'fallback-root' },
         refreshMs: 7_500,
       })
-      expect(status.state.kind === 'detached' ? status.state.revision : undefined)
-        .toMatch(/^[0-9a-f]{7,}$/)
+      expect(status.state.kind === 'detached' ? status.state.revision : undefined).toMatch(/^[0-9a-f]{7,}$/)
       expect(JSON.stringify(status)).not.toContain('top-secret')
     } finally {
       await service.dispose()
@@ -205,10 +216,10 @@ describe('workspaceGit.status', () => {
 
     try {
       await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toEqual({
-        state: { kind: 'none' }, refreshMs: 5_000,
+        state: { kind: 'none' },
+        refreshMs: 5_000,
       })
-      await expect(ctx.workspaceGit.status(id, AbortSignal.abort(new Error('session changed'))))
-        .rejects.toThrow('session changed')
+      await expect(ctx.workspaceGit.status(id, AbortSignal.abort(new Error('session changed')))).rejects.toThrow('session changed')
       expect(spawn).toHaveBeenCalledOnce()
     } finally {
       await service.dispose()
@@ -229,11 +240,12 @@ describe('workspaceGit.status', () => {
     const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 10, refreshMs: 5_000 })
     const id = SessionId('deadline-session')
     ctx.sessions.create(id, { meta: { cwd: root } })
-    const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation(spec => waitingForAbort(spec))
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation((spec) => waitingForAbort(spec))
 
     try {
       await expect(ctx.workspaceGit.status(id, new AbortController().signal)).resolves.toMatchObject({
-        state: { kind: 'none' }, refreshMs: 5_000,
+        state: { kind: 'none' },
+        refreshMs: 5_000,
       })
       expect(spawn).toHaveBeenCalledOnce()
       expect(spawn.mock.calls[0]?.[0].signal?.aborted).toBe(true)
@@ -256,11 +268,13 @@ describe('workspaceGit.status', () => {
     const service = await ctx.plugin(WorkspaceGit, { deadlineMs: 5_000, refreshMs: 5_000 })
     const id = SessionId('dispose-session')
     ctx.sessions.create(id, { meta: { cwd: root } })
-    const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation(spec => waitingForAbort(spec))
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockImplementation((spec) => waitingForAbort(spec))
     const status = ctx.workspaceGit.status(id, new AbortController().signal)
 
     try {
-      await vi.waitFor(() => { expect(spawn).toHaveBeenCalledOnce() })
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalledOnce()
+      })
       await service.dispose()
       await expect(status).rejects.toThrow('workspace Git service disposed')
       expect(spawn.mock.calls[0]?.[0].signal?.aborted).toBe(true)

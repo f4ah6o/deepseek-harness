@@ -12,12 +12,8 @@ import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controll
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  apply,
-  type SessionPendingInteractionBase,
-  UiSession,
-} from '../src/client/index.ts'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { apply, type SessionPendingInteractionBase, UiSession } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
 interface SessionsBench {
@@ -67,9 +63,10 @@ function createSessionsBench(ctx: Context): SessionsBench {
     return source
   }
   const resolveBinding = vi.fn((id: SessionId) => bindings.get(id))
-  const createSession = vi.fn<ISessions['create']>(async options =>
-    options?.sessionId ?? sessionId(`created-${String(options?.workspaceId ?? 'none')}`))
-  const retainInfo = vi.fn<ISessions['retainInfo']>(id => retainSource(id))
+  const createSession = vi.fn<ISessions['create']>(
+    async (options) => options?.sessionId ?? sessionId(`created-${String(options?.workspaceId ?? 'none')}`),
+  )
+  const retainInfo = vi.fn<ISessions['retainInfo']>((id) => retainSource(id))
   const sessions = {
     list,
     create: createSession,
@@ -141,7 +138,9 @@ function createSessionsBench(ctx: Context): SessionsBench {
     },
     reference(binding) {
       let released = false
-      const release = vi.fn(() => { released = true })
+      const release = vi.fn(() => {
+        released = true
+      })
       return {
         sessionId: binding.sessionId,
         ready: Promise.resolve(binding),
@@ -189,7 +188,7 @@ function createUiSession(ctx: Context, bench: SessionsBench): UiSession {
 }
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(roots.splice(0).map((ctx) => ctx.fiber.dispose()))
   vi.restoreAllMocks()
 })
 
@@ -210,9 +209,13 @@ describe('UiSession bindings', () => {
     bench.setMainView(first.sessionId, 1)
     expect(current.getSnapshot()).toBe(firstSource.getSnapshot())
     const missing = sessionId('missing')
-    bench.list.update((draft) => { draft.byId[missing] = undefined as never })
+    bench.list.update((draft) => {
+      draft.byId[missing] = undefined as never
+    })
     expect(current.getSnapshot()).toBe(firstSource.getSnapshot())
-    bench.list.update((draft) => { Reflect.deleteProperty(draft.byId, missing) })
+    bench.list.update((draft) => {
+      Reflect.deleteProperty(draft.byId, missing)
+    })
 
     bench.retainInfo.mockClear()
     bench.setRetainInfo(first.sessionId, 2)
@@ -348,7 +351,6 @@ describe('UiSession bindings', () => {
     expect(changed).not.toHaveBeenCalled()
   })
 
-
   it('contains a failing binding subscriber and continues dispatch', () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)
@@ -356,7 +358,9 @@ describe('UiSession bindings', () => {
     const source = service.bindingSource(bench.reference(bench.binding(sessionId('s1'))))
     const failure = new Error('subscriber failed')
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const off = source.subscribe(() => { throw failure })
+    const off = source.subscribe(() => {
+      throw failure
+    })
     const after = vi.fn()
     source.subscribe(after)
 
@@ -377,7 +381,9 @@ describe('UiSession bindings', () => {
     ctx.provide('slots', { bindStoreScope } as never)
     let service: UiSession | undefined
     const fiber = ctx.plugin({
-      apply(scope: Context) { service = new UiSession(scope, bench.sessions) },
+      apply(scope: Context) {
+        service = new UiSession(scope, bench.sessions)
+      },
     })
     await fiber.await()
     if (service === undefined) throw new Error('UiSession did not start')
@@ -404,19 +410,26 @@ describe('UiSession bindings', () => {
     const absent = service.bindingSource(undefined)
     expect(sourceA).not.toBe(sourceB)
     const values: unknown[] = []
-    sourceA.subscribe(() => { values.push(sourceB.getSnapshot().props.feature) })
+    sourceA.subscribe(() => {
+      values.push(sourceB.getSnapshot().props.feature)
+    })
     const changedB = vi.fn()
     sourceB.subscribe(changedB)
     const custom = createSnapshotStore(1)
     const keyed = (key: string): HostObservable<unknown> => createSnapshotStore(key)
     const remove = service.provide({
-      hooks: ['custom'], keyedHooks: ['customKeyed'], props: ['feature'],
-      resolve: binding => ({
-        hooks: { custom }, keyedHooks: { customKeyed: keyed }, props: { feature: binding.sessionId },
+      hooks: ['custom'],
+      keyedHooks: ['customKeyed'],
+      props: ['feature'],
+      resolve: (binding) => ({
+        hooks: { custom },
+        keyedHooks: { customKeyed: keyed },
+        props: { feature: binding.sessionId },
       }),
     })
     const removeNeighbor = service.provide({
-      props: ['neighbor'], resolve: () => ({ props: { neighbor: 'kept' } }),
+      props: ['neighbor'],
+      resolve: () => ({ props: { neighbor: 'kept' } }),
     })
 
     expect(service.bindingSource(a)).toBe(sourceA)
@@ -483,12 +496,18 @@ describe('UiSession bindings', () => {
     const absent = service.bindingSource(undefined)
     const before = absent.getSnapshot()
 
-    expect(() => service.provide({
-      keyedHooks: ['feature'], resolve: () => ({ keyedHooks: { feature: () => source } }),
-    })).toThrow("uiSession.provide: duplicate keyed hook 'feature' at prop 'useFeature'")
-    expect(() => service.provide({
-      props: ['useFeature'], resolve: () => ({ props: { useFeature: true } }),
-    })).toThrow("uiSession.provide: duplicate prop 'useFeature' at prop 'useFeature'")
+    expect(() =>
+      service.provide({
+        keyedHooks: ['feature'],
+        resolve: () => ({ keyedHooks: { feature: () => source } }),
+      }),
+    ).toThrow("uiSession.provide: duplicate keyed hook 'feature' at prop 'useFeature'")
+    expect(() =>
+      service.provide({
+        props: ['useFeature'],
+        resolve: () => ({ props: { useFeature: true } }),
+      }),
+    ).toThrow("uiSession.provide: duplicate prop 'useFeature' at prop 'useFeature'")
     expect(absent.getSnapshot()).toBe(before)
   })
 
@@ -505,14 +524,16 @@ describe('UiSession bindings', () => {
     second.subscribe(changed)
     let calls = 0
 
-    expect(() => service.provide({
-      props: ['partial'],
-      resolve: () => {
-        calls += 1
-        if (calls === 2) throw new Error('second binding failed')
-        return { props: { partial: true } }
-      },
-    })).toThrow('second binding failed')
+    expect(() =>
+      service.provide({
+        props: ['partial'],
+        resolve: () => {
+          calls += 1
+          if (calls === 2) throw new Error('second binding failed')
+          return { props: { partial: true } }
+        },
+      }),
+    ).toThrow('second binding failed')
     expect(calls).toBe(2)
     expect(first.getSnapshot()).toBe(beforeFirst)
     expect(second.getSnapshot()).toBe(beforeSecond)
@@ -533,11 +554,15 @@ describe('UiSession status', () => {
     expect(service.sessionStatus.getSnapshot().get(id)?.completionUnread).toBe(false)
 
     bench.emitStatus(id, true)
-    bench.list.update((draft) => { draft.byId[id]!.displayTitle = 'Renamed child' })
+    bench.list.update((draft) => {
+      draft.byId[id]!.displayTitle = 'Renamed child'
+    })
     expect(service.sessionStatus.getSnapshot().get(id)?.running).toBe(true)
     expect(service.sessionStatus.getSnapshot().get(id)?.completionUnread).toBe(false)
 
-    bench.list.update((draft) => { draft.ids.push(id) })
+    bench.list.update((draft) => {
+      draft.ids.push(id)
+    })
     expect(service.sessionStatus.getSnapshot().get(id)?.running).toBe(false)
     expect(service.sessionStatus.getSnapshot().get(id)?.completionUnread).toBe(true)
   })
@@ -556,9 +581,13 @@ describe('UiSession status', () => {
       pendingInteraction: undefined,
       completionUnread: false,
     })
-    bench.list.update((draft) => { draft.byId[id]!.running = true })
+    bench.list.update((draft) => {
+      draft.byId[id]!.running = true
+    })
     expect(service.sessionStatus.getSnapshot().get(id)?.running).toBe(true)
-    bench.list.update((draft) => { draft.byId[id]!.running = false })
+    bench.list.update((draft) => {
+      draft.byId[id]!.running = false
+    })
     expect(service.sessionStatus.getSnapshot().get(id)?.completionUnread).toBe(true)
     bench.setMainView(id, 1)
     expect(service.sessionStatus.getSnapshot().get(id)?.completionUnread).toBe(false)
@@ -590,7 +619,9 @@ describe('UiSession status', () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)
     const id = sessionId('early')
-    bench.list.update((draft) => { draft.phase = 'pending' })
+    bench.list.update((draft) => {
+      draft.phase = 'pending'
+    })
     const service = createUiSession(ctx, bench)
 
     bench.emitStatus(id, false)
@@ -599,7 +630,9 @@ describe('UiSession status', () => {
       pendingInteraction: undefined,
       completionUnread: true,
     })
-    bench.list.update((draft) => { draft.phase = 'ready' })
+    bench.list.update((draft) => {
+      draft.phase = 'ready'
+    })
     expect(service.sessionStatus.getSnapshot().has(id)).toBe(false)
   })
 })
@@ -612,15 +645,11 @@ describe('UiSession pending interactions', () => {
     const id = sessionId('s1')
     const listener = vi.fn()
     const off = service.sessionStatus.subscribe(listener)
-    const registerApproval = service.registerPendingInteraction<SessionPendingInteractionBase>(
-      () => 0,
+    const registerApproval = service.registerPendingInteraction<SessionPendingInteractionBase>(() => 0)
+    const registerQuestion = service.registerPendingInteraction<SessionPendingInteractionBase>((interaction) =>
+      interaction.kind === 'plan-review' ? 2 : 1,
     )
-    const registerQuestion = service.registerPendingInteraction<SessionPendingInteractionBase>(
-      interaction => interaction.kind === 'plan-review' ? 2 : 1,
-    )
-    const registerBackground = service.registerPendingInteraction<SessionPendingInteractionBase>(
-      () => -1,
-    )
+    const registerBackground = service.registerPendingInteraction<SessionPendingInteractionBase>(() => -1)
     listener.mockClear()
 
     const approval = { key: 'approval:1', kind: 'approval', sessionId: id }
@@ -658,28 +687,26 @@ describe('UiSession pending interactions', () => {
     const ctx = new Context()
     const bench = createSessionsBench(ctx)
     const service = createUiSession(ctx, bench)
-    const registerPendingInteraction = service.registerPendingInteraction<SessionPendingInteractionBase>(
-      () => 1,
-    )
+    const registerPendingInteraction = service.registerPendingInteraction<SessionPendingInteractionBase>(() => 1)
     const interaction = { key: 'question:1', kind: 'question', sessionId: sessionId('s1') }
     const delegate = () => Promise.resolve()
     const remove = registerPendingInteraction(interaction, delegate)
-    expect(() => { registerPendingInteraction(interaction, delegate) })
-      .toThrow("ui-session: duplicate pending interaction key 'question:1'")
+    expect(() => {
+      registerPendingInteraction(interaction, delegate)
+    }).toThrow("ui-session: duplicate pending interaction key 'question:1'")
 
     const failure = new Error('pending subscriber failed')
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-    service.sessionStatus.subscribe(() => { throw failure })
+    service.sessionStatus.subscribe(() => {
+      throw failure
+    })
     const after = vi.fn()
     service.sessionStatus.subscribe(after)
 
     remove()
 
     expect(after).toHaveBeenCalledOnce()
-    expect(report).toHaveBeenCalledWith(
-      '[ui-session] Session status subscriber failed:',
-      failure,
-    )
+    expect(report).toHaveBeenCalledWith('[ui-session] Session status subscriber failed:', failure)
   })
 
   it('removes active values before awaiting their teardown delegation', async () => {
@@ -689,14 +716,15 @@ describe('UiSession pending interactions', () => {
     const gate = Promise.withResolvers<undefined>()
     const delegate = vi.fn(() => gate.promise)
     const publish = service.registerPendingInteraction<SessionPendingInteractionBase>(() => 1)
-    const remove = publish(
-      { key: 'question:1', kind: 'question', sessionId: sessionId('s1') },
-      delegate,
-    )
+    const remove = publish({ key: 'question:1', kind: 'question', sessionId: sessionId('s1') }, delegate)
 
     let disposed = false
-    const disposal = ctx.fiber.dispose().then(() => { disposed = true })
-    await vi.waitFor(() => { expect(delegate).toHaveBeenCalledOnce() })
+    const disposal = ctx.fiber.dispose().then(() => {
+      disposed = true
+    })
+    await vi.waitFor(() => {
+      expect(delegate).toHaveBeenCalledOnce()
+    })
     expect(service.sessionStatus.getSnapshot()).toEqual(new Map())
     expect(disposed).toBe(false)
     remove()
@@ -732,11 +760,12 @@ describe('ui-session apply', () => {
     })
     expect(slots.installScope).toHaveBeenCalledWith('session', ctx.uiSession.adapter)
     const root = slots.provideRoot.mock.calls[0]![0] as RootStandardSourceContribution
-    expect(root.keyedHooks?.sessionRetainInfo?.(sessionId('s1')))
-      .toBe(bench.retainInfo(sessionId('s1')))
+    expect(root.keyedHooks?.sessionRetainInfo?.(sessionId('s1'))).toBe(bench.retainInfo(sessionId('s1')))
   })
 
   it('keeps the Host loader half inert', () => {
-    expect(() => { nodeApply() }).not.toThrow()
+    expect(() => {
+      nodeApply()
+    }).not.toThrow()
   })
 })

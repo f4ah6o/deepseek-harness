@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 import SubagentRuntime, { type SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
@@ -80,8 +80,9 @@ describe('scripted subagent provider fixture', () => {
     const ctx = await mount()
     const alreadyAborted = new AbortController()
     alreadyAborted.abort()
-    await expect(ctx.subagents.start('mock', baseRequest({ signal: alreadyAborted.signal })))
-      .rejects.toThrow('scripted subagent start aborted before publication')
+    await expect(ctx.subagents.start('mock', baseRequest({ signal: alreadyAborted.signal }))).rejects.toThrow(
+      'scripted subagent start aborted before publication',
+    )
 
     const handoff = new AbortController()
     const pending = ctx.subagents.start('mock', baseRequest({ signal: handoff.signal }))

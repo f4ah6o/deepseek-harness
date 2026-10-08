@@ -16,7 +16,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { packageFiles, packageStylesheets, parseRules, type CssRule } from './stylesheet-scan.ts'
 
 /** The one stylesheet allowed to declare a darwin window drag region, relative to packages/. */
@@ -123,8 +123,7 @@ const CHROME_ROWS: readonly ChromeRow[] = [
  * @returns true when the rule declares a drag region.
  */
 function declaresDrag(rule: CssRule): boolean {
-  return rule.declarations
-    .some(([property, value]) => /^(-webkit-)?app-region$/.test(property) && /^drag(\s|!|$)/.test(value))
+  return rule.declarations.some(([property, value]) => /^(-webkit-)?app-region$/.test(property) && /^drag(\s|!|$)/.test(value))
 }
 
 /**
@@ -135,7 +134,7 @@ function declaresDrag(rule: CssRule): boolean {
 function dragSelectors(css: string): string[] {
   return parseRules(css)
     .filter(declaresDrag)
-    .map(rule => rule.selectors.join(', '))
+    .map((rule) => rule.selectors.join(', '))
 }
 
 /**
@@ -217,10 +216,10 @@ function underPackages(file: string): string {
  * @returns the value text, or undefined when the rule or declaration is absent.
  */
 function declaredValue(file: string, selector: string, property: string): string | undefined {
-  const path = packageStylesheets().find(candidate => candidate.endsWith(`/${file}`))
+  const path = packageStylesheets().find((candidate) => candidate.endsWith(`/${file}`))
   /* v8 ignore next -- the manifest names shipped stylesheets; a missing one is reported by the height assertion below. */
   if (path === undefined) return undefined
-  const rule = parseRules(readFileSync(path, 'utf8')).find(candidate => candidate.selectors.includes(selector))
+  const rule = parseRules(readFileSync(path, 'utf8')).find((candidate) => candidate.selectors.includes(selector))
   return rule?.declarations.find(([name]) => name === property)?.[1]
 }
 
@@ -247,19 +246,18 @@ describe('window drag-region ownership', () => {
   it('declares every pinned chrome row at the height the manifest pins', () => {
     for (const row of CHROME_ROWS) {
       if (row.height === undefined) continue
-      expect(declaredValue(row.file, row.selector, row.height[0]), `${row.selector} ${row.height[0]}`)
-        .toBe(row.height[1])
+      expect(declaredValue(row.file, row.selector, row.height[0]), `${row.selector} ${row.height[0]}`).toBe(row.height[1])
       if (row.inset !== undefined) {
-        expect(declaredValue(row.file, row.selector, row.inset[0]), `${row.selector} ${row.inset[0]}`)
-          .toBe(row.inset[1])
+        expect(declaredValue(row.file, row.selector, row.inset[0]), `${row.selector} ${row.inset[0]}`).toBe(row.inset[1])
       }
     }
   })
 
   it('marks its own window drag in every chrome row’s markup', () => {
     for (const row of CHROME_ROWS) {
-      const marked = openingTags(readFileSync(join(PACKAGES_DIR, row.markup), 'utf8'))
-        .filter(tag => DRAG_MARK_PATTERN.test(tag) && referencesRow(tag, row))
+      const marked = openingTags(readFileSync(join(PACKAGES_DIR, row.markup), 'utf8')).filter(
+        (tag) => DRAG_MARK_PATTERN.test(tag) && referencesRow(tag, row),
+      )
       expect(marked, `${row.markup} ${row.selector}`).toHaveLength(1)
     }
   })
@@ -269,14 +267,14 @@ describe('window drag-region ownership', () => {
     // has no manifest entry — would drag the window over something that is not
     // window chrome, so the two lists must match exactly.
     const found: string[] = []
-    for (const file of packageFiles(name => name.endsWith('.tsx'))) {
+    for (const file of packageFiles((name) => name.endsWith('.tsx'))) {
       if (!file.includes('/src/')) continue
       for (const tag of openingTags(readFileSync(file, 'utf8'))) {
         if (!DRAG_MARK_PATTERN.test(tag)) continue
-        const row = CHROME_ROWS.find(candidate => file.endsWith(`/${candidate.markup}`) && referencesRow(tag, candidate))
+        const row = CHROME_ROWS.find((candidate) => file.endsWith(`/${candidate.markup}`) && referencesRow(tag, candidate))
         found.push(row === undefined ? `${underPackages(file)} <unmatched ${DRAG_MARK} tag>` : `${row.markup} ${row.selector}`)
       }
     }
-    expect(found.sort()).toEqual(CHROME_ROWS.map(row => `${row.markup} ${row.selector}`).sort())
+    expect(found.sort()).toEqual(CHROME_ROWS.map((row) => `${row.markup} ${row.selector}`).sort())
   })
 })

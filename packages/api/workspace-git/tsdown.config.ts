@@ -1,7 +1,3 @@
 import { clientBundle } from '../../client/tsdown.client.ts'
 
-export default clientBundle(
-  '@deepseek-ai/dsh-api-workspace-git',
-  ['lib/types/index.js'],
-  { hostPhase: true },
-)
+export default clientBundle('@deepseek-ai/dsh-api-workspace-git', ['lib/types/index.js'], { hostPhase: true })

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 type Rules = Record<string, unknown>
 
@@ -51,13 +51,15 @@ function severity(value: unknown): 0 | 1 | 2 {
 }
 
 function normalizedRules(rules: Rules): Rules {
-  return Object.fromEntries(Object.entries(rules)
-    .filter(([, value]) => severity(value) > 0)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => {
-      const options = isUnknownArray(value) ? value.slice(1) : []
-      return [name, [severity(value), ...options]]
-    }))
+  return Object.fromEntries(
+    Object.entries(rules)
+      .filter(([, value]) => severity(value) > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, value]) => {
+        const options = isUnknownArray(value) ? value.slice(1) : []
+        return [name, [severity(value), ...options]]
+      }),
+  )
 }
 
 function mergedRules(overrides: readonly unknown[], indexes: readonly number[]): Rules {

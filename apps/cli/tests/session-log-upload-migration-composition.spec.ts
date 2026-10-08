@@ -6,7 +6,7 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { migrateSessionLogUploadDefaults } from '../src/session-log-upload-migration.ts'
 
 const homes: string[] = []
@@ -19,7 +19,7 @@ function configuredEnabled(config: unknown): boolean | undefined {
 }
 
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
 })
 
@@ -51,15 +51,18 @@ describe('session-log migration through real patch composition', () => {
   it('resets a profile uploader inserted by a saved patch while preserving an aliased source', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-upload-profile-alias-'))
     homes.push(home)
-    const profileDir = makeProfile(home, [
-      '- insert:',
-      '    - id: shared-config',
-      '      config: &upload { enabled: !!js "true" }',
-      '    - id: session-log-deepseek',
-      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
-      '      config: *upload',
-      '',
-    ].join('\n'))
+    const profileDir = makeProfile(
+      home,
+      [
+        '- insert:',
+        '    - id: shared-config',
+        '      config: &upload { enabled: !!js "true" }',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: *upload',
+        '',
+      ].join('\n'),
+    )
     const profilePatch = join(profileDir, 'cordis.patch.yml')
     const homePatch = join(home, 'cordis.patch.yml')
     writeFileSync(homePatch, '[]\n')
@@ -68,14 +71,13 @@ describe('session-log migration through real patch composition', () => {
 
     const patches = loadOverlayPatches('dsh-test', profilePatch)
     const entries = composeEntries([patches])
-    expect(entries.map(entry => entry.id)).toEqual(['shared-config', 'session-log-deepseek'])
-    const shared = entries.find(entry => entry.id === 'shared-config')
-    const uploader = entries.find(entry => entry.id === 'session-log-deepseek')
+    expect(entries.map((entry) => entry.id)).toEqual(['shared-config', 'session-log-deepseek'])
+    const shared = entries.find((entry) => entry.id === 'shared-config')
+    const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
     expect(shared?.config).toEqual({ enabled: { __jsExpr: 'true' } })
     const enabled = configuredEnabled(uploader?.config)
     expect(enabled).toBe(false)
-    expect(await firstRequestHasSessionLog(enabled, 'profile-alias-reset'))
-      .toBe(false)
+    expect(await firstRequestHasSessionLog(enabled, 'profile-alias-reset')).toBe(false)
     expect(readFileSync(profilePatch, 'utf8')).toContain('config: { enabled: false }')
   })
 
@@ -85,31 +87,30 @@ describe('session-log migration through real patch composition', () => {
     const profileDir = makeProfile(home, '[]\n')
     const profilePatch = join(profileDir, 'cordis.patch.yml')
     const homePatch = join(home, 'cordis.patch.yml')
-    writeFileSync(homePatch, [
-      '- insert:',
-      '    - id: shared-value',
-      '      config: { enabled: &enabled true }',
-      '    - id: session-log-deepseek',
-      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
-      '      config: { enabled: *enabled }',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      homePatch,
+      [
+        '- insert:',
+        '    - id: shared-value',
+        '      config: { enabled: &enabled true }',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: { enabled: *enabled }',
+        '',
+      ].join('\n'),
+    )
 
     await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
 
-    const layers = [
-      loadOverlayPatches('dsh-test', profilePatch),
-      loadOverlayPatches('dsh-test', homePatch),
-    ]
+    const layers = [loadOverlayPatches('dsh-test', profilePatch), loadOverlayPatches('dsh-test', homePatch)]
     const entries = composeEntries(layers)
-    expect(entries.map(entry => entry.id)).toEqual(['shared-value', 'session-log-deepseek'])
-    const shared = entries.find(entry => entry.id === 'shared-value')
-    const uploader = entries.find(entry => entry.id === 'session-log-deepseek')
+    expect(entries.map((entry) => entry.id)).toEqual(['shared-value', 'session-log-deepseek'])
+    const shared = entries.find((entry) => entry.id === 'shared-value')
+    const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
     expect(shared?.config).toEqual({ enabled: true })
     expect(uploader?.config).toBeUndefined()
     const enabled = configuredEnabled(uploader?.config)
-    expect(await firstRequestHasSessionLog(enabled, 'home-alias-reset'))
-      .toBe(false)
+    expect(await firstRequestHasSessionLog(enabled, 'home-alias-reset')).toBe(false)
     expect(readFileSync(homePatch, 'utf8')).toContain('enabled: &enabled true')
   })
 
@@ -121,29 +122,28 @@ describe('session-log migration through real patch composition', () => {
     const homePatch = join(home, 'cordis.patch.yml')
     const legacy = join(home, 'settings.yaml')
     writeFileSync(homePatch, '[]\n')
-    writeFileSync(legacy, [
-      'session-log-deepseek:',
-      '  enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
-      '',
-    ].join('\n'))
+    writeFileSync(
+      legacy,
+      ['session-log-deepseek:', '  enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"', ''].join('\n'),
+    )
 
     await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
 
     expect(readFileSync(legacy, 'utf8')).toContain('enabled: false')
     writeFileSync(profilePatch, '- id: session-log-deepseek\n  config: { enabled: false }\n')
     const basePatch = join(home, 'base.patch.yml')
-    writeFileSync(basePatch, [
-      '- insert:',
-      '    - id: session-log-deepseek',
-      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
-      '      config: { enabled: false }',
-      '',
-    ].join('\n'))
-    const entries = composeEntries([
-      loadOverlayPatches('dsh-test', basePatch),
-      loadOverlayPatches('dsh-test', profilePatch),
-    ])
-    const uploader = entries.find(entry => entry.id === 'session-log-deepseek')
+    writeFileSync(
+      basePatch,
+      [
+        '- insert:',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: { enabled: false }',
+        '',
+      ].join('\n'),
+    )
+    const entries = composeEntries([loadOverlayPatches('dsh-test', basePatch), loadOverlayPatches('dsh-test', profilePatch)])
+    const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
     const enabled = configuredEnabled(uploader?.config)
     expect(enabled).toBe(false)
     expect(await firstRequestHasSessionLog(enabled, 'legacy-expression-reset')).toBe(false)
@@ -154,11 +154,14 @@ describe('session-log migration through real patch composition', () => {
     async (anchorKind) => {
       const home = mkdtempSync(join(tmpdir(), `dsh-upload-${anchorKind}-anchor-`))
       homes.push(home)
-      const profileDir = makeProfile(home, [
-        anchorKind === 'row'
-          ? '- insert:\n    - &uploader\n      id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploader }\n'
-          : '- insert: &uploaderRows\n    - id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n- insert:\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploaderRows }\n',
-      ].join('\n'))
+      const profileDir = makeProfile(
+        home,
+        [
+          anchorKind === 'row'
+            ? '- insert:\n    - &uploader\n      id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploader }\n'
+            : '- insert: &uploaderRows\n    - id: session-log-deepseek\n      name: cordis:uploader\n      config: { enabled: true }\n- insert:\n    - id: unrelated\n      name: cordis:other\n      config: { retained: *uploaderRows }\n',
+        ].join('\n'),
+      )
       const profilePatch = join(profileDir, 'cordis.patch.yml')
       const homePatch = join(home, 'cordis.patch.yml')
       writeFileSync(homePatch, '[]\n')
@@ -166,14 +169,15 @@ describe('session-log migration through real patch composition', () => {
       await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
 
       const entries = composeEntries([loadOverlayPatches('dsh-test', profilePatch)])
-      const uploader = entries.find(entry => entry.id === 'session-log-deepseek')
-      const unrelated = entries.find(entry => entry.id === 'unrelated')
+      const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
+      const unrelated = entries.find((entry) => entry.id === 'unrelated')
       const enabled = configuredEnabled(uploader?.config)
       expect(enabled).toBe(false)
       expect(unrelated?.config).toEqual({
-        retained: anchorKind === 'row'
-          ? { id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }
-          : [{ id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }],
+        retained:
+          anchorKind === 'row'
+            ? { id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }
+            : [{ id: 'session-log-deepseek', name: 'cordis:uploader', config: { enabled: true } }],
       })
       expect(await firstRequestHasSessionLog(enabled, `${anchorKind}-anchor-reset`)).toBe(false)
     },

@@ -2,10 +2,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import * as modulesClient from '@deepseek-ai/dsh-client-modules/client'
 import type {
-  ClientBundleRegistration, ClientModuleCreateOptions, ClientModuleLoaderTarget, DshWindow,
+  ClientBundleRegistration,
+  ClientModuleCreateOptions,
+  ClientModuleLoaderTarget,
+  DshWindow,
   WebBootEntry,
 } from '@deepseek-ai/dsh-client-modules/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { AppWebEntry } from '../src/boot.ts'
 
 const MODULES_ID = '@deepseek-ai/dsh-client-modules'
@@ -26,18 +29,25 @@ afterEach(() => {
 })
 
 /** Install the stable facade shape that the Host injects before AppWebEntry runs. */
-function installFacade(
-  create?: (options: ClientModuleCreateOptions) => modulesClient.ClientModuleSystem,
-): ClientModuleLoaderTarget {
+function installFacade(create?: (options: ClientModuleCreateOptions) => modulesClient.ClientModuleSystem): ClientModuleLoaderTarget {
   const pendingQueue: ClientBundleRegistration[] = []
   const target: ClientModuleLoaderTarget = {
     mode: 'queue',
     pendingQueue,
-    load: (registration) => { pendingQueue.push(registration) },
-    create: create ?? (options => modulesClient.createClientModuleSystem(target, {
-      id: MODULES_ID,
-      exports: moduleFace,
-    }, options)),
+    load: (registration) => {
+      pendingQueue.push(registration)
+    },
+    create:
+      create ??
+      ((options) =>
+        modulesClient.createClientModuleSystem(
+          target,
+          {
+            id: MODULES_ID,
+            exports: moduleFace,
+          },
+          options,
+        )),
   }
   win.__ModuleLoader__ = target
   return target
@@ -82,7 +92,14 @@ describe('bootstrap failure rendering', () => {
     }
     const entry = new AppWebEntry(container, {
       loadBundle: async () => {
-        target.load({ id: 'broken', factory: () => ({ apply() { throw new Error('plugin activation failed') } }) })
+        target.load({
+          id: 'broken',
+          factory: () => ({
+            apply() {
+              throw new Error('plugin activation failed')
+            },
+          }),
+        })
       },
     })
     const report = vi.fn<(reason: unknown) => void>()
@@ -104,15 +121,16 @@ describe('bootstrap failure rendering', () => {
   })
 
   it('renders a missing bootstrap facade', async () => {
-    await expectBootFailure(
-      () => { delete win.__ModuleLoader__ },
-      'window.__ModuleLoader__ bootstrap facade is missing',
-    )
+    await expectBootFailure(() => {
+      delete win.__ModuleLoader__
+    }, 'window.__ModuleLoader__ bootstrap facade is missing')
   })
 
   it('renders a create failure owned by the facade', async () => {
     await expectBootFailure(() => {
-      installFacade(() => { throw new Error('facade create failed') })
+      installFacade(() => {
+        throw new Error('facade create failed')
+      })
     }, 'facade create failed')
   })
 
@@ -157,13 +175,13 @@ describe('plugin activation', () => {
     win.__DSH_BOOT__ = {
       rev: 'graph',
       entries,
-      batches: [{ phase: 'application', url: applicationUrl, rev: 'batch', entries: entries.map(row => row.id) }],
+      batches: [{ phase: 'application', url: applicationUrl, rev: 'batch', entries: entries.map((row) => row.id) }],
     }
     const loaded: string[] = []
     const registrations: ClientBundleRegistration[] = [
       {
         id: 'consumer',
-        factory: require => ({
+        factory: (require) => ({
           apply: () => {
             expect((require(RUNTIME_CLIENT_ID) as { marker: string }).marker).toBe('provider')
           },
@@ -175,7 +193,7 @@ describe('plugin activation', () => {
       },
       {
         id: 'runtime',
-        factory: require => ({
+        factory: (require) => ({
           apply: () => {},
           marker: (require(PROVIDER_CLIENT_ID) as { marker: string }).marker,
         }),
@@ -217,38 +235,46 @@ describe('plugin activation', () => {
     win.__DSH_BOOT__ = {
       rev: 'graph',
       entries,
-      batches: [{
-        phase: 'application',
-        url: '/application.js',
-        rev: 'batch',
-        entries: entries.map(row => row.id),
-      }],
+      batches: [
+        {
+          phase: 'application',
+          url: '/application.js',
+          rev: 'batch',
+          entries: entries.map((row) => row.id),
+        },
+      ],
     }
     const registrations = new Map<string, ClientBundleRegistration>([
-      ['/consumer.js', {
-        id: 'consumer',
-        factory: () => ({
-          inject: ['modules'],
-          apply: (ctx: Context) => {
-            expect(ctx.modules).toBeDefined()
-            events.push('consumer')
-          },
-        }),
-      }],
-      ['/renderer.js', {
-        id: 'renderer',
-        factory: () => ({
-          apply: (ctx: Context) => {
-            ctx.reflect.provide('uiRenderer', {
-              mount: (element: HTMLElement) => {
-                events.push('mount')
-                element.textContent = 'mounted'
-                return () => {}
-              },
-            })
-          },
-        }),
-      }],
+      [
+        '/consumer.js',
+        {
+          id: 'consumer',
+          factory: () => ({
+            inject: ['modules'],
+            apply: (ctx: Context) => {
+              expect(ctx.modules).toBeDefined()
+              events.push('consumer')
+            },
+          }),
+        },
+      ],
+      [
+        '/renderer.js',
+        {
+          id: 'renderer',
+          factory: () => ({
+            apply: (ctx: Context) => {
+              ctx.reflect.provide('uiRenderer', {
+                mount: (element: HTMLElement) => {
+                  events.push('mount')
+                  element.textContent = 'mounted'
+                  return () => {}
+                },
+              })
+            },
+          }),
+        },
+      ],
     ])
     const entry = new AppWebEntry(container, {
       loadBundle: async (url) => {
@@ -271,7 +297,9 @@ it('draws the shared boot page before Host injections and resumes without replac
   vi.stubGlobal('__DSH_BOOT_READY__', gate)
   const container = document.createElement('div')
   document.body.append(container)
-  const create = vi.fn(() => { throw new Error('injections consumed') })
+  const create = vi.fn(() => {
+    throw new Error('injections consumed')
+  })
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
   const entry = new AppWebEntry(container)
   const boot = entry.run()

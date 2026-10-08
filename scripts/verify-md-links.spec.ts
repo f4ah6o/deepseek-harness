@@ -8,7 +8,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { anchorCache, documentAnchors, findViolations, githubSlug, markdownLinkSourcePaths } from './verify-md-links.ts'
 
 const roots: string[] = []
@@ -37,12 +37,11 @@ describe('Markdown source discovery', () => {
       'packages/README.zh.md': '[removed group](removed/README.zh.md)\n',
     })
     const sources = markdownLinkSourcePaths(root)
-    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
-    expect(violations.map(({ file, reason }) => ({ file, reason })).sort((a, b) => a.file.localeCompare(b.file)))
-      .toEqual([
-        { file: join('packages', 'README.md'), reason: 'target' },
-        { file: join('packages', 'README.zh.md'), reason: 'target' },
-      ])
+    const violations = sources.flatMap((file) => findViolations(join(root, file), anchorCache(), root))
+    expect(violations.map(({ file, reason }) => ({ file, reason })).sort((a, b) => a.file.localeCompare(b.file))).toEqual([
+      { file: join('packages', 'README.md'), reason: 'target' },
+      { file: join('packages', 'README.zh.md'), reason: 'target' },
+    ])
   })
 
   it('checks package instructions and nested docs while excluding frozen notes', () => {
@@ -53,7 +52,7 @@ describe('Markdown source discovery', () => {
       '.agents/notes/archived/process/frozen.md': '[historical](missing.md)\n',
     })
     const sources = markdownLinkSourcePaths(root)
-    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
+    const violations = sources.flatMap((file) => findViolations(join(root, file), anchorCache(), root))
     expect(violations.map(({ file }) => file).sort()).toEqual([
       join('packages', 'AGENTS.md'),
       join('packages', 'core', 'README.md'),
@@ -64,14 +63,9 @@ describe('Markdown source discovery', () => {
 
 describe('documentAnchors', () => {
   it('slugs rendered heading text, suffixes repeats, and reads explicit <a id> anchors', () => {
-    const anchors = documentAnchors([
-      '# My Doc',
-      '## Live `events` — mode!',
-      '## Repeat',
-      '## Repeat',
-      '<a id="hand-anchor"></a>',
-      '',
-    ].join('\n'))
+    const anchors = documentAnchors(
+      ['# My Doc', '## Live `events` — mode!', '## Repeat', '## Repeat', '<a id="hand-anchor"></a>', ''].join('\n'),
+    )
     expect(anchors).toEqual(new Set(['my-doc', 'live-events--mode', 'repeat', 'repeat-1', 'hand-anchor']))
     expect(githubSlug('Security and authority are non-goals')).toBe('security-and-authority-are-non-goals')
   })
@@ -91,16 +85,18 @@ describe('documentAnchors', () => {
   })
 
   it('ignores <a id> inside code fences, inline code, and HTML comments', () => {
-    const anchors = documentAnchors([
-      '# Doc',
-      '```md',
-      '<a id="fenced"></a>',
-      '```',
-      'Inline `<a id="inline"></a>` sample.',
-      '<!-- <a id="commented"></a> -->',
-      '<a id="real"></a>',
-      '',
-    ].join('\n'))
+    const anchors = documentAnchors(
+      [
+        '# Doc',
+        '```md',
+        '<a id="fenced"></a>',
+        '```',
+        'Inline `<a id="inline"></a>` sample.',
+        '<!-- <a id="commented"></a> -->',
+        '<a id="real"></a>',
+        '',
+      ].join('\n'),
+    )
     expect(anchors).toEqual(new Set(['doc', 'real']))
   })
 })

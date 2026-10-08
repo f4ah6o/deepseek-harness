@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -20,7 +20,7 @@ import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'test': { kind: 'test' } & ContextFormed
+    test: { kind: 'test' } & ContextFormed
   }
 }
 
@@ -77,10 +77,12 @@ describe('hand-declared providers', () => {
     const result = await assemble(ctx, {
       provider: 'acme-gateway',
       model: 'acme-large',
-      messages: [createUserMessage({
-        content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'test' },
-      })],
+      messages: [
+        createUserMessage({
+          content: [{ type: 'text', text: 'hi' }],
+          source: { kind: 'test' },
+        }),
+      ],
     })
 
     expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
@@ -123,8 +125,7 @@ describe('hand-declared providers', () => {
     const withCatalog = await harness({ providers: { deepseek: { baseURL: server.url } } })
     const [catalogModel] = getBuiltinModels('deepseek')
     if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
-    expect((await withCatalog.llm.resolveModelInfo('deepseek', catalogModel.id)).reasoning?.efforts.map(e => e.id))
-      .toContain('off')
+    expect((await withCatalog.llm.resolveModelInfo('deepseek', catalogModel.id)).reasoning?.efforts.map((e) => e.id)).toContain('off')
   })
 
   it('joins the configurable-provider directory so a settings surface can reach it', async () => {
@@ -143,9 +144,8 @@ describe('hand-declared providers', () => {
     })
     // Membership of the catalog, not of the settings document: a shipped
     // provider carries a stored profile the moment anyone corrects it.
-    expect(directory.filter(entry => entry.declared).map(entry => entry.provider))
-      .toEqual(['acme-gateway'])
-    expect(directory.find(entry => entry.provider === 'deepseek')?.declared).toBe(false)
+    expect(directory.filter((entry) => entry.declared).map((entry) => entry.provider)).toEqual(['acme-gateway'])
+    expect(directory.find((entry) => entry.provider === 'deepseek')?.declared).toBe(false)
   })
 
   it('sizes a model the catalog cannot describe from the route\u2019s own fallbacks', () => {
@@ -182,7 +182,7 @@ describe('hand-declared providers', () => {
   })
 
   it('takes a model’s declared modalities, then the catalog’s, then the route’s', () => {
-    const vision = getBuiltinModels('anthropic').find(model => model.input.includes('image'))
+    const vision = getBuiltinModels('anthropic').find((model) => model.input.includes('image'))
     if (vision === undefined) throw new Error('the installed catalog ships no anthropic vision model')
     const resolved = resolveProfiles({
       'acme-gateway': {
@@ -202,10 +202,13 @@ describe('hand-declared providers', () => {
       // The route value is a fallback, never an override: a catalog model
       // keeps what the catalog records even under a narrower route default,
       // exactly as it keeps its own contextWindow.
-      'anthropic': { defaultInput: ['text'] },
+      anthropic: { defaultInput: ['text'] },
     })
     const inputOf = (route: string, id: string): readonly string[] | undefined =>
-      resolved.get(route)?.piProvider?.getModels().find(model => model.id === id)?.input
+      resolved
+        .get(route)
+        ?.piProvider?.getModels()
+        .find((model) => model.id === id)?.input
 
     expect(inputOf('acme-gateway', 'bare')).toEqual(['text'])
     expect(inputOf('acme-gateway', 'seeing')).toEqual(['text', 'image'])
@@ -233,12 +236,12 @@ describe('hand-declared providers', () => {
           defaultInput: ['text', 'image'],
           models: [{ id: 'bare' }, { id: 'deaf', input: ['text'] }],
         },
-        'anthropic': { defaultInput: ['text'] },
+        anthropic: { defaultInput: ['text'] },
       },
     })
 
     const listed = async (provider: string): Promise<Record<string, readonly string[] | undefined>> =>
-      Object.fromEntries((await ctx.llm.listModels(provider)).map(model => [model.id, model.inputModalities]))
+      Object.fromEntries((await ctx.llm.listModels(provider)).map((model) => [model.id, model.inputModalities]))
 
     expect(await listed('acme-gateway')).toEqual({ bare: ['text'], seeing: ['text', 'image'] })
     expect(await listed('vision-gateway')).toEqual({ bare: ['text', 'image'], deaf: ['text'] })
@@ -246,7 +249,7 @@ describe('hand-declared providers', () => {
 
     // A catalog vision model keeps what the catalog records even under a
     // narrower route default: the route value is a fallback, not an override.
-    const vision = getBuiltinModels('anthropic').find(model => model.input.includes('image'))
+    const vision = getBuiltinModels('anthropic').find((model) => model.input.includes('image'))
     if (vision === undefined) throw new Error('the installed catalog ships no anthropic vision model')
     expect((await ctx.llm.resolveModelInfo('anthropic', vision.id)).inputModalities).toEqual(vision.input)
   })
@@ -260,7 +263,7 @@ describe('hand-declared providers', () => {
     const [catalogModel] = getBuiltinModels('deepseek')
     if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
     const resolved = resolveProfiles({
-      'deepseek': { baseURL: 'https://catalog.test', models: [{ id: catalogModel.id, input: [] }] },
+      deepseek: { baseURL: 'https://catalog.test', models: [{ id: catalogModel.id, input: [] }] },
       'acme-gateway': {
         api: 'openai-completions',
         baseURL: 'https://acme.test',
@@ -272,57 +275,77 @@ describe('hand-declared providers', () => {
 
     // Nothing sits below the route value, so its empty list states no answer
     // anything could take, and is refused where it is written.
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        defaultInput: [],
-        models: [{ id: 'bare' }],
-      },
-    })).toThrow(/defaultInput must name at least one modality/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          defaultInput: [],
+          models: [{ id: 'bare' }],
+        },
+      }),
+    ).toThrow(/defaultInput must name at least one modality/)
   })
 
   it('rejects a model the route cannot identify', () => {
-    const declare = (model: LlmPiAi.PiAiModelProfile): (() => unknown) =>
-      () => resolveProfiles({ 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test', models: [model] } })
+    const declare =
+      (model: LlmPiAi.PiAiModelProfile): (() => unknown) =>
+      () =>
+        resolveProfiles({ 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test', models: [model] } })
 
     expect(declare({ id: '' })).toThrow(/empty id/)
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        models: [{ id: 'dup', contextWindow: 1, maxTokens: 1 }, { id: 'dup', contextWindow: 2, maxTokens: 2 }],
-      },
-    })).toThrow(/more than once/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [
+            { id: 'dup', contextWindow: 1, maxTokens: 1 },
+            { id: 'dup', contextWindow: 2, maxTokens: 2 },
+          ],
+        },
+      }),
+    ).toThrow(/more than once/)
   })
 
   it('retains duplicate-id diagnostics without offering the ambiguous model after loading', () => {
-    const profile = resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        models: [{ id: 'dup' }, { id: 'valid' }, { id: 'dup' }],
+    const profile = resolveProfiles(
+      {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [{ id: 'dup' }, { id: 'valid' }, { id: 'dup' }],
+        },
       },
-    }, 'deferred').get('acme-gateway')
+      'deferred',
+    ).get('acme-gateway')
     expect(profile?.modelErrors.get('dup')).toContain('lists model "dup" more than once')
-    expect(profile?.piProvider?.getModels().map(model => model.id)).toEqual(['valid'])
+    expect(profile?.piProvider?.getModels().map((model) => model.id)).toEqual(['valid'])
   })
 
   it('rejects a declaration that names no wire protocol or endpoint', () => {
-    expect(() => resolveProfiles({
-      'acme-gateway': { baseURL: 'https://acme.test', models: [{ id: 'm', contextWindow: 1, maxTokens: 1 }] },
-    })).toThrow(/needs an api/)
-    expect(() => resolveProfiles({
-      'acme-gateway': { api: 'openai-completions', models: [{ id: 'm', contextWindow: 1, maxTokens: 1 }] },
-    })).toThrow(/needs a baseURL/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': { baseURL: 'https://acme.test', models: [{ id: 'm', contextWindow: 1, maxTokens: 1 }] },
+      }),
+    ).toThrow(/needs an api/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': { api: 'openai-completions', models: [{ id: 'm', contextWindow: 1, maxTokens: 1 }] },
+      }),
+    ).toThrow(/needs a baseURL/)
   })
 
   it('retains the missing-api model diagnostic when a stored custom provider cannot be built', () => {
-    const profile = resolveProfiles({
-      'acme-gateway': { baseURL: 'https://acme.test', models: [{ id: '111' }] },
-    }, 'deferred').get('acme-gateway')!
-    const failure = 'llm-pi-ai: provider "acme-gateway" model "111" needs an api; '
-      + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
+    const profile = resolveProfiles(
+      {
+        'acme-gateway': { baseURL: 'https://acme.test', models: [{ id: '111' }] },
+      },
+      'deferred',
+    ).get('acme-gateway')!
+    const failure =
+      'llm-pi-ai: provider "acme-gateway" model "111" needs an api; ' +
+      "the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
 
     expect(profile.catalogError).toBe(failure)
     expect(profile.modelErrors.get('111')).toBe(failure)
@@ -337,15 +360,15 @@ describe('hand-declared providers', () => {
       // endpoint, and headers can carry, so a route naming one would be built
       // unable to authenticate.
       expect(supportedProtocols()).not.toContain(api)
-      expect(() => buildProvider({ provider: 'acme-gateway', displayName: 'Acme', api, models: [], namesCredential: true }))
-        .toThrow(/cannot serve; supported protocols are/)
+      expect(() => buildProvider({ provider: 'acme-gateway', displayName: 'Acme', api, models: [], namesCredential: true })).toThrow(
+        /cannot serve; supported protocols are/,
+      )
     },
   )
 
   it('rejects a protocol this build cannot serve, and a route that names none', () => {
     const spec = { provider: 'acme-gateway', displayName: 'Acme Gateway', models: [], namesCredential: true }
-    expect(() => buildProvider({ ...spec, api: 'quantum-telepathy' }))
-      .toThrow(/cannot serve; supported protocols are/)
+    expect(() => buildProvider({ ...spec, api: 'quantum-telepathy' })).toThrow(/cannot serve; supported protocols are/)
     expect(() => buildProvider(spec)).toThrow(/cannot serve; supported protocols are/)
   })
 
@@ -416,8 +439,10 @@ describe('hand-declared providers', () => {
   })
 
   it('rejects a capacity that is not a positive integer', () => {
-    const declare = (model: LlmPiAi.PiAiModelProfile): (() => unknown) =>
-      () => resolveProfiles({ 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test', models: [model] } })
+    const declare =
+      (model: LlmPiAi.PiAiModelProfile): (() => unknown) =>
+      () =>
+        resolveProfiles({ 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test', models: [model] } })
 
     expect(declare({ id: 'm', contextWindow: 0, maxTokens: 1 })).toThrow(/contextWindow must be a positive integer/)
     expect(declare({ id: 'm', contextWindow: 1.5, maxTokens: 1 })).toThrow(/contextWindow must be a positive integer/)
@@ -444,8 +469,11 @@ describe('catalog routes with per-model configuration', () => {
     const ctx = await harness({ providers: { deepseek: { baseURL: server.url } } })
 
     const listed = await ctx.llm.listModels('deepseek')
-    expect(listed.map(model => model.id).sort())
-      .toEqual(getBuiltinModels('deepseek').map(model => model.id).sort())
+    expect(listed.map((model) => model.id).sort()).toEqual(
+      getBuiltinModels('deepseek')
+        .map((model) => model.id)
+        .sort(),
+    )
   })
 
   it('overrides one catalog model field and defaults the rest from the catalog', async () => {
@@ -469,7 +497,7 @@ describe('catalog routes with per-model configuration', () => {
     expect(info.name).toBe(catalogModel.name)
     expect(info.defaultMaxTokens).toBeUndefined()
     // An explicit list replaces the catalog rather than adding to it.
-    expect((await ctx.llm.listModels('deepseek')).map(model => model.id)).toEqual([catalogModel.id])
+    expect((await ctx.llm.listModels('deepseek')).map((model) => model.id)).toEqual([catalogModel.id])
   })
 
   it('materializes a request default only from a configured output cap', async () => {
@@ -527,8 +555,7 @@ describe('catalog routes with per-model configuration', () => {
     // Some catalog models carry provider-required request headers; overriding a
     // capacity must not drop them, because configuration has no way to restate
     // them.
-    const headered = (getBuiltinModels('nvidia') as { id: string; headers?: unknown }[])
-      .find(model => model.headers !== undefined)
+    const headered = (getBuiltinModels('nvidia') as { id: string; headers?: unknown }[]).find((model) => model.headers !== undefined)
     if (headered === undefined) throw new Error('the installed catalog ships no nvidia model with headers')
 
     const resolved = resolveProfiles({
@@ -550,8 +577,12 @@ describe('catalog routes with per-model configuration', () => {
 
     // `stream` is interface-required and unused by the harness adapter, which
     // only calls `streamSimple`; both must still reach the catalog provider.
-    for await (const _event of built.stream(model, context, { apiKey: 'k' })) { /* drain */ }
-    for await (const _event of built.streamSimple(model, context, { apiKey: 'k' })) { /* drain */ }
+    for await (const _event of built.stream(model, context, { apiKey: 'k' })) {
+      /* drain */
+    }
+    for await (const _event of built.streamSimple(model, context, { apiKey: 'k' })) {
+      /* drain */
+    }
 
     expect(server.paths).toEqual(['/v1/chat/completions', '/v1/chat/completions'])
   })
@@ -562,7 +593,7 @@ describe('catalog routes with per-model configuration', () => {
     const resolved = resolveProfiles({ opencode: {} })
     const models = resolved.get('opencode')?.piProvider?.getModels() ?? []
     expect(models.length).toBeGreaterThan(0)
-    expect(models.every(model => model.baseUrl.length > 0)).toBe(true)
+    expect(models.every((model) => model.baseUrl.length > 0)).toBe(true)
     expect(resolved.get('opencode')?.piProvider?.baseUrl).toBeUndefined()
   })
 
@@ -571,8 +602,8 @@ describe('catalog routes with per-model configuration', () => {
     const models = resolved.get('openai')?.piProvider?.getModels() ?? []
     // The protocol changes for the whole route; each model keeps the catalog
     // endpoint it already had.
-    expect(models.every(model => model.api === 'openai-completions')).toBe(true)
-    expect(models.every(model => model.baseUrl === 'https://api.openai.com/v1')).toBe(true)
+    expect(models.every((model) => model.api === 'openai-completions')).toBe(true)
+    expect(models.every((model) => model.baseUrl === 'https://api.openai.com/v1')).toBe(true)
   })
 
   it('repoints a catalog route at another wire protocol', async () => {
@@ -640,10 +671,14 @@ describe('per-model reasoning efforts', () => {
   }
 
   it('declares selectable levels with their wire spellings on a hand-declared model', () => {
-    const model = modelOf(declared([{
-      id: 'acme-think',
-      reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'ultra' },
-    }]))
+    const model = modelOf(
+      declared([
+        {
+          id: 'acme-think',
+          reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'ultra' },
+        },
+      ]),
+    )
 
     expect(model.reasoning).toBe(true)
     // Undeclared levels are pinned null rather than left to pi-ai's own
@@ -678,9 +713,12 @@ describe('per-model reasoning efforts', () => {
     if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
     expect(getSupportedThinkingLevels(catalogModel as Model<Api>)).toEqual(['off', 'low', 'high', 'max'])
 
-    const model = modelOf({
-      deepseek: { models: [{ id: catalogModel.id, reasoningEfforts: { off: null, high: 'high' } }] },
-    }, 'deepseek')
+    const model = modelOf(
+      {
+        deepseek: { models: [{ id: catalogModel.id, reasoningEfforts: { off: null, high: 'high' } }] },
+      },
+      'deepseek',
+    )
 
     expect(getSupportedThinkingLevels(model)).toEqual(['off', 'high'])
     // Only the reasoning fields change; identity and capacities stay catalog.
@@ -710,8 +748,10 @@ describe('per-model reasoning efforts', () => {
   })
 
   it('rejects a declaration that offers nothing or spells a level it cannot send', () => {
-    const declare = (efforts: NonNullable<LlmPiAi.PiAiModelProfile['reasoningEfforts']>): (() => unknown) =>
-      () => resolveProfiles(declared([{ id: 'm', reasoningEfforts: efforts }]))
+    const declare =
+      (efforts: NonNullable<LlmPiAi.PiAiModelProfile['reasoningEfforts']>): (() => unknown) =>
+      () =>
+        resolveProfiles(declared([{ id: 'm', reasoningEfforts: efforts }]))
 
     expect(declare({})).toThrow(/empty reasoningEfforts/)
     // A YAML `reasoningEfforts:` left valueless arrives as null through the
@@ -746,7 +786,7 @@ describe('modelOverrides', () => {
       },
     })
     const models = resolved.get('deepseek')?.piProvider?.getModels() ?? []
-    const reshaped = models.find(model => model.id === target.id)
+    const reshaped = models.find((model) => model.id === target.id)
     if (reshaped === undefined) throw new Error('the overridden model vanished from the route')
 
     // The whole catalog still serves — that is the difference from `models`,
@@ -758,40 +798,50 @@ describe('modelOverrides', () => {
     // default exactly as a models entry's would.
     expect(resolved.get('deepseek')?.configuredMaxTokens.get(target.id)).toBe(4096)
     // A sibling the overrides do not name is byte-identical to the catalog.
-    const sibling = models.find(model => model.id !== target.id)
-    expect(sibling?.maxTokens).toBe(getBuiltinModels('deepseek').find(model => model.id === sibling?.id)?.maxTokens)
+    const sibling = models.find((model) => model.id !== target.id)
+    expect(sibling?.maxTokens).toBe(getBuiltinModels('deepseek').find((model) => model.id === sibling?.id)?.maxTokens)
   })
 
   it('refuses every override that lands nowhere instead of skipping it', () => {
-    expect(() => resolveProfiles({
-      deepseek: { modelOverrides: { 'no-such-model': { name: 'ghost' } } },
-    })).toThrow(/which the installed catalog does not describe/)
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        models: [{ id: 'm' }],
-        modelOverrides: { m: { name: 'renamed' } },
-      },
-    })).toThrow(/a declared route spells every model out/)
+    expect(() =>
+      resolveProfiles({
+        deepseek: { modelOverrides: { 'no-such-model': { name: 'ghost' } } },
+      }),
+    ).toThrow(/which the installed catalog does not describe/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [{ id: 'm' }],
+          modelOverrides: { m: { name: 'renamed' } },
+        },
+      }),
+    ).toThrow(/a declared route spells every model out/)
     const declaredOnly = deepseekModel()
-    expect(() => resolveProfiles({
-      deepseek: {
-        models: [{ id: declaredOnly.id }],
-        modelOverrides: { [declaredOnly.id]: { name: 'renamed' } },
-      },
-    })).toThrow(/models already replaces the served catalog/)
-    expect(() => resolveProfiles({
-      deepseek: { modelOverrides: { '': { name: 'nameless' } } },
-    })).toThrow(/empty model id/)
+    expect(() =>
+      resolveProfiles({
+        deepseek: {
+          models: [{ id: declaredOnly.id }],
+          modelOverrides: { [declaredOnly.id]: { name: 'renamed' } },
+        },
+      }),
+    ).toThrow(/models already replaces the served catalog/)
+    expect(() =>
+      resolveProfiles({
+        deepseek: { modelOverrides: { '': { name: 'nameless' } } },
+      }),
+    ).toThrow(/empty model id/)
     // The dict key is the id; a value smuggling its own would quietly rename
     // the model it meant to customize. The schema passes unknown keys
     // through, so resolution is the boundary that refuses it — the variable
     // indirection mirrors that boundary by sidestepping the literal check.
     const smuggled = { name: 'x', id: 'other' }
-    expect(() => resolveProfiles({
-      deepseek: { modelOverrides: { [deepseekModel().id]: smuggled } },
-    })).toThrow(/sets "id", which is the dict key/)
+    expect(() =>
+      resolveProfiles({
+        deepseek: { modelOverrides: { [deepseekModel().id]: smuggled } },
+      }),
+    ).toThrow(/sets "id", which is the dict key/)
   })
 })
 
@@ -799,21 +849,24 @@ describe('compat switches', () => {
   /** The materialized models of one route, keyed by id. */
   function modelsOf(providers: Record<string, LlmPiAi.PiAiProviderProfile>, route: string): Map<string, Model<Api>> {
     const models = resolveProfiles(providers).get(route)?.piProvider?.getModels() ?? []
-    return new Map(models.map(model => [model.id, model]))
+    return new Map(models.map((model) => [model.id, model]))
   }
 
   it('applies route switches to every openai-completions model, entries winning per field', () => {
-    const models = modelsOf({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        compat: { thinkingFormat: 'deepseek' },
-        models: [
-          { id: 'dialect-default', reasoningEfforts: { off: null, high: 'high' } },
-          { id: 'dialect-odd', compat: { thinkingFormat: 'openai', supportsReasoningEffort: false } },
-        ],
+    const models = modelsOf(
+      {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          compat: { thinkingFormat: 'deepseek' },
+          models: [
+            { id: 'dialect-default', reasoningEfforts: { off: null, high: 'high' } },
+            { id: 'dialect-odd', compat: { thinkingFormat: 'openai', supportsReasoningEffort: false } },
+          ],
+        },
       },
-    }, 'acme-gateway')
+      'acme-gateway',
+    )
 
     expect(models.get('dialect-default')?.compat).toEqual({ thinkingFormat: 'deepseek' })
     expect(models.get('dialect-odd')?.compat).toEqual({ thinkingFormat: 'openai', supportsReasoningEffort: false })
@@ -825,9 +878,12 @@ describe('compat switches', () => {
     const inherited = catalogModel.compat as OpenAICompletionsCompat
     expect(inherited.requiresReasoningContentOnAssistantMessages).toBe(true)
 
-    const models = modelsOf({
-      deepseek: { models: [{ id: catalogModel.id, compat: { thinkingFormat: 'openai' } }] },
-    }, 'deepseek')
+    const models = modelsOf(
+      {
+        deepseek: { models: [{ id: catalogModel.id, compat: { thinkingFormat: 'openai' } }] },
+      },
+      'deepseek',
+    )
 
     // The one switched field changes; the catalog's other quirks survive,
     // because configuration has no way to restate them.
@@ -836,47 +892,57 @@ describe('compat switches', () => {
 
   it('skips models of other protocols on a mixed route instead of failing them', () => {
     const catalog = getBuiltinModels('opencode') as readonly Model<Api>[]
-    const completions = catalog.find(model => model.api === 'openai-completions')
-    const responses = catalog.find(model => model.api === 'openai-responses')
+    const completions = catalog.find((model) => model.api === 'openai-completions')
+    const responses = catalog.find((model) => model.api === 'openai-responses')
     if (completions === undefined || responses === undefined) throw new Error('opencode ships no mixed catalog')
 
-    const models = modelsOf({
-      opencode: {
-        compat: { supportsReasoningEffort: false },
-        models: [{ id: completions.id }, { id: responses.id }],
+    const models = modelsOf(
+      {
+        opencode: {
+          compat: { supportsReasoningEffort: false },
+          models: [{ id: completions.id }, { id: responses.id }],
+        },
       },
-    }, 'opencode')
+      'opencode',
+    )
 
     expect((models.get(completions.id)?.compat as OpenAICompletionsCompat).supportsReasoningEffort).toBe(false)
     expect(models.get(responses.id)?.compat).toEqual(responses.compat)
   })
 
   it('rejects a model-level switch on a protocol that has no such field, naming what it offers', () => {
-    expect(() => resolveProfiles({
-      anthropic: {
-        models: [{ id: 'claude-sonnet-4-5', compat: { thinkingFormat: 'openai' } }],
-      },
-    })).toThrow(/its api is "anthropic-messages", which does not take it.*exists on openai-completions/s)
+    expect(() =>
+      resolveProfiles({
+        anthropic: {
+          models: [{ id: 'claude-sonnet-4-5', compat: { thinkingFormat: 'openai' } }],
+        },
+      }),
+    ).toThrow(/its api is "anthropic-messages", which does not take it.*exists on openai-completions/s)
   })
 
   it('rejects route switches no model on the route can take', () => {
-    expect(() => resolveProfiles({
-      anthropic: { compat: { thinkingFormat: 'openai' } },
-    })).toThrow(/no model on the route speaks a protocol that takes it/)
+    expect(() =>
+      resolveProfiles({
+        anthropic: { compat: { thinkingFormat: 'openai' } },
+      }),
+    ).toThrow(/no model on the route speaks a protocol that takes it/)
   })
 
   it('carries the developer-role switch onto a hand-declared reasoning model', () => {
     // pi-ai reads this switch only for a reasoning model, and detects it from
     // the endpoint URL — which for a private gateway answers as though it were
     // OpenAI itself, so the route must be able to say otherwise.
-    const models = modelsOf({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
-        models: [{ id: 'acme-think', reasoningEfforts: { off: null, high: 'high' } }],
+    const models = modelsOf(
+      {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+          models: [{ id: 'acme-think', reasoningEfforts: { off: null, high: 'high' } }],
+        },
       },
-    }, 'acme-gateway')
+      'acme-gateway',
+    )
 
     expect(models.get('acme-think')?.compat).toEqual({
       supportsDeveloperRole: false,
@@ -885,27 +951,33 @@ describe('compat switches', () => {
   })
 
   it('carries a switch both OpenAI protocols declare onto an openai-responses route', () => {
-    const models = modelsOf({
-      'acme-responses': {
-        api: 'openai-responses',
-        baseURL: 'https://acme.test',
-        compat: { supportsDeveloperRole: false },
-        models: [{ id: 'acme-r', reasoningEfforts: { off: null, high: 'high' } }],
+    const models = modelsOf(
+      {
+        'acme-responses': {
+          api: 'openai-responses',
+          baseURL: 'https://acme.test',
+          compat: { supportsDeveloperRole: false },
+          models: [{ id: 'acme-r', reasoningEfforts: { off: null, high: 'high' } }],
+        },
       },
-    }, 'acme-responses')
+      'acme-responses',
+    )
 
     expect(models.get('acme-r')?.compat).toEqual({ supportsDeveloperRole: false })
   })
 
   it('carries an anthropic-only switch onto an anthropic-messages route', () => {
-    const models = modelsOf({
-      'acme-claude': {
-        api: 'anthropic-messages',
-        baseURL: 'https://acme.test',
-        compat: { supportsTemperature: false, supportsCacheControlOnTools: false },
-        models: [{ id: 'acme-opus' }],
+    const models = modelsOf(
+      {
+        'acme-claude': {
+          api: 'anthropic-messages',
+          baseURL: 'https://acme.test',
+          compat: { supportsTemperature: false, supportsCacheControlOnTools: false },
+          models: [{ id: 'acme-opus' }],
+        },
       },
-    }, 'acme-claude')
+      'acme-claude',
+    )
 
     expect(models.get('acme-opus')?.compat).toEqual({
       supportsTemperature: false,
@@ -915,17 +987,20 @@ describe('compat switches', () => {
 
   it('lands each route switch only on the models whose protocol declares it', () => {
     const catalog = getBuiltinModels('opencode') as readonly Model<Api>[]
-    const completions = catalog.find(model => model.api === 'openai-completions')
-    const responses = catalog.find(model => model.api === 'openai-responses')
+    const completions = catalog.find((model) => model.api === 'openai-completions')
+    const responses = catalog.find((model) => model.api === 'openai-responses')
     if (completions === undefined || responses === undefined) throw new Error('opencode ships no mixed catalog')
 
-    const models = modelsOf({
-      opencode: {
-        // Both protocols take the first switch; only completions takes the second.
-        compat: { supportsDeveloperRole: false, thinkingFormat: 'openai' },
-        models: [{ id: completions.id }, { id: responses.id }],
+    const models = modelsOf(
+      {
+        opencode: {
+          // Both protocols take the first switch; only completions takes the second.
+          compat: { supportsDeveloperRole: false, thinkingFormat: 'openai' },
+          models: [{ id: completions.id }, { id: responses.id }],
+        },
       },
-    }, 'opencode')
+      'opencode',
+    )
 
     const onCompletions = models.get(completions.id)?.compat as OpenAICompletionsCompat
     expect(onCompletions.supportsDeveloperRole).toBe(false)
@@ -936,20 +1011,25 @@ describe('compat switches', () => {
   })
 
   it('carries chat-template kwargs beside the thinking format that dispatches through them', () => {
-    const models = modelsOf({
-      'acme-qwen': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        models: [{
-          id: 'qwen-local',
-          reasoningEfforts: { off: null, medium: 'medium' },
-          compat: {
-            thinkingFormat: 'qwen-chat-template',
-            chatTemplateKwargs: { enable_thinking: { $var: 'thinking.enabled' } },
-          },
-        }],
+    const models = modelsOf(
+      {
+        'acme-qwen': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [
+            {
+              id: 'qwen-local',
+              reasoningEfforts: { off: null, medium: 'medium' },
+              compat: {
+                thinkingFormat: 'qwen-chat-template',
+                chatTemplateKwargs: { enable_thinking: { $var: 'thinking.enabled' } },
+              },
+            },
+          ],
+        },
       },
-    }, 'acme-qwen')
+      'acme-qwen',
+    )
 
     expect(models.get('qwen-local')?.compat).toEqual({
       thinkingFormat: 'qwen-chat-template',
@@ -958,21 +1038,26 @@ describe('compat switches', () => {
   })
 
   it('carries private-endpoint stream and reasoning controls', () => {
-    const models = modelsOf({
-      'acme-baseten': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        models: [{
-          id: 'reasoning-local',
-          compat: {
-            supportsFinishReason: false,
-            thinkingFormat: 'baseten',
-            chatTemplateArgs: { enable_thinking: { $var: 'thinking.enabled' } },
-            supportsThinkingTokenBudget: true,
-          },
-        }],
+    const models = modelsOf(
+      {
+        'acme-baseten': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          models: [
+            {
+              id: 'reasoning-local',
+              compat: {
+                supportsFinishReason: false,
+                thinkingFormat: 'baseten',
+                chatTemplateArgs: { enable_thinking: { $var: 'thinking.enabled' } },
+                supportsThinkingTokenBudget: true,
+              },
+            },
+          ],
+        },
       },
-    }, 'acme-baseten')
+      'acme-baseten',
+    )
 
     expect(models.get('reasoning-local')?.compat).toEqual({
       supportsFinishReason: false,
@@ -983,13 +1068,15 @@ describe('compat switches', () => {
   })
 
   it('rejects a model switch on an unrecognized protocol as having no configurable compat', () => {
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'acme-chat',
-        baseURL: 'https://acme.test',
-        models: [{ id: 'acme-a', compat: { supportsStore: false } }],
-      },
-    })).toThrow(/its api is "acme-chat", which does not take it.*"acme-chat" offers no configurable compat/s)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'acme-chat',
+          baseURL: 'https://acme.test',
+          models: [{ id: 'acme-a', compat: { supportsStore: false } }],
+        },
+      }),
+    ).toThrow(/its api is "acme-chat", which does not take it.*"acme-chat" offers no configurable compat/s)
   })
 
   it('refuses a valueless compat key written through the composed settings path', async () => {
@@ -998,16 +1085,18 @@ describe('compat switches', () => {
     // schemastery keeps the null, so nothing but that check stands between it
     // and `Model.compat`.
     const ctx = await bootWithSettings({})
-    await expect(configurations.get(ctx)!.update({
-      providers: {
-        'acme-gateway': {
-          api: 'openai-completions',
-          baseURL: 'https://acme.test/v1',
-          compat: { supportsDeveloperRole: null },
-          models: [{ id: 'acme-a' }],
+    await expect(
+      configurations.get(ctx)!.update({
+        providers: {
+          'acme-gateway': {
+            api: 'openai-completions',
+            baseURL: 'https://acme.test/v1',
+            compat: { supportsDeveloperRole: null },
+            models: [{ id: 'acme-a' }],
+          },
         },
-      },
-    })).rejects.toThrow(/compat "supportsDeveloperRole" with no value/)
+      }),
+    ).rejects.toThrow(/compat "supportsDeveloperRole" with no value/)
   })
 
   it('carries a compat switch from a written settings section onto the wire', async () => {
@@ -1037,42 +1126,48 @@ describe('compat switches', () => {
     })
 
     const request = server.requests[0] as { messages: { role: string }[] }
-    expect(request.messages.map(message => message.role)).toEqual(['system'])
+    expect(request.messages.map((message) => message.role)).toEqual(['system'])
   })
 
   it('refuses a valueless compat key rather than writing null over the catalog', () => {
     // schemastery passes a YAML bare key through as null. Carried forward it
     // would replace the installed entry's value, and pi-ai's `??` would then
     // reach for its baseURL detection — the "written but not applied" outcome.
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        compat: { supportsDeveloperRole: null } as never,
-        models: [{ id: 'acme-a' }],
-      },
-    })).toThrow(/compat "supportsDeveloperRole" with no value/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          compat: { supportsDeveloperRole: null } as never,
+          models: [{ id: 'acme-a' }],
+        },
+      }),
+    ).toThrow(/compat "supportsDeveloperRole" with no value/)
   })
 
   it('refuses a compat key whose value is undefined, as a cordis.yml entry can write', () => {
     // `!!js undefined` reaches the same state as a YAML bare key, and
     // schemastery keeps the key either way, so both are refused together.
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        compat: { supportsDeveloperRole: undefined } as never,
-        models: [{ id: 'acme-a' }],
-      },
-    })).toThrow(/compat "supportsDeveloperRole" with no value/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          compat: { supportsDeveloperRole: undefined } as never,
+          models: [{ id: 'acme-a' }],
+        },
+      }),
+    ).toThrow(/compat "supportsDeveloperRole" with no value/)
   })
 
   it('refuses a valueless compat key on a model entry too', () => {
-    expect(() => resolveProfiles({
-      deepseek: {
-        modelOverrides: { 'deepseek-flash': { compat: { requiresReasoningContentOnAssistantMessages: null } } as never },
-      },
-    })).toThrow(/model "deepseek-flash" sets compat "requiresReasoningContentOnAssistantMessages" with no value/)
+    expect(() =>
+      resolveProfiles({
+        deepseek: {
+          modelOverrides: { 'deepseek-flash': { compat: { requiresReasoningContentOnAssistantMessages: null } } as never },
+        },
+      }),
+    ).toThrow(/model "deepseek-flash" sets compat "requiresReasoningContentOnAssistantMessages" with no value/)
   })
 
   it('serves the Responses compat type on every protocol pi-ai gives it to', () => {
@@ -1094,25 +1189,29 @@ describe('compat switches', () => {
   it('refuses a compat key no wire protocol declares instead of dropping it', () => {
     // Schemastery passes unknown keys through, so silently dropping one would
     // make an unreadable switch look applied; the resolver must refuse it.
-    expect(() => resolveProfiles({
-      'acme-gateway': {
-        api: 'openai-completions',
-        baseURL: 'https://acme.test',
-        compat: { supportsDevelperRole: false } as never,
-        models: [{ id: 'acme-a' }],
-      },
-    })).toThrow(/compat "supportsDevelperRole", which no wire protocol declares; the configurable switches are .*\bsupportsDeveloperRole\b/)
+    expect(() =>
+      resolveProfiles({
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test',
+          compat: { supportsDevelperRole: false } as never,
+          models: [{ id: 'acme-a' }],
+        },
+      }),
+    ).toThrow(/compat "supportsDevelperRole", which no wire protocol declares; the configurable switches are .*\bsupportsDeveloperRole\b/)
   })
 
   it('refuses compat keys pi-ai’s catalog owns, pointing at the catalog route', () => {
     for (const compat of [{ openRouterRouting: {} }, { supportsAdditionalTools: true }]) {
-      expect(() => resolveProfiles({
-        'acme-gateway': {
-          api: 'openai-completions',
-          baseURL: 'https://acme.test',
-          models: [{ id: 'acme-a', compat: compat as never }],
-        },
-      })).toThrow(/which is not configurable here/)
+      expect(() =>
+        resolveProfiles({
+          'acme-gateway': {
+            api: 'openai-completions',
+            baseURL: 'https://acme.test',
+            models: [{ id: 'acme-a', compat: compat as never }],
+          },
+        }),
+      ).toThrow(/which is not configurable here/)
     }
   })
 })
@@ -1122,12 +1221,17 @@ describe('resolution snapshots', () => {
     const server = await mockServer([{ events: textEvents }])
     let current = resolveProfiles({ deepseek: { baseURL: `${server.url}/v1` } })
     let release: () => void = () => {}
-    const held = new Promise<void>((resolve) => { release = resolve })
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
     const adapter = new PiAiAdapter({
       profiles: () => current,
       // Credential resolution is the real await inside a stream call, and the
       // window a configuration change has to land in.
-      resolveApiKey: async () => { await held; return 'k' },
+      resolveApiKey: async () => {
+        await held
+        return 'k'
+      },
       auth: memoryAuth(),
     })
 
@@ -1137,7 +1241,8 @@ describe('resolution snapshots', () => {
         provider: 'deepseek',
         model: 'deepseek-flash',
         messages: [],
-      })) chunks.push(chunk)
+      }))
+        chunks.push(chunk)
     })()
 
     // The route set changes while the request waits, and something else reads
@@ -1164,8 +1269,12 @@ describe('resolution snapshots', () => {
     })
     const drain = async (): Promise<void> => {
       for await (const _chunk of adapter.stream({
-        provider: 'deepseek', model: 'deepseek-flash', messages: [],
-      })) { /* drain */ }
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+        messages: [],
+      })) {
+        /* drain */
+      }
     }
 
     await drain()
@@ -1199,8 +1308,7 @@ describe('configurable-provider directory', () => {
     // The refused swap costs a diagnostic, not the directory: every entry the
     // page needs is still declared.
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(before)
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'deepseek-official')?.settingsNs)
-      .toBe('llm-deepseek')
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'deepseek-official')?.settingsNs).toBe('llm-deepseek')
   })
 
   it('replaces its entries atomically as declared routes come and go', async () => {
@@ -1218,8 +1326,7 @@ describe('configurable-provider directory', () => {
       },
     })
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(catalogOnly + 1)
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'acme-gateway')?.displayName)
-      .toBe('Acme Gateway')
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'acme-gateway')?.displayName).toBe('Acme Gateway')
 
     await configurations.get(ctx)!.replace({})
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(catalogOnly)
@@ -1227,7 +1334,7 @@ describe('configurable-provider directory', () => {
 
   it('offers every installed catalog route, including one that only signs in', async () => {
     const ctx = await harness({})
-    const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
+    const offered = ctx.llm.listConfigurableProviders().map((entry) => entry.provider)
 
     // `openai-codex` is the one installed provider that authenticates through
     // OAuth alone. It is offered like any other because the collection now

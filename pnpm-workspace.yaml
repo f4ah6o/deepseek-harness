@@ -9,7 +9,6 @@ packages:
   - apps/*
   # Private package owning repository-level benchmark dependencies.
   - benchmarks
-  - website
   # Deploy root of the single-exe build: a pure dependency manifest whose
   # closure is what the exe bundles and what the Python runtime distributes.
   - python/sdk-runtime
@@ -18,10 +17,17 @@ overrides:
   'extract-zip>yauzl': '3.4.0'
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 
 peerDependencyRules:
   allowedVersions:
     typescript: '>=5 <7'
+    vite: '*'
+    vitest: '*'
+  allowAny:
+    - vite
+    - vitest
 
 # pnpm 10+ blocks any dependency shipping an install/build script until it is
 # explicitly reviewed here (strictDepBuilds defaults to true: an unlisted script
@@ -105,3 +111,9 @@ patchedDependencies:
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
   exceljs@4.4.0: patches/exceljs@4.4.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.1.0
+  vitest: 5.0.3
+  vite-plus: 1.1.0
+  '@vitest/coverage-v8': 5.0.3
+  '@vitest/spy': 5.0.3

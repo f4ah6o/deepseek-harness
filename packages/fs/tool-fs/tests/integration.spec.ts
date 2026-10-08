@@ -5,7 +5,7 @@
  * messages.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -38,7 +38,10 @@ function call(name: string, args: unknown) {
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  return result.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
 }
 
 function notObservedDiagnostic(path: string): string {
@@ -169,7 +172,7 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
       // Editing a line OUTSIDE the window is authorized because the file is unchanged.
       const result = await call('edit', { file_path: 'a.txt', old_string: 'line 12', new_string: 'LINE 12' })
       expect(result.isError).toBe(false)
-      expect(await readFile(join(dir, 'a.txt'), 'utf8')).toBe(lines.map(l => l === 'line 12' ? 'LINE 12' : l).join('\n'))
+      expect(await readFile(join(dir, 'a.txt'), 'utf8')).toBe(lines.map((l) => (l === 'line 12' ? 'LINE 12' : l)).join('\n'))
     })
 
     it('rejects an edit when the file changed since the windowed read (stale before matching)', async () => {
@@ -389,7 +392,9 @@ describe('per-session cwd', () => {
     await ctx.plugin(FsPolicy)
     fiber = await ctx.plugin(ToolFs)
   })
-  afterEach(async () => { await rm(sessionDir, { recursive: true, force: true }) })
+  afterEach(async () => {
+    await rm(sessionDir, { recursive: true, force: true })
+  })
 
   const callIn = (sessionObj: object, name: string, args: unknown) =>
     ctx.tools.execute({
@@ -439,7 +444,13 @@ describe('signal, concurrency, and the fs/observed contract', () => {
   const callSig = (signal: AbortSignal, name: string, args: unknown) =>
     ctx.tools.execute({ callId: ToolCallId(`c-${++callCounter}`), name, arguments: args, agent: { session } as never, signal })
   const callOwned = (name: string, args: unknown) =>
-    ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`c-${++callCounter}`), name, arguments: args, agent: { session } as never })
+    ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId(`c-${++callCounter}`),
+      name,
+      arguments: args,
+      agent: { session } as never,
+    })
 
   it('a pre-aborted registry call skips read/write/edit with ABORTED_BEFORE_DISPATCH', async () => {
     await writeFile(join(dir, 'a.txt'), 'hello')
@@ -467,24 +478,32 @@ describe('signal, concurrency, and the fs/observed contract', () => {
     const captured = Promise.withResolvers<undefined>()
     const versions: (FsVersion | undefined)[] = []
     // Both guards must be captured before a successful edit refreshes the session's observed version.
-    const dispose = ctx.on('fs/edit-intent', async (_target, _actor, next) => {
-      const intent = await next()
-      versions.push(intent?.version)
-      if (versions.length === 2) captured.resolve(undefined)
-      await captured.promise
-      return intent
-    }, { prepend: true })
+    const dispose = ctx.on(
+      'fs/edit-intent',
+      async (_target, _actor, next) => {
+        const intent = await next()
+        versions.push(intent?.version)
+        if (versions.length === 2) captured.resolve(undefined)
+        await captured.promise
+        return intent
+      },
+      { prepend: true },
+    )
     // An early tool failure must release any peer already waiting at the barrier.
     const pending = [
       callOwned('edit', { file_path: 'a.txt', old_string: 'base', new_string: 'ONE', replace_all: false }),
       callOwned('edit', { file_path: 'a.txt', old_string: 'value', new_string: 'TWO', replace_all: false }),
-    ].map(pendingCall => pendingCall.finally(() => { captured.resolve(undefined) }))
+    ].map((pendingCall) =>
+      pendingCall.finally(() => {
+        captured.resolve(undefined)
+      }),
+    )
     try {
       const results = await Promise.all(pending)
       expect(versions).toHaveLength(2)
       expect(versions[0]).toBeDefined()
       expect(versions[1]).toBe(versions[0])
-      const errors = results.filter(r => r.isError)
+      const errors = results.filter((r) => r.isError)
       expect(errors).toHaveLength(1)
       expect(errors[0]?.error).toMatchObject({ info: { code: 'FS_STALE_VERSION' } })
       // The world is consistent: exactly one edit landed.
@@ -527,7 +546,9 @@ describe('signal, concurrency, and the fs/observed contract', () => {
   it('a throwing fs/observed listener surfaces as isError, but the mutation already hit disk', async () => {
     // fs/observed is a plain ctx.emit after the write succeeded; a throwing listener cannot
     // roll the write back — it only turns the tool result into isError.
-    ctx.on('fs/observed', () => { throw new Error('recording bug') })
+    ctx.on('fs/observed', () => {
+      throw new Error('recording bug')
+    })
     const result = await callOwned('write', { file_path: 'w.txt', content: 'durable' })
     expect(result.isError).toBe(true)
     expect(await readFile(join(dir, 'w.txt'), 'utf8')).toBe('durable')

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { EMPTY_CHAT_SNAPSHOT, type MessageImagesProps } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -11,15 +11,20 @@ import type { MessageImageLabels } from '../src/MessageImage.tsx'
 import { MessageImages } from '../src/client/MessageImages.tsx'
 
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
-const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+const useResource = (() => ({
+  status: 'none' as const,
+  value: undefined,
+  failure: undefined,
+  reload: () => {},
+})) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = (selector) => selector({ activePanelId: null })
 
 afterEach(cleanup)
 
 const labels: MessageImageLabels = {
   image: '图片',
   open: '查看原图',
-  openNamed: label => `${label}，点击查看原图`,
+  openNamed: (label) => `${label}，点击查看原图`,
   loading: '图片加载中…',
   loadFailed: '图片加载失败，点击重试',
   lightbox: { dialog: '原图预览', close: '关闭原图预览' },
@@ -46,16 +51,19 @@ const emptyTrajectory: TrajectorySnapshot = {
   partial: null,
   runningCalls: [],
 }
-const useSessionStatus: MessageImagesProps['useSessionStatus'] = selector => selector(noAttention)
-const useConversation: MessageImagesProps['useConversation'] = selector => selector(EMPTY_CONVERSATION_SNAPSHOT)
-const useChat: MessageImagesProps['useChat'] = selector => selector(EMPTY_CHAT_SNAPSHOT)
-const useTrajectory: MessageImagesProps['useTrajectory'] = selector => selector(emptyTrajectory)
+const useSessionStatus: MessageImagesProps['useSessionStatus'] = (selector) => selector(noAttention)
+const useConversation: MessageImagesProps['useConversation'] = (selector) => selector(EMPTY_CONVERSATION_SNAPSHOT)
+const useChat: MessageImagesProps['useChat'] = (selector) => selector(EMPTY_CHAT_SNAPSHOT)
+const useTrajectory: MessageImagesProps['useTrajectory'] = (selector) => selector(emptyTrajectory)
 
 describe('MessageImage', () => {
   it('renders a cached URL on the first frame while refreshing it', () => {
-    const load = Object.assign(vi.fn(() => new Promise<string>(() => {})), {
-      peek: vi.fn(() => 'blob:seeded'),
-    })
+    const load = Object.assign(
+      vi.fn(() => new Promise<string>(() => {})),
+      {
+        peek: vi.fn(() => 'blob:seeded'),
+      },
+    )
     const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     expect(view.queryByText('图片加载中…')).toBeNull()
     expect((view.getByAltText('history.png') as HTMLImageElement).src).toContain('blob:seeded')
@@ -69,7 +77,9 @@ describe('MessageImage', () => {
     expect(frame.getAttribute('style')).toContain('width: 240px')
     expect(frame.getAttribute('style')).toContain('height: 120px')
     expect(frame.getAttribute('title')).toBe('查看原图')
-    await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
+    await waitFor(() => {
+      expect(view.getByAltText('history.png')).toBeTruthy()
+    })
     expect(load).toHaveBeenCalledWith(attachment)
     fireEvent.click(frame)
     expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
@@ -90,12 +100,15 @@ describe('MessageImage', () => {
     const { name: _named, ...unnamed } = attachment
     const load = vi.fn().mockResolvedValue('blob:unnamed')
     const view = render(<MessageImage image={{ attachment: unnamed }} load={load} variant="single" labels={labels} />)
-    await waitFor(() => { expect(view.getByAltText('图片')).toBeTruthy() })
+    await waitFor(() => {
+      expect(view.getByAltText('图片')).toBeTruthy()
+    })
     expect(view.getByRole('button', { name: '图片，点击查看原图' })).toBeTruthy()
   })
 
   it('surfaces a retry control when durable bytes cannot be read, including a failed retry', async () => {
-    const load = vi.fn()
+    const load = vi
+      .fn()
       .mockRejectedValueOnce(new Error('offline'))
       .mockRejectedValueOnce(new Error('still offline'))
       .mockResolvedValueOnce('blob:retry')
@@ -104,7 +117,9 @@ describe('MessageImage', () => {
     fireEvent.click(retry)
     const retryAgain = await view.findByRole('button', { name: '图片加载失败，点击重试' })
     fireEvent.click(retryAgain)
-    await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
+    await waitFor(() => {
+      expect(view.getByAltText('history.png')).toBeTruthy()
+    })
     expect(load).toHaveBeenCalledTimes(3)
   })
 
@@ -116,7 +131,9 @@ describe('MessageImage', () => {
     const tallFrame = tall.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(tallFrame.getAttribute('style')).toContain('width: 60px')
     expect(tallFrame.getAttribute('style')).toContain('height: 240px')
-    await waitFor(() => { expect(tall.getByAltText('history.png')).toBeTruthy() })
+    await waitFor(() => {
+      expect(tall.getByAltText('history.png')).toBeTruthy()
+    })
     expect(tall.getByAltText('history.png').style.objectPosition).toBe('center top')
     tall.unmount()
     const wide = render(
@@ -125,7 +142,9 @@ describe('MessageImage', () => {
     const wideFrame = wide.getByRole('button', { name: 'history.png，点击查看原图' })
     expect(wideFrame.getAttribute('style')).toContain('width: 240px')
     expect(wideFrame.getAttribute('style')).toContain('height: 60px')
-    await waitFor(() => { expect(wide.getByAltText('history.png')).toBeTruthy() })
+    await waitFor(() => {
+      expect(wide.getByAltText('history.png')).toBeTruthy()
+    })
     expect(wide.getByAltText('history.png').style.objectPosition).toBe('left center')
     wide.unmount()
     const small = render(
@@ -164,7 +183,9 @@ describe('MessageImage', () => {
     expect(loading.textContent).toBe('')
     expect(loading.querySelector('svg')).not.toBeNull()
 
-    await act(async () => { pending.reject(new Error('offline')) })
+    await act(async () => {
+      pending.reject(new Error('offline'))
+    })
     const retry = view.getByRole('button', { name: statusLabels.loadFailed })
     expect(retry.getAttribute('title')).toBe(statusLabels.loadFailed)
     expect(retry.textContent).toBe('')
@@ -181,7 +202,9 @@ describe('MessageImage', () => {
   it('uses the owner display name for an unnamed thumbnail and its original-image viewer', async () => {
     const { name: _name, ...unnamed } = attachment
     const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue('blob:thumbnail')
-    const view = render(<ImageGallery images={[{ attachment: unnamed, label: 'Image 2' }]} load={load} align="start" thumbnail labels={labels} />)
+    const view = render(
+      <ImageGallery images={[{ attachment: unnamed, label: 'Image 2' }]} load={load} align="start" thumbnail labels={labels} />,
+    )
     fireEvent.click(await view.findByRole('button', { name: labels.loadFailed }))
     const image = await view.findByAltText('Image 2')
     expect(image.closest('button')?.getAttribute('data-variant')).toBe('thumbnail')
@@ -198,13 +221,23 @@ describe('MessageImage', () => {
 
   it('ignores a load settling after unmount', async () => {
     let resolve: ((url: string) => void) | undefined
-    const load = vi.fn(() => new Promise<string>((r) => { resolve = r }))
+    const load = vi.fn(
+      () =>
+        new Promise<string>((r) => {
+          resolve = r
+        }),
+    )
     const view = render(<MessageImage image={{ attachment }} load={load} variant="single" labels={labels} />)
     view.unmount()
     resolve?.('blob:late')
     await Promise.resolve()
     let reject: ((error: Error) => void) | undefined
-    const failing = vi.fn(() => new Promise<string>((_r, rej) => { reject = rej }))
+    const failing = vi.fn(
+      () =>
+        new Promise<string>((_r, rej) => {
+          reject = rej
+        }),
+    )
     const second = render(<MessageImage image={{ attachment }} load={failing} variant="single" labels={labels} />)
     second.unmount()
     reject?.(new Error('late failure'))
@@ -233,9 +266,7 @@ describe('MessageImage preview arm', () => {
 
   it('sizes an unprobed lone preview as a square crop and falls back to the image label', () => {
     const load = vi.fn()
-    const view = render(
-      <MessageImage image={{ preview: { url: 'blob:unprobed' } }} load={load} variant="single" labels={labels} />,
-    )
+    const view = render(<MessageImage image={{ preview: { url: 'blob:unprobed' } }} load={load} variant="single" labels={labels} />)
     const img = view.getByAltText('图片') as HTMLImageElement
     const frame = img.closest('button') as HTMLButtonElement
     expect(frame.style.width).toBe('240px')
@@ -265,7 +296,9 @@ describe('ImageGallery', () => {
       />,
     )
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
-    await waitFor(() => { expect(view.getAllByAltText('history.png')).toHaveLength(2) })
+    await waitFor(() => {
+      expect(view.getAllByAltText('history.png')).toHaveLength(2)
+    })
     expect(view.getByAltText('echo.png')).toBeTruthy()
   })
 
@@ -274,9 +307,7 @@ describe('ImageGallery', () => {
     const lone = render(<ImageGallery images={[{ attachment }]} load={load} align="start" labels={labels} />)
     expect(lone.container.querySelectorAll('[data-variant="single"]')).toHaveLength(1)
     lone.unmount()
-    const compact = render(
-      <ImageGallery images={[{ attachment }]} load={load} align="end" compact labels={labels} />,
-    )
+    const compact = render(<ImageGallery images={[{ attachment }]} load={load} align="end" compact labels={labels} />)
     expect(compact.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(1)
     compact.unmount()
     const several = render(
@@ -318,7 +349,9 @@ describe('ImageGallery', () => {
       sessionId: 'message-images-test' as MessageImagesProps['sessionId'],
       useSession,
       useSessions,
-      usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
+      usePanelInfo,
+      useSessionRetainInfo: () => undefined,
+      useResource,
       useSessionStatus,
       useWorkspaces,
       useProjection: () => undefined,
@@ -342,7 +375,9 @@ describe('ImageGallery', () => {
       t,
     }
     const view = render(<MessageImages {...props} />)
-    await waitFor(() => { expect(view.getByAltText('history.png')).toBeTruthy() })
+    await waitFor(() => {
+      expect(view.getByAltText('history.png')).toBeTruthy()
+    })
     expect(view.getByRole('button', { name: 'history.png，点击查看原图' })).toBeTruthy()
     expect(view.container.querySelector('[data-align="end"]')).not.toBeNull()
   })

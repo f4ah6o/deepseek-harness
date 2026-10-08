@@ -1,9 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import {
-  settleRun,
-  settleRunResult,
-} from '../src/index.ts'
+import { settleRun, settleRunResult } from '../src/index.ts'
 
 const MAX_SUBAGENT_DIAGNOSTIC_BYTES = 4_096
 
@@ -17,12 +14,14 @@ describe('outcome mapping helpers', () => {
     ['paused', { status: 'failed', detail: 'paused' }],
   ] as const)('settleRun maps the %s stop reason onto its Task outcome', async (stopReason, expected) => {
     const output = [{ type: 'text' as const, text: 'partial' }]
-    await expect(settleRun({
-      id: SessionId('child'),
-      localAgent: undefined,
-      result: Promise.resolve({ output, stopReason: stopReason as never }),
-      dispose: () => Promise.resolve(),
-    })).resolves.toEqual(expected)
+    await expect(
+      settleRun({
+        id: SessionId('child'),
+        localAgent: undefined,
+        result: Promise.resolve({ output, stopReason: stopReason as never }),
+        dispose: () => Promise.resolve(),
+      }),
+    ).resolves.toEqual(expected)
   })
 
   it('settleRun disposes the run before reporting, on both result paths', async () => {
@@ -31,7 +30,10 @@ describe('outcome mapping helpers', () => {
       id: SessionId('child-1'),
       localAgent: undefined,
       result: Promise.resolve({ output: [{ type: 'text' as const, text: 'ok' }], stopReason: 'completed' as const }),
-      dispose() { order.push('dispose'); return Promise.resolve() },
+      dispose() {
+        order.push('dispose')
+        return Promise.resolve()
+      },
     })
     order.push('reported')
     expect(completed).toEqual({ status: 'completed', result: 'ok' })
@@ -43,7 +45,10 @@ describe('outcome mapping helpers', () => {
       id: SessionId('child-2'),
       localAgent: undefined,
       result: Promise.reject(new Error('transport gone')),
-      dispose() { disposed = true; return Promise.resolve() },
+      dispose() {
+        disposed = true
+        return Promise.resolve()
+      },
     })
     expect(failed).toEqual({ status: 'failed', detail: 'Error: transport gone' })
     expect(disposed).toBe(true)
@@ -69,32 +74,36 @@ describe('outcome mapping helpers', () => {
   })
 
   it('keeps provider diagnostics separate in failed background outcomes', async () => {
-    await expect(settleRun({
-      id: SessionId('child-diagnostic'),
-      localAgent: undefined,
-      result: Promise.resolve({
-        output: [{ type: 'text', text: 'partial assistant text' }],
-        diagnostic: 'Claude Code denied a tool request',
-        stopReason: 'error',
+    await expect(
+      settleRun({
+        id: SessionId('child-diagnostic'),
+        localAgent: undefined,
+        result: Promise.resolve({
+          output: [{ type: 'text', text: 'partial assistant text' }],
+          diagnostic: 'Claude Code denied a tool request',
+          stopReason: 'error',
+        }),
+        dispose: () => Promise.resolve(),
       }),
-      dispose: () => Promise.resolve(),
-    })).resolves.toEqual({
+    ).resolves.toEqual({
       status: 'failed',
       detail: 'error; diagnostic: Claude Code denied a tool request',
     })
   })
 
   it('treats a diagnostic-bearing remote abort as failed without changing local cancellation', async () => {
-    await expect(settleRun({
-      id: SessionId('child-remote-abort'),
-      localAgent: undefined,
-      result: Promise.resolve({
-        output: [],
-        diagnostic: 'ACP permission was denied',
-        stopReason: 'aborted',
+    await expect(
+      settleRun({
+        id: SessionId('child-remote-abort'),
+        localAgent: undefined,
+        result: Promise.resolve({
+          output: [],
+          diagnostic: 'ACP permission was denied',
+          stopReason: 'aborted',
+        }),
+        dispose: () => Promise.resolve(),
       }),
-      dispose: () => Promise.resolve(),
-    })).resolves.toEqual({
+    ).resolves.toEqual({
       status: 'failed',
       detail: 'aborted; diagnostic: ACP permission was denied',
     })
@@ -105,7 +114,9 @@ describe('outcome mapping helpers', () => {
     const oversized = '权限'.repeat(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
     const controller = new AbortController()
     const exactResult = await settleRunResult({
-      attempt: async () => { throw new Error('provider failed') },
+      attempt: async () => {
+        throw new Error('provider failed')
+      },
       collectOutput: () => [],
       collectDiagnostic: () => exact,
       cancelled: () => false,
@@ -115,7 +126,9 @@ describe('outcome mapping helpers', () => {
     expect(exactResult.diagnostic).toBe(exact)
 
     const result = await settleRunResult({
-      attempt: async () => { throw new Error('provider failed') },
+      attempt: async () => {
+        throw new Error('provider failed')
+      },
       collectOutput: () => [],
       collectDiagnostic: () => oversized,
       cancelled: () => false,
@@ -123,8 +136,7 @@ describe('outcome mapping helpers', () => {
       onAbort: () => {},
     })
     const limited = result.diagnostic ?? ''
-    expect(Buffer.byteLength(limited, 'utf8'))
-      .toBeLessThanOrEqual(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
+    expect(Buffer.byteLength(limited, 'utf8')).toBeLessThanOrEqual(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
     expect(limited.endsWith('[diagnostic truncated]')).toBe(true)
     expect(limited).not.toContain('\uFFFD')
     expect(result.stopReason).toBe('error')
@@ -135,18 +147,18 @@ describe('outcome mapping helpers', () => {
     const controller = new AbortController()
     const oversized = '权限'.repeat(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
     const failed = await settleRunResult({
-      attempt: () => Promise.resolve({
-        output: [],
-        diagnostic: oversized,
-        stopReason: 'error',
-      }),
+      attempt: () =>
+        Promise.resolve({
+          output: [],
+          diagnostic: oversized,
+          stopReason: 'error',
+        }),
       collectOutput: () => [],
       cancelled: () => false,
       signal: controller.signal,
       onAbort: () => {},
     })
-    expect(Buffer.byteLength(failed.diagnostic ?? '', 'utf8'))
-      .toBeLessThanOrEqual(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
+    expect(Buffer.byteLength(failed.diagnostic ?? '', 'utf8')).toBeLessThanOrEqual(MAX_SUBAGENT_DIAGNOSTIC_BYTES)
     expect(failed.diagnostic).toMatch(/\[diagnostic truncated\]$/)
 
     const plainFailure = await settleRunResult({

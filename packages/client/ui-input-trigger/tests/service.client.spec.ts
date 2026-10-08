@@ -8,14 +8,23 @@
  * session scope (createScope).
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { InputTriggerController, InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {
-  BeginCommandRequest, ClientSessionContext, CommandClaim, InsertReferenceRequest, PickOutcome,
-  ReferenceInsert, InputTriggerCandidate, InputTriggerPick, InputTriggerSource, SourceRoster, TriggerChar,
+  BeginCommandRequest,
+  ClientSessionContext,
+  CommandClaim,
+  InsertReferenceRequest,
+  PickOutcome,
+  ReferenceInsert,
+  InputTriggerCandidate,
+  InputTriggerPick,
+  InputTriggerSource,
+  SourceRoster,
+  TriggerChar,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 
 const sid = (k: string): SessionId => k as SessionId
@@ -35,9 +44,10 @@ function deferredSource(trigger: TriggerChar, name: string, over: Partial<InputT
   const source: InputTriggerSource = {
     trigger,
     name,
-    candidates: (session, req) => new Promise<readonly InputTriggerCandidate[]>((resolve, reject) => {
-      pending.push({ resolve, reject, query: req.query, signal: req.signal, session })
-    }),
+    candidates: (session, req) =>
+      new Promise<readonly InputTriggerCandidate[]>((resolve, reject) => {
+        pending.push({ resolve, reject, query: req.query, signal: req.signal, session })
+      }),
     onPick: () => undefined,
     warm,
     ...over,
@@ -47,7 +57,10 @@ function deferredSource(trigger: TriggerChar, name: string, over: Partial<InputT
 
 /** Source whose candidates resolve immediately; picks are recorded. */
 function readySource(
-  trigger: TriggerChar, name: string, items: readonly InputTriggerCandidate[], onPick?: (pick: InputTriggerPick) => PickOutcome,
+  trigger: TriggerChar,
+  name: string,
+  items: readonly InputTriggerCandidate[],
+  onPick?: (pick: InputTriggerPick) => PickOutcome,
 ) {
   const picks: InputTriggerPick[] = []
   const source: InputTriggerSource = {
@@ -62,8 +75,11 @@ function readySource(
   return { source, picks }
 }
 
-const claimOf = (token: string): CommandClaim =>
-  ({ name: token.slice(1).trim(), token, submit: () => Promise.resolve({ kind: 'success' }) })
+const claimOf = (token: string): CommandClaim => ({
+  name: token.slice(1).trim(),
+  token,
+  submit: () => Promise.resolve({ kind: 'success' }),
+})
 
 /** One microtask hop: lets settled candidate promises flow into the store. */
 const tick = () => Promise.resolve()
@@ -73,7 +89,7 @@ function controllerBench(sources: InputTriggerSource[] = [], key = 'a') {
   const root = new Context()
   const scope = createScope(root, sid(key))
   const roster: SourceRoster = {
-    sources: trigger => sources.filter(s => s.trigger === trigger),
+    sources: (trigger) => sources.filter((s) => s.trigger === trigger),
     all: () => sources,
   }
   const controller = new InputTriggerController({ actx: scope.ctx, sessionId: sid(key), roster })
@@ -86,7 +102,7 @@ async function serviceBench() {
   const bindings = new Map<SessionId, { sessionId: SessionId; session: { sessionId: SessionId }; ctx: Context }>()
   root.provide('sessions', {
     scopeOf: (c: Context) => scopeOf(c),
-    sessionOf: (ctx: Context) => [...bindings.values()].find(binding => binding.ctx === ctx)?.session,
+    sessionOf: (ctx: Context) => [...bindings.values()].find((binding) => binding.ctx === ctx)?.session,
     binding: (id: SessionId) => bindings.get(id),
   } as never)
   await root.plugin(InputTriggerService).await()
@@ -108,8 +124,7 @@ describe('registerSource', () => {
   it('throws on a duplicate (trigger, name); same name across triggers is fine', async () => {
     const { inputTriggers } = await serviceBench()
     inputTriggers.registerSource(readySource('/', 'command', []).source)
-    expect(() => inputTriggers.registerSource(readySource('/', 'command', []).source))
-      .toThrow(/already registered/)
+    expect(() => inputTriggers.registerSource(readySource('/', 'command', []).source)).toThrow(/already registered/)
     inputTriggers.registerSource(readySource('@', 'command', []).source)
   })
 
@@ -125,12 +140,12 @@ describe('registerSource', () => {
     ca.track('/o', 2, { tier: 'plain' }, 1)
     cb.track('/o', 2, { tier: 'plain' }, 1)
     await tick()
-    expect(ca.menu.getSnapshot().groups.map(g => g.source)).toEqual(['alpha', 'beta'])
-    expect(cb.menu.getSnapshot().groups.map(g => g.source)).toEqual(['alpha', 'beta'])
+    expect(ca.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['alpha', 'beta'])
+    expect(cb.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['alpha', 'beta'])
 
     disposeB()
-    expect(ca.menu.getSnapshot().groups.map(g => g.source)).toEqual(['alpha'])
-    expect(cb.menu.getSnapshot().groups.map(g => g.source)).toEqual(['alpha'])
+    expect(ca.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['alpha'])
+    expect(cb.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['alpha'])
     // The name is free again, and a stale double-dispose stays a no-op.
     disposeB()
     inputTriggers.registerSource(deferredSource('/', 'beta').source)
@@ -153,10 +168,7 @@ describe('registerSource', () => {
     const controller = inputTriggers.sessionOf(mint('a').actx)
     const fiber = root.plugin({
       apply(pluginCtx: Context) {
-        pluginCtx.effect(
-          () => inputTriggers.registerSource(readySource('/', 'command', [{ name: 'goal' }]).source),
-          'test: slash source',
-        )
+        pluginCtx.effect(() => inputTriggers.registerSource(readySource('/', 'command', [{ name: 'goal' }]).source), 'test: slash source')
       },
     })
     await fiber.await()
@@ -349,14 +361,10 @@ describe('track', () => {
 
     // Stale-while-revalidate: the pending group still carries the items.
     controller.track('/go', 3, { tier: 'plain' }, 1)
-    expect(controller.menu.getSnapshot().groups[0]).toEqual(
-      { source: 'command', status: 'pending', items: [{ name: 'goal' }] },
-    )
+    expect(controller.menu.getSnapshot().groups[0]).toEqual({ source: 'command', status: 'pending', items: [{ name: 'goal' }] })
     cmd.pending[1]!.resolve([{ name: 'goat' }])
     await tick()
-    expect(controller.menu.getSnapshot().groups[0]).toEqual(
-      { source: 'command', status: 'ready', items: [{ name: 'goat' }] },
-    )
+    expect(controller.menu.getSnapshot().groups[0]).toEqual({ source: 'command', status: 'ready', items: [{ name: 'goat' }] })
   })
 
   it('same hit re-track refreshes the span stamp without refetching', () => {
@@ -385,14 +393,11 @@ describe('track', () => {
   })
 
   it('trigger switch reseeds the roster', () => {
-    const { controller } = controllerBench([
-      deferredSource('/', 'command').source,
-      deferredSource('@', 'subagent').source,
-    ])
+    const { controller } = controllerBench([deferredSource('/', 'command').source, deferredSource('@', 'subagent').source])
     controller.track('/g', 2, { tier: 'plain' }, 1)
-    expect(controller.menu.getSnapshot().groups.map(g => g.source)).toEqual(['command'])
+    expect(controller.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['command'])
     controller.track('@w', 2, { tier: 'plain' }, 1)
-    expect(controller.menu.getSnapshot().groups.map(g => g.source)).toEqual(['subagent'])
+    expect(controller.menu.getSnapshot().groups.map((g) => g.source)).toEqual(['subagent'])
   })
 
   it('all sources settling empty auto-closes; a later settle of a gone generation is silent', async () => {
@@ -419,7 +424,7 @@ describe('track', () => {
       cmd.pending[0]!.resolve([{ name: 'goal' }])
       await tick()
       const state = controller.menu.getSnapshot()
-      expect(state.groups.map(g => g.source)).toEqual(['command'])
+      expect(state.groups.map((g) => g.source)).toEqual(['command'])
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skill'), expect.any(Error))
     } finally {
       errorSpy.mockRestore()
@@ -476,7 +481,7 @@ describe('programmatic source launcher', () => {
     controller.track('/g', 2, { tier: 'plain' }, 2)
     await tick()
     expect(controller.launcher.getSnapshot()).toBeNull()
-    expect(controller.menu.getSnapshot().groups.map(group => group.source)).toEqual(['command', 'skill'])
+    expect(controller.menu.getSnapshot().groups.map((group) => group.source)).toEqual(['command', 'skill'])
   })
 })
 
@@ -600,7 +605,7 @@ describe('pick / scoped input events', () => {
     expect(controller.onSpace()).toBe(false)
   })
 
-  it('scope carrier routing: a foreign session\'s listener never hears the dispatch, untagged root does', async () => {
+  it("scope carrier routing: a foreign session's listener never hears the dispatch, untagged root does", async () => {
     const claim = claimOf('/goal ')
     const cmd = readySource('/', 'command', [{ name: 'goal' }], () => ({ claim }))
     const { root, controller } = controllerBench([cmd.source])
@@ -611,7 +616,9 @@ describe('pick / scoped input events', () => {
       return true
     })
     // Untagged root listeners are admitted globally (the carrier contract).
-    root.on('slash/input-begin-command', (req) => { rootSeen.push(req) })
+    root.on('slash/input-begin-command', (req) => {
+      rootSeen.push(req)
+    })
     controller.track('/g', 2, { tier: 'plain' }, 3)
     await tick()
     controller.pick('command', 0)
@@ -654,7 +661,10 @@ describe('header / drilled descent', () => {
       header: (_session, req) => {
         requests.push({ ...req })
         if (!req.drilled || !req.query.includes('/')) return undefined
-        return req.query.split('/').filter(Boolean).map(label => ({ label, value: label }))
+        return req.query
+          .split('/')
+          .filter(Boolean)
+          .map((label) => ({ label, value: label }))
       },
       onPick: (pick) => {
         picks.push(pick)
@@ -704,7 +714,7 @@ describe('header / drilled descent', () => {
     controller.track('@src/lib/', 9, { tier: 'plain' }, 2)
     await tick()
     const trail = controller.headers.getSnapshot().get('reference')
-    expect(trail?.map(crumb => crumb.label)).toEqual(['src', 'lib'])
+    expect(trail?.map((crumb) => crumb.label)).toEqual(['src', 'lib'])
     picks.length = 0
     controller.pickCrumb('reference', 0)
     expect(picks).toHaveLength(1)
@@ -748,7 +758,9 @@ describe('header / drilled descent', () => {
       trigger: '@',
       name: 'broken',
       candidates: () => Promise.resolve([{ name: 'x' }]),
-      header: () => { throw new Error('header boom') },
+      header: () => {
+        throw new Error('header boom')
+      },
       onPick: () => undefined,
     }
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -770,7 +782,7 @@ describe('header / drilled descent', () => {
         seen.push(req.drilled)
         return Promise.resolve([{ name: 'src', drill: true, value: 'src' }])
       },
-      onPick: pick => (pick.action === 'drill' ? { text: '@src/', continue: true } : undefined),
+      onPick: (pick) => (pick.action === 'drill' ? { text: '@src/', continue: true } : undefined),
     }
     const { controller, actx } = controllerBench([source])
     actx.on('slash/input-insert-text', () => true)
@@ -784,7 +796,7 @@ describe('header / drilled descent', () => {
 })
 
 describe('lexicon', () => {
-  function lexSource(trigger: TriggerChar, name: string, roll?: readonly string[]  , hasHook = true): InputTriggerSource {
+  function lexSource(trigger: TriggerChar, name: string, roll?: readonly string[], hasHook = true): InputTriggerSource {
     return {
       trigger,
       name,
@@ -840,12 +852,14 @@ describe('lexicon', () => {
     const source: InputTriggerSource = {
       trigger: '/',
       name: 'skill',
-      candidates: () => Promise.resolve((roll ?? []).map(name => ({ name }))),
+      candidates: () => Promise.resolve((roll ?? []).map((name) => ({ name }))),
       onPick: () => undefined,
       lexicon: () => roll,
       subscribeLexicon: (_session, listener) => {
         notify = listener
-        return () => { notify = undefined }
+        return () => {
+          notify = undefined
+        }
       },
     }
     const { controller } = controllerBench([source])
@@ -854,7 +868,9 @@ describe('lexicon', () => {
     await tick()
     expect(controller.menu.getSnapshot().groups[0]?.items).toEqual([{ name: 'old' }])
     const seen: number[] = []
-    controller.lexicon.subscribe(() => { seen.push(controller.lexicon.getSnapshot().size) })
+    controller.lexicon.subscribe(() => {
+      seen.push(controller.lexicon.getSnapshot().size)
+    })
     roll = ['commit-helper']
     notify?.()
     await tick()
@@ -965,7 +981,10 @@ describe('arbitrate', () => {
   it('a launcher-opened menu survives the track its own focus produces', async () => {
     const { controller } = await menuBench()
     controller.toggleSource('command', {
-      trigger: '/', query: '', quoted: false, position: 'leading',
+      trigger: '/',
+      query: '',
+      quoted: false,
+      position: 'leading',
       span: { start: 0, end: 0, draftRev: 0 },
     })
     expect(controller.menu.getSnapshot().open).toBe(true)
@@ -1032,7 +1051,10 @@ describe('arbitrate', () => {
   it('tab during a pending refinement is consumed: no pick, no focus traversal', async () => {
     const picks: string[] = []
     const cmd = deferredSource('/', 'command', {
-      onPick: (pick) => { picks.push(pick.candidate.name); return undefined },
+      onPick: (pick) => {
+        picks.push(pick.candidate.name)
+        return undefined
+      },
     })
     const { controller } = controllerBench([cmd.source])
     controller.track('/g', 2, { tier: 'plain' }, 1)
@@ -1080,7 +1102,10 @@ describe('arbitrate', () => {
   it('enter during a pending refinement is consumed: no pick, no submit fallthrough', async () => {
     const picks: string[] = []
     const cmd = deferredSource('/', 'command', {
-      onPick: (pick) => { picks.push(pick.candidate.name); return undefined },
+      onPick: (pick) => {
+        picks.push(pick.candidate.name)
+        return undefined
+      },
     })
     const { controller } = controllerBench([cmd.source])
     controller.track('/g', 2, { tier: 'plain' }, 1)
@@ -1166,10 +1191,7 @@ describe('onSpace', () => {
 })
 
 describe('adjudicate', () => {
-  const enterSource = (
-    trigger: TriggerChar, name: string,
-    matchEnter?: InputTriggerSource['matchEnter'],
-  ): InputTriggerSource => ({
+  const enterSource = (trigger: TriggerChar, name: string, matchEnter?: InputTriggerSource['matchEnter']): InputTriggerSource => ({
     trigger,
     name,
     candidates: () => Promise.resolve([]),
@@ -1234,8 +1256,7 @@ describe('adjudicate', () => {
       enterSource('/', 'command', () => Promise.reject(new Error('warmup failed'))),
       enterSource('/', 'late', () => Promise.resolve('handled')),
     ])
-    await expect(controller.adjudicate('/goal x', new AbortController().signal, { attachments: 0 }))
-      .rejects.toThrow('warmup failed')
+    await expect(controller.adjudicate('/goal x', new AbortController().signal, { attachments: 0 })).rejects.toThrow('warmup failed')
   })
 
   it('an aborted attempt signal stops the poll', async () => {

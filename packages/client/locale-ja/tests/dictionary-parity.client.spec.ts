@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import ts from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { DICTIONARIES } from '../src/client/dicts/index.ts'
 
 interface SourceDictionary {
@@ -66,11 +66,7 @@ function resolveImport(owner: string, specifier: string): string | undefined {
   return undefined
 }
 
-function expressionText(
-  expression: ts.Expression,
-  scope: SourceScope,
-  visited: ReadonlySet<string> = new Set(),
-): string | undefined {
+function expressionText(expression: ts.Expression, scope: SourceScope, visited: ReadonlySet<string> = new Set()): string | undefined {
   const value = unwrap(expression)
   if (ts.isStringLiteralLike(value)) return value.text
   if (ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.PlusToken) {
@@ -79,13 +75,14 @@ function expressionText(
     return left === undefined || right === undefined ? undefined : left + right
   }
   if (
-    ts.isCallExpression(value)
-    && ts.isPropertyAccessExpression(value.expression)
-    && value.expression.name.text === 'join'
-    && ts.isArrayLiteralExpression(value.expression.expression)
+    ts.isCallExpression(value) &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    value.expression.name.text === 'join' &&
+    ts.isArrayLiteralExpression(value.expression.expression)
   ) {
-    const parts = value.expression.expression.elements.map(element =>
-      ts.isExpression(element) ? expressionText(element, scope, visited) : undefined)
+    const parts = value.expression.expression.elements.map((element) =>
+      ts.isExpression(element) ? expressionText(element, scope, visited) : undefined,
+    )
     if (!parts.every((part): part is string => part !== undefined)) return undefined
     const separator = value.arguments[0] === undefined ? ',' : expressionText(value.arguments[0], scope, visited)
     return separator === undefined ? undefined : parts.join(separator)
@@ -104,9 +101,7 @@ function expressionText(
   if (visited.has(reference)) return undefined
   const targetScope = sourceScope(imported.file)
   const targetValue = targetScope.values.get(imported.name)
-  return targetValue === undefined
-    ? undefined
-    : expressionText(targetValue, targetScope, new Set([...visited, reference]))
+  return targetValue === undefined ? undefined : expressionText(targetValue, targetScope, new Set([...visited, reference]))
 }
 
 function expressionDictionary(
@@ -145,9 +140,7 @@ function expressionDictionary(
       continue
     }
     if (!ts.isPropertyAssignment(property)) continue
-    const key = ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)
-      ? property.name.text
-      : undefined
+    const key = ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name) ? property.name.text : undefined
     if (key === undefined) continue
     const text = expressionText(property.initializer, scope, visited)
     if (text === undefined) return undefined
@@ -177,7 +170,7 @@ function sourceDictionaries(file: string): SourceDictionary[] {
 }
 
 function placeholderNames(template: string): string[] {
-  return [...template.matchAll(/\{(\w+)\}/gu)].map(match => match[1] ?? '').sort()
+  return [...template.matchAll(/\{(\w+)\}/gu)].map((match) => match[1] ?? '').sort()
 }
 
 function ownerPathFor(dictionaryFile: string): string {
@@ -199,7 +192,7 @@ function activeNamespaceDeclarations(): string[] {
   const clientRoot = resolve(root, 'packages')
   const namespaces = new Set<string>()
 
-  for (const group of readdirSync(clientRoot, { withFileTypes: true }).filter(entry => entry.isDirectory())) {
+  for (const group of readdirSync(clientRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
     const groupPath = resolve(clientRoot, group.name)
     for (const packageEntry of readdirSync(groupPath, { withFileTypes: true })) {
       if (!packageEntry.isDirectory()) continue
@@ -230,13 +223,14 @@ function activeNamespaceDeclarations(): string[] {
                 }
               }
             }
-            if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
-              && node.expression.name.text === 'register'
-              && ts.isPropertyAccessExpression(node.expression.expression)
-              && node.expression.expression.name.text === 'locale') {
-              const namespace = node.arguments[0] === undefined
-                ? undefined
-                : expressionText(node.arguments[0], scope)
+            if (
+              ts.isCallExpression(node) &&
+              ts.isPropertyAccessExpression(node.expression) &&
+              node.expression.name.text === 'register' &&
+              ts.isPropertyAccessExpression(node.expression.expression) &&
+              node.expression.expression.name.text === 'locale'
+            ) {
+              const namespace = node.arguments[0] === undefined ? undefined : expressionText(node.arguments[0], scope)
               if (namespace !== undefined) namespaces.add(namespace)
             }
             ts.forEachChild(node, visit)
@@ -252,9 +246,9 @@ function activeNamespaceDeclarations(): string[] {
 
 describe('Japanese locale dictionaries', () => {
   it('covers every registered namespace once', () => {
-    const names = DICTIONARIES.map(entry => entry.ns)
+    const names = DICTIONARIES.map((entry) => entry.ns)
     expect(new Set(names).size).toBe(names.length)
-    const files = readdirSync(dictionaryDirectory).filter(file => file.endsWith('.ts') && file !== 'index.ts')
+    const files = readdirSync(dictionaryDirectory).filter((file) => file.endsWith('.ts') && file !== 'index.ts')
     const declared = new Map<string, string>()
     for (const file of files) {
       const text = readFileSync(resolve(dictionaryDirectory, file), 'utf8')
@@ -263,12 +257,12 @@ describe('Japanese locale dictionaries', () => {
     }
     expect([...declared.keys()].sort()).toEqual(names.sort())
     const active = activeNamespaceDeclarations()
-    expect(active.filter(namespace => !names.includes(namespace))).toEqual([])
+    expect(active.filter((namespace) => !names.includes(namespace))).toEqual([])
   })
 
   it('matches every owning English and Chinese key and interpolation set', () => {
     const files = new Map<string, string>()
-    for (const file of readdirSync(dictionaryDirectory).filter(path => path.endsWith('.ts') && path !== 'index.ts')) {
+    for (const file of readdirSync(dictionaryDirectory).filter((path) => path.endsWith('.ts') && path !== 'index.ts')) {
       const text = readFileSync(resolve(dictionaryDirectory, file), 'utf8')
       const namespace = text.match(/^\/\*\* Japanese dictionary for the `([^`]+)` namespace/mu)?.[1]
       if (namespace !== undefined) files.set(namespace, file)
@@ -279,15 +273,18 @@ describe('Japanese locale dictionaries', () => {
       if (file === undefined) throw new Error(`${entry.ns}: Japanese dictionary source file is missing`)
       const owner = ownerPathFor(file)
       const expectedKeys = Object.keys(entry.dict).sort()
-      const candidates = sourceDictionaries(owner).filter(dictionary =>
-        JSON.stringify([...dictionary.values.keys()].sort()) === JSON.stringify(expectedKeys))
+      const candidates = sourceDictionaries(owner).filter(
+        (dictionary) => JSON.stringify([...dictionary.values.keys()].sort()) === JSON.stringify(expectedKeys),
+      )
       if (candidates.length < 2) {
         const available = sourceDictionaries(owner)
-        const sizes = available.map(dictionary => `${dictionary.file}:${dictionary.values.size}`).join(', ')
+        const sizes = available.map((dictionary) => `${dictionary.file}:${dictionary.values.size}`).join(', ')
         const closest = available[0]
-        const missing = closest === undefined ? [] : expectedKeys.filter(key => !closest.values.has(key))
-        const extra = closest === undefined ? [] : [...closest.values.keys()].filter(key => !expectedKeys.includes(key))
-        throw new Error(`${entry.ns}: could not find matching English and Chinese dictionaries in ${owner}; expected ${expectedKeys.length}, found ${sizes}, missing ${missing}, extra ${extra}`)
+        const missing = closest === undefined ? [] : expectedKeys.filter((key) => !closest.values.has(key))
+        const extra = closest === undefined ? [] : [...closest.values.keys()].filter((key) => !expectedKeys.includes(key))
+        throw new Error(
+          `${entry.ns}: could not find matching English and Chinese dictionaries in ${owner}; expected ${expectedKeys.length}, found ${sizes}, missing ${missing}, extra ${extra}`,
+        )
       }
 
       for (const candidate of candidates) {

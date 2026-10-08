@@ -1,15 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings-plugins",
-  "description": "Built-in plugins settings section for the dsh web client: the Settings navigation entry and the tab chrome feature-owned tabs register into",
   "version": "0.2.1-alpha.1",
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Built-in plugins settings section for the dsh web client: the Settings navigation entry and the tab chrome feature-owned tabs register into",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/client/ui-settings-plugins"
   },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -25,22 +28,12 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "dsh": {
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-settings"
-      ],
-      "platform": "web"
-    }
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
-  },
-  "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
+    "bundle": "vp pack",
+    "watch": "vp pack --watch"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -53,9 +46,16 @@
     "@types/react": "~18.3.1",
     "react": "^18.2.0"
   },
-  "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.d.ts"
-  ]
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  }
 }

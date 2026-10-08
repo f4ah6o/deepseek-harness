@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
-import {
-  createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, launchedThroughSsh, launchEnvironmentOf,
-} from '../src/index.ts'
+import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, launchedThroughSsh, launchEnvironmentOf } from '../src/index.ts'
 
 const layered = createLaunchEnvironmentSnapshot([
   { source: 'process', values: { SHARED: 'from-process', ONLY_PROCESS: 'p' } },
@@ -11,9 +9,9 @@ const layered = createLaunchEnvironmentSnapshot([
 ])
 
 describe('launchedThroughSsh', () => {
-  it.each(['SSH_CONNECTION', 'SSH_TTY'].flatMap(name =>
-    (['process', 'project-env', 'user-env'] as const).map(source => ({ name, source })),
-  ))('classifies $name from $source', ({ name, source }) => {
+  it.each(
+    ['SSH_CONNECTION', 'SSH_TTY'].flatMap((name) => (['process', 'project-env', 'user-env'] as const).map((source) => ({ name, source }))),
+  )('classifies $name from $source', ({ name, source }) => {
     const snapshot = createLaunchEnvironmentSnapshot([{ source, values: { [name]: 'ssh-marker' } }])
     expect(launchedThroughSsh(snapshot)).toBe(source === 'process')
   })
@@ -40,8 +38,7 @@ describe('createLaunchEnvironmentSnapshot', () => {
     // The point of getFrom: a routing field that must never come from a
     // project directory cannot be reached by reordering, only by listing it.
     expect(layered.getFrom('ONLY_PROJECT', ['process', 'user-env'])).toBeUndefined()
-    expect(layered.getFrom('SHARED', ['user-env', 'process']))
-      .toEqual({ value: 'from-process', source: 'process' })
+    expect(layered.getFrom('SHARED', ['user-env', 'process'])).toEqual({ value: 'from-process', source: 'process' })
     expect(layered.getFrom('SHARED', [])).toBeUndefined()
   })
 

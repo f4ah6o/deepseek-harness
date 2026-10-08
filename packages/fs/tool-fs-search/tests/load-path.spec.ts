@@ -14,7 +14,7 @@
  * red, revert.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -45,7 +45,7 @@ describe('dsh-tool-fs-search real-load-path guard', () => {
     const unwrapped = loader.unwrapExports(toolFsSearch) as Parameters<Context['plugin']>[0]
     // A collapsed export shape (dropped inject) would throw "without inject" here.
     const fiber = await ctx.plugin(unwrapped, { sampleOverCapGlobResults: true })
-    expect(ctx.tools.schemas().map(s => s.name)).toEqual(expect.arrayContaining(['glob', 'grep']))
+    expect(ctx.tools.schemas().map((s) => s.name)).toEqual(expect.arrayContaining(['glob', 'grep']))
     await fiber.dispose()
   })
 })

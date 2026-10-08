@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
-import { expect, vi, type MockInstance } from 'vitest'
+import { expect, vi, type MockInstance } from 'vite-plus/test'
 
 /** The built page under test; `pnpm run test:web` rebuilds it before running. */
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
@@ -59,8 +59,7 @@ const PINNED_CLOCK_STEP_MS = 250
  */
 export function pinHostClock(): MockInstance<typeof Date.now> {
   const startedAt = performance.now()
-  return vi.spyOn(Date, 'now').mockImplementation(() =>
-    WEB_FIXTURE_TIME + Math.floor(performance.now() - startedAt))
+  return vi.spyOn(Date, 'now').mockImplementation(() => WEB_FIXTURE_TIME + Math.floor(performance.now() - startedAt))
 }
 
 /**
@@ -87,8 +86,12 @@ export async function pinBrowserClock(page: Page): Promise<() => void> {
     }
   }
   await step()
-  const timer = setInterval(() => { void step() }, PINNED_CLOCK_STEP_MS)
-  return () => { clearInterval(timer) }
+  const timer = setInterval(() => {
+    void step()
+  }, PINNED_CLOCK_STEP_MS)
+  return () => {
+    clearInterval(timer)
+  }
 }
 
 /**
@@ -110,11 +113,17 @@ export async function newEnglishPage(browser: Browser, height = 1000): Promise<P
  * @param target - locator resolved again when its previous element detached.
  */
 export async function scrollIntoView(target: Locator): Promise<void> {
-  await expect.poll(() => target.evaluate((element) => {
-    if (!element.isConnected) return false
-    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
-    return true
-  }), { timeout: 10_000 }).toBe(true)
+  await expect
+    .poll(
+      () =>
+        target.evaluate((element) => {
+          if (!element.isConnected) return false
+          element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
+          return true
+        }),
+      { timeout: 10_000 },
+    )
+    .toBe(true)
 }
 
 /**
@@ -129,7 +138,7 @@ export async function expandTurnProcesses(page: Page): Promise<void> {
   const count = await controls.count()
   for (let index = 0; index < count; index++) {
     const control = controls.nth(index)
-    if (await control.isVisible() && await control.getAttribute('aria-expanded') === 'false') await control.click()
+    if ((await control.isVisible()) && (await control.getAttribute('aria-expanded')) === 'false') await control.click()
   }
 }
 
@@ -140,17 +149,17 @@ export async function expandTurnProcesses(page: Page): Promise<void> {
  */
 export async function expandOwningTurnProcess(page: Page, target: Locator): Promise<void> {
   if (await target.isVisible()) return
-  const turn = await target.evaluate(element => element.closest<HTMLElement>('[data-chat-turn]')?.dataset.chatTurn)
+  const turn = await target.evaluate((element) => element.closest<HTMLElement>('[data-chat-turn]')?.dataset.chatTurn)
   if (turn !== undefined) {
     const control = page.locator(`[data-turn-process="${turn}"]`)
-    if (await control.count() > 0) {
+    if ((await control.count()) > 0) {
       await control.waitFor({ state: 'visible', timeout: 10_000 })
-      if (await control.getAttribute('aria-expanded') === 'false') await control.click()
+      if ((await control.getAttribute('aria-expanded')) === 'false') await control.click()
     }
   }
   const group = target.locator('xpath=ancestor::*[@data-chat-group-key][1]')
   const header = group.locator('[data-process-activity]').first()
-  if (await header.isVisible() && await header.getAttribute('aria-expanded') === 'false') await header.click()
+  if ((await header.isVisible()) && (await header.getAttribute('aria-expanded')) === 'false') await header.click()
 }
 
 /** Fail loud on a stale checkout instead of testing yesterday's bundle. */
@@ -168,10 +177,14 @@ export function probeFreePort(): Promise<number> {
     probe.listen(0, '127.0.0.1', () => {
       const address = probe.address()
       if (address === null || typeof address === 'string') {
-        probe.close(() => { reject(new Error('port probe returned no address')) })
+        probe.close(() => {
+          reject(new Error('port probe returned no address'))
+        })
         return
       }
-      probe.close(() => { resolvePort(address.port) })
+      probe.close(() => {
+        resolvePort(address.port)
+      })
     })
   })
 }
@@ -205,7 +218,10 @@ export async function connectFreshWorkspace(page: Page, root: string, name = 'wo
   await dialog.getByRole('button', { name: 'Open', exact: true }).click()
   // The pick connected the workspace: the blank session's live composer
   // replaces the locked placeholder and enables.
-  await page.locator('[data-composer-input][contenteditable="true"][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
+  await page
+    .locator(
+      '[data-composer-input][contenteditable="true"][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]',
+    )
     .waitFor({ timeout: 15_000 })
 }
 
@@ -230,7 +246,8 @@ export async function connectFreshWorkspaceZh(page: Page, root: string, name = '
   await pathInput.press('Enter')
   await dialog.getByRole('button', { name: '打开', exact: true }).click()
   const editable = modelAvailable ? '[contenteditable="true"]' : ''
-  await page.locator(`[data-composer-input]${editable}[data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]`)
+  await page
+    .locator(`[data-composer-input]${editable}[data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]`)
     .waitFor({ timeout: 15_000 })
 }
 
@@ -255,11 +272,7 @@ export async function connectFreshWorkspaceZh(page: Page, root: string, name = '
  * @param text - the replacement draft; `''` clears the draft. Must not
  * contain a newline: typed Enter submits the composer.
  */
-export async function writeComposerDraft(
-  page: Page,
-  input: ReturnType<Page['locator']>,
-  text: string,
-): Promise<void> {
+export async function writeComposerDraft(page: Page, input: ReturnType<Page['locator']>, text: string): Promise<void> {
   await input.and(page.locator('[contenteditable="true"]')).waitFor({ timeout: 15_000 })
   await input.click()
   await page.keyboard.press('ControlOrMeta+A')

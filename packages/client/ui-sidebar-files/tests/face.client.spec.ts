@@ -1,5 +1,5 @@
 /** Directory subscriptions and read settlements through the face's real store actions. */
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceDirectoryListing } from '@deepseek-ai/dsh-api-workspace-files/types'
@@ -101,7 +101,9 @@ describe('filesFace', () => {
   it.each([false, true])('keeps deep expansion intent while restoring an ancestor (reopen: %s)', async (reopen) => {
     const h = mount()
     const refresh = vi.spyOn(DirectoryNode.prototype, 'refresh')
-    onTestFinished(() => { refresh.mockRestore() })
+    onTestFinished(() => {
+      refresh.mockRestore()
+    })
     const src = `${ROOT}/src`
     const components = `${src}/components`
     const nested = `${components}/nested`
@@ -114,17 +116,21 @@ describe('filesFace', () => {
     h.face.start(TAB, ROOT, h.controller.signal)
     await h.watches.ready(ROOT)
     await h.settle({ ok: true, value: LEVEL })
-    for (const [parent, path, level] of [[ROOT, src, srcLevel], [src, components, componentsLevel], [components, nested, empty]] as const) {
+    for (const [parent, path, level] of [
+      [ROOT, src, srcLevel],
+      [src, components, componentsLevel],
+      [components, nested, empty],
+    ] as const) {
       toggle(parent, path)
       await h.watches.ready(path)
       await h.settle({ ok: true, value: level })
     }
     toggle(ROOT, src)
-    await Promise.all(h.watches.opened.slice(1).map(stream => stream.released.promise))
+    await Promise.all(h.watches.opened.slice(1).map((stream) => stream.released.promise))
     toggle(ROOT, src)
     await h.watches.ready(src, 1)
     expect(h.outstanding()).toEqual([src])
-    expect(h.watches.opened.filter(stream => !stream.signal.aborted).map(stream => stream.path)).toEqual([ROOT, src])
+    expect(h.watches.opened.filter((stream) => !stream.signal.aborted).map((stream) => stream.path)).toEqual([ROOT, src])
 
     toggle(components, nested)
     expect(h.snapshot()!.expanded).not.toContain(nested)
@@ -138,7 +144,7 @@ describe('filesFace', () => {
     if (reading?.type !== 'return') throw new Error('Expected the restored directory to start listing')
     await h.settle({ ok: true, value: componentsLevel })
     await reading.value
-    expect(h.watches.opened.filter(stream => stream.path === nested)).toHaveLength(reopen ? 2 : 1)
+    expect(h.watches.opened.filter((stream) => stream.path === nested)).toHaveLength(reopen ? 2 : 1)
     if (reopen) {
       await h.watches.ready(nested, 1)
       await h.settle({ ok: true, value: empty })
@@ -185,7 +191,7 @@ describe('filesFace', () => {
     const before = h.snapshot()
     h.face.toggle(TAB, `${ROOT}/src`, `${ROOT}/src/nested`, [ROOT], h.controller.signal)
     expect(h.snapshot()).toBe(before)
-    expect(h.watches.opened.map(watch => watch.path)).toEqual([ROOT])
+    expect(h.watches.opened.map((watch) => watch.path)).toEqual([ROOT])
     h.controller.abort()
     await stream.released.promise
     h.face.toggle(TAB, ROOT, `${ROOT}/src`, [ROOT], h.controller.signal)
@@ -194,30 +200,36 @@ describe('filesFace', () => {
     expect(h.watches.opened).toHaveLength(1)
   })
 
-  it.each([new Error('watch disconnected'), 'watch disconnected'])('records a watch failure without an Error prefix: %s', async (failure) => {
-    const h = mount()
-    const reported = Promise.withResolvers<undefined>()
-    const unsubscribe = h.instance.subscribe(() => {
-      const level = h.snapshot()?.levels[ROOT]
-      if (level?.kind === 'ready' && level.failure !== undefined) reported.resolve(undefined)
-    })
-    onTestFinished(unsubscribe)
-    h.face.start(TAB, ROOT, h.controller.signal)
-    const stream = await h.watches.forPath(ROOT)
-    stream.fail(failure)
-    expect((await h.waitForList(0)).path).toBe(ROOT)
-    await h.settle({ ok: true, value: LEVEL })
-    await reported.promise
-    expect(h.snapshot()!.levels[ROOT]).toMatchObject({
-      kind: 'ready', level: LEVEL,
-      failure: { code: 'gateway/internal', message: 'watch disconnected' },
-    })
-    await stream.released.promise
-  })
+  it.each([new Error('watch disconnected'), 'watch disconnected'])(
+    'records a watch failure without an Error prefix: %s',
+    async (failure) => {
+      const h = mount()
+      const reported = Promise.withResolvers<undefined>()
+      const unsubscribe = h.instance.subscribe(() => {
+        const level = h.snapshot()?.levels[ROOT]
+        if (level?.kind === 'ready' && level.failure !== undefined) reported.resolve(undefined)
+      })
+      onTestFinished(unsubscribe)
+      h.face.start(TAB, ROOT, h.controller.signal)
+      const stream = await h.watches.forPath(ROOT)
+      stream.fail(failure)
+      expect((await h.waitForList(0)).path).toBe(ROOT)
+      await h.settle({ ok: true, value: LEVEL })
+      await reported.promise
+      expect(h.snapshot()!.levels[ROOT]).toMatchObject({
+        kind: 'ready',
+        level: LEVEL,
+        failure: { code: 'gateway/internal', message: 'watch disconnected' },
+      })
+      await stream.released.promise
+    },
+  )
 
   it('does not publish a watch failure when the tab closes during its fallback list', async () => {
     const close = vi.spyOn(DirectoryNode.prototype, 'close')
-    onTestFinished(() => { close.mockRestore() })
+    onTestFinished(() => {
+      close.mockRestore()
+    })
     const h = mount()
     h.face.start(TAB, ROOT, h.controller.signal)
     const stream = await h.watches.forPath(ROOT)
@@ -276,8 +288,8 @@ describe('filesFace', () => {
     await settle({ ok: true, value: { entries: [], truncated: false } })
     expect(snapshot()!.levels[collapsed]).toEqual(cached.levels[collapsed])
     expect(snapshot()).toMatchObject({ expanded: [ROOT, child], scrollTop: 120, autoRefresh: false })
-    expect(watches.opened.map(stream => stream.path)).toEqual([ROOT, child])
-    expect(watches.opened.every(stream => !stream.signal.aborted)).toBe(true)
+    expect(watches.opened.map((stream) => stream.path)).toEqual([ROOT, child])
+    expect(watches.opened.every((stream) => !stream.signal.aborted)).toBe(true)
   })
 })
 
@@ -288,8 +300,7 @@ describe('createList', () => {
       entries: [{ name: 'a.ts', type: 'file', size: 3 }],
       truncated: true,
     }
-    const list = vi.fn<WorkspaceFilesListRemote['workspaceFiles']['list']>()
-      .mockResolvedValue({ ok: true, value: listing })
+    const list = vi.fn<WorkspaceFilesListRemote['workspaceFiles']['list']>().mockResolvedValue({ ok: true, value: listing })
     const signal = new AbortController().signal
     const result = await createList({ workspaceFiles: { list } })(SESSION, `${ROOT}/src`, signal)
     expect(list).toHaveBeenCalledWith(SESSION, `${ROOT}/src`, signal)
@@ -298,8 +309,7 @@ describe('createList', () => {
 
   it('returns a failure as the endpoint reported it', async () => {
     const error = new RemoteError('workspace-file/not-directory', 'file', { path: 'x', kind: 'file' })
-    const list = vi.fn<WorkspaceFilesListRemote['workspaceFiles']['list']>()
-      .mockResolvedValue({ ok: false, error })
+    const list = vi.fn<WorkspaceFilesListRemote['workspaceFiles']['list']>().mockResolvedValue({ ok: false, error })
     const result = await createList({ workspaceFiles: { list } })(SESSION, `${ROOT}/x`, new AbortController().signal)
     expect(result).toEqual({ ok: false, error })
   })

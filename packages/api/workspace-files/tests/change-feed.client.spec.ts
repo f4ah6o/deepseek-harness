@@ -1,6 +1,6 @@
 /** Target-scoped Host streams, canonical-path delivery, and follower disposal. */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { ChangeFeed } from '../src/client/change-feed.ts'
 import type { WorkspaceFileWatchFrame } from '../src/types.ts'
 import { FakeRemote } from './fake-remote.client.ts'
@@ -17,9 +17,9 @@ function harness() {
   onTestFinished(async () => {
     for (const follower of followers) follower.controller.abort()
     await remote.dispose()
-    await Promise.all(followers.map(follower => Promise.resolve(follower.it.return?.())))
+    await Promise.all(followers.map((follower) => Promise.resolve(follower.it.return?.())))
     await feed.settle()
-    expect(remote.opened.every(watch => watch.source.aborted)).toBe(true)
+    expect(remote.opened.every((watch) => watch.source.aborted)).toBe(true)
   })
   const follow = (sessionId: SessionId, path: string, controller = new AbortController()) => {
     const follower = feed.follow(sessionId, path, controller.signal)
@@ -95,7 +95,9 @@ describe('ChangeFeed — one Host stream per Session and target', () => {
     await remote.waitForDispose(0)
     const b = follow(S1, PATH)
     let settled = false
-    const closing = feed.settle().then(() => { settled = true })
+    const closing = feed.settle().then(() => {
+      settled = true
+    })
     const independent = follow(S1, '/w/b.txt')
     const otherWatch = await remote.ready(1)
     await expect(independent.ready).resolves.toBe(true)
@@ -107,7 +109,7 @@ describe('ChangeFeed — one Host stream per Session and target', () => {
     await closing
     await remote.ready(2)
     await expect(b.ready).resolves.toBe(true)
-    expect(remote.opened.map(watch => watch.path)).toEqual([PATH, '/w/b.txt', PATH])
+    expect(remote.opened.map((watch) => watch.path)).toEqual([PATH, '/w/b.txt', PATH])
     expect(settled).toBe(true)
     await feed.settle()
   })
@@ -125,7 +127,9 @@ describe('ChangeFeed — one Host stream per Session and target', () => {
     await remote.waitForDispose(1)
     await expect(b.ready).resolves.toBe(false)
     let settled = false
-    const closing = feed.settle().then(() => { settled = true })
+    const closing = feed.settle().then(() => {
+      settled = true
+    })
     firstGate.resolve(undefined)
     await remote.waitForStreamEnd(1)
     expect(remote.disposed).toHaveLength(2)
@@ -150,7 +154,7 @@ describe('ChangeFeed — one Host stream per Session and target', () => {
     const independent = follow(S1, '/w/b.txt')
     await remote.ready(1)
     await expect(independent.ready).resolves.toBe(true)
-    expect(remote.opened.map(watch => watch.path)).toEqual([PATH, '/w/b.txt'])
+    expect(remote.opened.map((watch) => watch.path)).toEqual([PATH, '/w/b.txt'])
     gate.reject(new Error('carrier gone'))
     remote.disposeGate = undefined
     await remote.ready(2)

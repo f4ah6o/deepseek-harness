@@ -1,6 +1,6 @@
 /** Host fetch observation behavior. */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { installFetchObserver, type FetchObserver } from '../src/host/inspection/network.ts'
 import type { InspectorRecordInput } from '../src/shared/bridge/messages/observation.ts'
 import type { InspectorJsonValue } from '../src/shared/json.ts'
@@ -28,11 +28,14 @@ describe('full fetch observer', () => {
       })
     })
     Object.defineProperty(globalThis, 'fetch', { value: native, writable: true, configurable: true })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     const response = await fetch('https://example.test/path?token=visible', {
       method: 'POST',
@@ -40,7 +43,9 @@ describe('full fetch observer', () => {
       body: 'secret request body',
     })
     expect(await response.text()).toBe('complete response body')
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/end')).toBe(true)
+    })
 
     const start = payload(records, 'fetch/start')
     expect(start).toMatchObject({
@@ -64,15 +69,20 @@ describe('full fetch observer', () => {
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 4, maxResponseBodyBytes: 4, maxChunkBytes: 2 })
+      { maxRequestBodyBytes: 4, maxResponseBodyBytes: 4, maxChunkBytes: 2 },
+    )
 
     const response = await fetch('https://example.test/', { method: 'POST', body: 'request-long' })
     expect(await response.text()).toBe('response-long')
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/end')).toBe(true)
+    })
 
     expect(decodeChunks(records, 'fetch/request-body-chunk')).toBe('requ')
     expect(payload(records, 'fetch/request-body-end')).toMatchObject({ capturedBytes: 4, truncated: true })
@@ -83,28 +93,42 @@ describe('full fetch observer', () => {
   it('finishes response capture when the caller aborts after response headers', async () => {
     const records: InspectorRecordInput[] = []
     Object.defineProperty(globalThis, 'fetch', {
-      value: vi.fn(async (request: Request) => new Response(new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(Buffer.from('first'))
-          request.signal.addEventListener('abort', () => {
-            controller.error(new DOMException('aborted', 'AbortError'))
-          }, { once: true })
-        },
-      }))),
+      value: vi.fn(
+        async (request: Request) =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(Buffer.from('first'))
+                request.signal.addEventListener(
+                  'abort',
+                  () => {
+                    controller.error(new DOMException('aborted', 'AbortError'))
+                  },
+                  { once: true },
+                )
+              },
+            }),
+          ),
+      ),
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
     const abort = new AbortController()
 
     const response = await fetch('https://example.test/cancel-body', { signal: abort.signal })
     abort.abort()
     await expect(response.text()).rejects.toThrow()
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/end')).toBe(true)
+    })
 
     expect(decodeChunks(records, 'fetch/response-body-chunk')).toBe('first')
     expect(payload(records, 'fetch/end')).toMatchObject({
@@ -112,25 +136,35 @@ describe('full fetch observer', () => {
       responseBodyTruncated: true,
       responseCaptureError: 'AbortError: aborted',
     })
-    expect(records.some(record => record.topic === 'fetch/error')).toBe(false)
+    expect(records.some((record) => record.topic === 'fetch/error')).toBe(false)
   })
 
   it('reports a fetch rejected before response headers as a canceled request', async () => {
     const records: InspectorRecordInput[] = []
     Object.defineProperty(globalThis, 'fetch', {
-      value: vi.fn(async (request: Request) => await new Promise<Response>((_resolve, reject) => {
-        request.signal.addEventListener('abort', () => {
-          reject(new DOMException('aborted', 'AbortError'))
-        }, { once: true })
-      })),
+      value: vi.fn(
+        async (request: Request) =>
+          await new Promise<Response>((_resolve, reject) => {
+            request.signal.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('aborted', 'AbortError'))
+              },
+              { once: true },
+            )
+          }),
+      ),
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
     const abort = new AbortController()
 
     const pending = fetch('https://example.test/cancel-before-response', { signal: abort.signal })
@@ -138,8 +172,8 @@ describe('full fetch observer', () => {
     await expect(pending).rejects.toThrow()
 
     expect(payload(records, 'fetch/error')).toMatchObject({ canceled: true })
-    expect(records.some(record => record.topic === 'fetch/response')).toBe(false)
-    expect(records.some(record => record.topic === 'fetch/end')).toBe(false)
+    expect(records.some((record) => record.topic === 'fetch/response')).toBe(false)
+    expect(records.some((record) => record.topic === 'fetch/end')).toBe(false)
   })
 
   it('reports non-cancellation fetch failures without manufacturing a canceled flag', async () => {
@@ -149,11 +183,14 @@ describe('full fetch observer', () => {
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     await expect(fetch('https://example.test/failure')).rejects.toThrow('connection failed')
     expect(payload(records, 'fetch/error')).toMatchObject({ message: 'Error: connection failed', canceled: false })
@@ -172,11 +209,14 @@ describe('full fetch observer', () => {
     const responseClone = vi.spyOn(Response.prototype, 'clone').mockImplementationOnce(() => {
       throw new Error('response clone failed')
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     const response = await fetch('https://example.test/clone-failure', { method: 'POST', body: 'request' })
     expect(await response.text()).toBe('response')
@@ -193,15 +233,20 @@ describe('full fetch observer', () => {
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
     const replacement = vi.fn<typeof fetch>()
 
     await fetch('https://example.test/no-content')
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/end')).toBe(true)
+    })
     Object.defineProperty(globalThis, 'fetch', { value: replacement, writable: true, configurable: true })
     const firstStop = observer.stop()
     expect(observer.stop()).toBe(firstStop)
@@ -211,11 +256,16 @@ describe('full fetch observer', () => {
 
   it('rejects installation without a callable global fetch', () => {
     Object.defineProperty(globalThis, 'fetch', { value: undefined, writable: true, configurable: true })
-    expect(() => installFetchObserver({ publish: vi.fn() }, {
-      maxRequestBodyBytes: 1,
-      maxResponseBodyBytes: 1,
-      maxChunkBytes: 1,
-    })).toThrow('globalThis.fetch is unavailable')
+    expect(() =>
+      installFetchObserver(
+        { publish: vi.fn() },
+        {
+          maxRequestBodyBytes: 1,
+          maxResponseBodyBytes: 1,
+          maxChunkBytes: 1,
+        },
+      ),
+    ).toThrow('globalThis.fetch is unavailable')
   })
 
   it('rejects an accessor fetch property', () => {
@@ -224,11 +274,16 @@ describe('full fetch observer', () => {
       configurable: true,
       get: () => nativeFetch,
     })
-    expect(() => installFetchObserver({ publish: vi.fn() }, {
-      maxRequestBodyBytes: 1,
-      maxResponseBodyBytes: 1,
-      maxChunkBytes: 1,
-    })).toThrow('globalThis.fetch is an accessor')
+    expect(() =>
+      installFetchObserver(
+        { publish: vi.fn() },
+        {
+          maxRequestBodyBytes: 1,
+          maxResponseBodyBytes: 1,
+          maxChunkBytes: 1,
+        },
+      ),
+    ).toThrow('globalThis.fetch is an accessor')
   })
 
   it('contains publisher failures from asynchronous body completion', async () => {
@@ -238,16 +293,21 @@ describe('full fetch observer', () => {
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string): void {
-        if (topic !== 'fetch/end') return
-        endAttempted = true
-        throw new Error('publisher closed')
+    observer = installFetchObserver(
+      {
+        publish(topic: string): void {
+          if (topic !== 'fetch/end') return
+          endAttempted = true
+          throw new Error('publisher closed')
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     await fetch('https://example.test/publisher-failure')
-    await vi.waitFor(() => { expect(endAttempted).toBe(true) })
+    await vi.waitFor(() => {
+      expect(endAttempted).toBe(true)
+    })
     await expect(observer.stop()).resolves.toBeUndefined()
   })
 
@@ -255,9 +315,12 @@ describe('full fetch observer', () => {
     const records: InspectorRecordInput[] = []
     let settleRead: ((value: ReadableStreamReadResult<Uint8Array>) => void) | undefined
     const reader = {
-      read: vi.fn(async () => await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
-        settleRead = resolve
-      })),
+      read: vi.fn(
+        async () =>
+          await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+            settleRead = resolve
+          }),
+      ),
       cancel: vi.fn(() => {
         settleRead?.({ done: true, value: undefined })
         return Promise.reject(new Error('cancel already observed'))
@@ -272,11 +335,14 @@ describe('full fetch observer', () => {
     vi.spyOn(Response.prototype, 'clone').mockReturnValueOnce({
       body: { getReader: () => reader },
     } as unknown as Response)
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     await fetch('https://example.test/pending-body')
     await observer.stop()
@@ -289,7 +355,8 @@ describe('full fetch observer', () => {
   it('contains a rejected reader cancellation after reaching the body limit', async () => {
     const records: InspectorRecordInput[] = []
     const reader = {
-      read: vi.fn()
+      read: vi
+        .fn()
         .mockResolvedValueOnce({ done: false, value: Buffer.from('oversized') })
         .mockResolvedValue({ done: true, value: undefined }),
       cancel: vi.fn(() => Promise.reject(new Error('cancel failed'))),
@@ -303,14 +370,19 @@ describe('full fetch observer', () => {
     vi.spyOn(Response.prototype, 'clone').mockReturnValueOnce({
       body: { getReader: () => reader },
     } as unknown as Response)
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1, maxChunkBytes: 1 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1, maxChunkBytes: 1 },
+    )
 
     await fetch('https://example.test/body-limit')
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/end')).toBe(true)
+    })
     expect(payload(records, 'fetch/end')).toMatchObject({ capturedBytes: 1, responseBodyTruncated: true })
     expect(reader.cancel).toHaveBeenCalledWith('inspector body capture limit reached')
   })
@@ -318,27 +390,40 @@ describe('full fetch observer', () => {
   it('renders non-Error rejection values without allowing hostile coercion to escape', async () => {
     const records: InspectorRecordInput[] = []
     const plainFailure: unknown = 'plain failure'
-    const unrenderable = { toString: () => { throw new Error('cannot stringify') } }
+    const unrenderable = {
+      toString: () => {
+        throw new Error('cannot stringify')
+      },
+    }
     Object.defineProperty(globalThis, 'fetch', {
-      value: vi.fn()
-        .mockImplementationOnce(async () => { throw plainFailure })
-        .mockImplementationOnce(async () => { throw unrenderable }),
+      value: vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          throw plainFailure
+        })
+        .mockImplementationOnce(async () => {
+          throw unrenderable
+        }),
       writable: true,
       configurable: true,
     })
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     await expect(fetch('https://example.test/plain-failure')).rejects.toBe('plain failure')
     await expect(fetch('https://example.test/unrenderable-failure')).rejects.toBe(unrenderable)
-    expect(records.filter(record => record.topic === 'fetch/error').map(record => record.payload))
-      .toEqual(expect.arrayContaining([
+    expect(records.filter((record) => record.topic === 'fetch/error').map((record) => record.payload)).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ message: 'plain failure', canceled: false }),
         expect.objectContaining({ message: 'unrenderable fetch error', canceled: false }),
-      ]))
+      ]),
+    )
   })
 
   it('restores an inherited fetch without leaving an own property', async () => {
@@ -348,11 +433,14 @@ describe('full fetch observer', () => {
     Reflect.deleteProperty(globalThis, 'fetch')
     Object.defineProperty(prototype, 'fetch', { value: nativeFetch, writable: true, configurable: true })
     try {
-      observer = installFetchObserver({ publish: vi.fn() }, {
-        maxRequestBodyBytes: 1_024,
-        maxResponseBodyBytes: 1_024,
-        maxChunkBytes: 4,
-      })
+      observer = installFetchObserver(
+        { publish: vi.fn() },
+        {
+          maxRequestBodyBytes: 1_024,
+          maxResponseBodyBytes: 1_024,
+          maxChunkBytes: 4,
+        },
+      )
       await observer.stop()
       expect(Object.hasOwn(globalThis, 'fetch')).toBe(false)
     } finally {
@@ -365,12 +453,15 @@ describe('full fetch observer', () => {
     const records: InspectorRecordInput[] = []
     const requestReadFailure: unknown = 'request read failed'
     const reader = {
-      read: vi.fn(async () => { throw requestReadFailure }),
+      read: vi.fn(async () => {
+        throw requestReadFailure
+      }),
       cancel: vi.fn(() => Promise.resolve()),
       releaseLock: vi.fn(),
     }
     Object.defineProperty(globalThis, 'fetch', {
-      value: vi.fn()
+      value: vi
+        .fn()
         .mockResolvedValueOnce(new Response(null, { status: 204 }))
         .mockRejectedValueOnce(new DOMException('network failed', 'NetworkError')),
       writable: true,
@@ -379,30 +470,35 @@ describe('full fetch observer', () => {
     vi.spyOn(Request.prototype, 'clone').mockReturnValueOnce({
       body: { getReader: () => reader },
     } as unknown as Request)
-    observer = installFetchObserver({
-      publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
-        records.push({ topic, payload, monotonicMs })
+    observer = installFetchObserver(
+      {
+        publish(topic: string, payload: InspectorJsonValue, monotonicMs = performance.now()) {
+          records.push({ topic, payload, monotonicMs })
+        },
       },
-    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 })
+      { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 4 },
+    )
 
     await fetch('https://example.test/request-read-failure')
-    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/request-body-end')).toBe(true) })
+    await vi.waitFor(() => {
+      expect(records.some((record) => record.topic === 'fetch/request-body-end')).toBe(true)
+    })
     expect(payload(records, 'fetch/request-body-end')).toMatchObject({ captureError: 'request read failed' })
     await expect(fetch('https://example.test/network-failure')).rejects.toThrow('network failed')
-    expect(records.filter(record => record.topic === 'fetch/error').at(-1)?.payload)
-      .toMatchObject({ canceled: false })
+    expect(records.filter((record) => record.topic === 'fetch/error').at(-1)?.payload).toMatchObject({ canceled: false })
   })
 })
 
 function payload(records: readonly InspectorRecordInput[], topic: string): Record<string, unknown> {
-  const record = records.find(candidate => candidate.topic === topic)
+  const record = records.find((candidate) => candidate.topic === topic)
   expect(record).toBeDefined()
   return record!.payload as Record<string, unknown>
 }
 
 function decodeChunks(records: readonly InspectorRecordInput[], topic: string): string {
-  return Buffer.concat(records
-    .filter(record => record.topic === topic)
-    .map(record => Buffer.from(String((record.payload as Record<string, unknown>).data), 'base64')))
-    .toString('utf8')
+  return Buffer.concat(
+    records
+      .filter((record) => record.topic === topic)
+      .map((record) => Buffer.from(String((record.payload as Record<string, unknown>).data), 'base64')),
+  ).toString('utf8')
 }

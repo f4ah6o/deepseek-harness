@@ -1,6 +1,9 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: {
     index: 'lib/types/index.js',
     control: 'lib/types/control.js',

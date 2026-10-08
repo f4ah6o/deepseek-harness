@@ -2,14 +2,14 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { getDshRuntimeVersion, initProfile, PROFILE_TEMPLATES, readProfileVersionExemptions } from '@deepseek-ai/dsh-app-boot'
 import { runPluginCommand, runProfilePnpm } from '@deepseek-ai/dsh-plugin-manager/operations'
 import { runPlugin } from '../src/plugin.ts'
 
 vi.mock('../src/profile-boot.ts', () => ({ INSTALL_ANCHOR: '/installation/package.json' }))
-vi.mock('@deepseek-ai/dsh-plugin-manager/operations', async importOriginal => ({
-  ...await importOriginal<typeof import('@deepseek-ai/dsh-plugin-manager/operations')>(),
+vi.mock('@deepseek-ai/dsh-plugin-manager/operations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@deepseek-ai/dsh-plugin-manager/operations')>()),
   runPluginCommand: vi.fn(),
   runProfilePnpm: vi.fn(),
 }))
@@ -33,7 +33,7 @@ it('requires explicit acknowledgement, grants only the exact pair, lists and rev
   const { dir, stdout, stderr } = fixture()
   const runtime = getDshRuntimeVersion()
   expect(await runPlugin('test', ['allow-version', '@example/plugin@1.2.3', '--dsh-version', runtime, '--accept-risk'])).toBe(0)
-  expect(stderr.mock.calls.map(call => call[0]).join('')).toMatchInlineSnapshot(`
+  expect(stderr.mock.calls.map((call) => call[0]).join('')).toMatchInlineSnapshot(`
     "dsh: warning: allowing incompatible plugin versions can break the application or corrupt data. Approval applies only to the exact package and DSH versions.
     "
   `)
@@ -58,7 +58,7 @@ it.each([
   ['version-exemptions', 'extra'],
 ])('rejects malformed or unacknowledged exemption command %j', async (...arguments_) => {
   const { dir, stderr } = fixture()
-  const args = arguments_.map(value => value === 'CURRENT' ? getDshRuntimeVersion() : value)
+  const args = arguments_.map((value) => (value === 'CURRENT' ? getDshRuntimeVersion() : value))
   expect(await runPlugin('test', args)).toBe(1)
   expect(stderr).toHaveBeenCalled()
   expect(existsSync(join(dir, 'compatibility.json'))).toBe(false)
@@ -86,11 +86,14 @@ it.each([0, 1])('forwards ordinary pnpm output and exit status %s', async (exitC
 it('names the exact grant command for each package a compatibility check refused', async () => {
   const { stderr } = fixture()
   vi.mocked(runPluginCommand).mockResolvedValue({
-    exitCode: 1, output: '', truncated: false, logPath: '/profile/log',
+    exitCode: 1,
+    output: '',
+    truncated: false,
+    logPath: '/profile/log',
     incompatible: [{ name: '@example/plugin', version: '1.2.3', runtimeVersion: '0.1.0', peers: { '@deepseek-ai/dsh': '^9.0.0' } }],
   })
   expect(await runPlugin('test', ['add', '@example/plugin'])).toBe(1)
-  expect(stderr.mock.calls.map(call => call[0])).toEqual([
+  expect(stderr.mock.calls.map((call) => call[0])).toEqual([
     'dsh: to accept the risk, run: dsh plugin --profile test allow-version @example/plugin@1.2.3 --dsh-version 0.1.0 --accept-risk\n',
     'dsh: plugin command failed; diagnostics: /profile/log\n',
   ])
@@ -101,8 +104,12 @@ it('forwards all other commands unchanged and retains package diagnostics', asyn
   vi.mocked(runPluginCommand).mockResolvedValue({ exitCode: 127, output: '', truncated: false, logPath: '/profile/log' })
   const args = ['add', 'github:example/plugin']
   expect(await runPlugin('test', args)).toBe(127)
-  expect(runPluginCommand).toHaveBeenCalledWith(expect.objectContaining({ profile: 'test' }), args, expect.objectContaining({ execution: 'cli' }))
-  expect(stderr.mock.calls.map(call => call[0]).join('')).toContain('pnpm was not found')
+  expect(runPluginCommand).toHaveBeenCalledWith(
+    expect.objectContaining({ profile: 'test' }),
+    args,
+    expect.objectContaining({ execution: 'cli' }),
+  )
+  expect(stderr.mock.calls.map((call) => call[0]).join('')).toContain('pnpm was not found')
 })
 
 it('uses the installation package runtime without changing CLI authentication or output policy', async () => {
@@ -115,21 +122,23 @@ it('uses the installation package runtime without changing CLI authentication or
   }
   expect(await runPlugin('test', ['list'], packageManager)).toBe(0)
   expect(runPluginCommand).toHaveBeenCalledWith(
-    expect.objectContaining({ profile: 'test' }), ['list'],
+    expect.objectContaining({ profile: 'test' }),
+    ['list'],
     expect.objectContaining({ ...packageManager, execution: 'cli' }),
   )
 })
 
 it.each([
-  ['list'], ['add', 'example-plugin'],
+  ['list'],
+  ['add', 'example-plugin'],
   ['version-exemptions'],
   ['allow-version', 'example-plugin@1.2.3', '--dsh-version', 'CURRENT', '--accept-risk'],
   ['revoke-version', 'example-plugin@1.2.3', '--dsh-version', 'CURRENT'],
 ])('requires Desktop initialization before %j without creating a profile', async (...arguments_) => {
   const { home, stderr } = fixture()
-  const args = arguments_.map(value => value === 'CURRENT' ? getDshRuntimeVersion() : value)
+  const args = arguments_.map((value) => (value === 'CURRENT' ? getDshRuntimeVersion() : value))
   expect(await runPlugin('desktop', args)).toBe(1)
-  expect(stderr.mock.calls.map(call => call[0]).join('')).toMatchInlineSnapshot(`
+  expect(stderr.mock.calls.map((call) => call[0]).join('')).toMatchInlineSnapshot(`
     "dsh: Error: Open DeepSeek Harness Desktop once to initialize its profile, then fully quit it before running dsh plugin --profile desktop.
     "
   `)

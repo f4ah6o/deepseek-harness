@@ -6,15 +6,9 @@ import { createAssistantMessage, createToolResultMessage, createUserMessage, Too
  * dispose-ordering pins, failure containment, and the `agent/error` relay.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, {
-  SESSION_FORMAT_VERSION,
-  Session,
-  SessionId,
-  SessionLogOffset,
-  type SessionEvent,
-} from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import {
   SessionTelemetryCoordinator,
@@ -55,20 +49,17 @@ class FakeBackend implements SessionTelemetrySink {
 
   async shutdown(): Promise<void> {
     this.calls.push('shutdown')
-    await new Promise(resolve => setTimeout(resolve, 5))
+    await new Promise((resolve) => setTimeout(resolve, 5))
     if (this.shutdownError) throw this.shutdownError
     this.shutdownResolved = true
   }
 
   ledger(): SessionTelemetryRecord[] {
-    return this.records.filter(r => r.channel === 'ledger')
+    return this.records.filter((r) => r.channel === 'ledger')
   }
 }
 
-async function setup(
-  backend: FakeBackend = new FakeBackend(),
-  capture: SessionTelemetryCapture = 'live',
-) {
+async function setup(backend: FakeBackend = new FakeBackend(), capture: SessionTelemetryCapture = 'live') {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   let coordinator!: SessionTelemetryCoordinator
@@ -88,30 +79,33 @@ function liveSession(ctx: Context, id = `s-${Math.random().toString(36).slice(2)
 
 function appendTurn(session: Session): void {
   session.append('turn/start', { turn: 1 })
-  session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' },
-  }), { surfaceOp: 'append' })
+  session.append(
+    'user/message',
+    createUserMessage({
+      content: [{ type: 'text', text: 'hello' }],
+      source: { kind: 'user' },
+    }),
+    { surfaceOp: 'append' },
+  )
 }
 
-function appendAssistantMessage(
-  session: Session,
-  turn: number,
-  step: number,
-  texts: readonly string[],
-  time0 = 100,
-): void {
-  session.append('assistant/message', {
-    turn,
-    step,
-    message: createAssistantMessage({
-      content: [{ type: 'text', text: texts.join('') }],
-      source: { provider: 'mock', model: 'mock' },
-    }),
-    stream: [
-      { type: 'text-chunks', time0, index: 0, dt: texts.slice(1).map(() => 5), texts: [...texts] },
-      { type: 'chunk', time: time0 + Math.max(0, texts.length - 1) * 5, chunk: { type: 'finish', reason: { kind: 'stop' } } },
-    ],
-  }, { surfaceOp: 'append' })
+function appendAssistantMessage(session: Session, turn: number, step: number, texts: readonly string[], time0 = 100): void {
+  session.append(
+    'assistant/message',
+    {
+      turn,
+      step,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: texts.join('') }],
+        source: { provider: 'mock', model: 'mock' },
+      }),
+      stream: [
+        { type: 'text-chunks', time0, index: 0, dt: texts.slice(1).map(() => 5), texts: [...texts] },
+        { type: 'chunk', time: time0 + Math.max(0, texts.length - 1) * 5, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+      ],
+    },
+    { surfaceOp: 'append' },
+  )
 }
 
 describe('SessionTelemetryCoordinator capture', () => {
@@ -153,9 +147,10 @@ describe('SessionTelemetryCoordinator capture', () => {
       session.append('turn/start', { turn: 1 })
       disposeRule()
       session.append('request/header', {
-        header: { config: { provider: 'mock', model: 'mock' } }, reason: 'initial',
+        header: { config: { provider: 'mock', model: 'mock' } },
+        reason: 'initial',
       })
-      expect(backend.ledger().map(record => record.attributes['event.type'])).toEqual(['request/header'])
+      expect(backend.ledger().map((record) => record.attributes['event.type'])).toEqual(['request/header'])
     } finally {
       await ctx.fiber.dispose()
     }
@@ -177,25 +172,35 @@ describe('SessionTelemetryCoordinator capture', () => {
     const { ctx, backend } = await setup()
     const session = liveSession(ctx)
     session.append('turn/start', { turn: 1 })
-    session.append('tool/result', {
-      turn: 1, step: 1,
-      message: createToolResultMessage({
-        callId: 'c1' as never,
-        content: [],
-        isError: true,
-      }),
-    }, { surfaceOp: 'append' })
-    session.append('tool/result', {
-      turn: 1, step: 1,
-      message: createToolResultMessage({
-        callId: 'c2' as never,
-        content: [],
-        isError: false,
-      }),
-    }, { surfaceOp: 'append' })
+    session.append(
+      'tool/result',
+      {
+        turn: 1,
+        step: 1,
+        message: createToolResultMessage({
+          callId: 'c1' as never,
+          content: [],
+          isError: true,
+        }),
+      },
+      { surfaceOp: 'append' },
+    )
+    session.append(
+      'tool/result',
+      {
+        turn: 1,
+        step: 1,
+        message: createToolResultMessage({
+          callId: 'c2' as never,
+          content: [],
+          isError: false,
+        }),
+      },
+      { surfaceOp: 'append' },
+    )
     session.append('telemetry-test/opaque', { payload: { nested: [] } })
     session.append('turn/end', { turn: 1, reason: { kind: 'error', error: { message: 'boom', code: 'UNKNOWN' } } })
-    const severities = backend.ledger().map(r => [r.attributes['event.type'], r.severity])
+    const severities = backend.ledger().map((r) => [r.attributes['event.type'], r.severity])
     expect(severities).toEqual([
       ['turn/start', 'info'],
       ['tool/result', 'error'],
@@ -222,24 +227,34 @@ describe('SessionTelemetryCoordinator capture', () => {
     appendAssistantMessage(a, 1, 1, ['a11-first', 'a11-second'], 110)
     appendAssistantMessage(a, 1, 2, ['a12-first'], 120)
     appendAssistantMessage(b, 1, 1, ['b11-first', 'b11-second'], 210)
-    const shipped = backend.ledger().map(r => [
-      r.attributes['session.id'],
-      r.attributes['event.seq'],
-      (r.body as SessionEvent<'assistant/message'>['data']).stream,
-    ])
+    const shipped = backend
+      .ledger()
+      .map((r) => [r.attributes['session.id'], r.attributes['event.seq'], (r.body as SessionEvent<'assistant/message'>['data']).stream])
     expect(shipped).toEqual([
-      ['a', 0, [
-        { type: 'text-chunks', time0: 110, index: 0, dt: [5], texts: ['a11-first', 'a11-second'] },
-        { type: 'chunk', time: 115, chunk: { type: 'finish', reason: { kind: 'stop' } } },
-      ]],
-      ['a', 1, [
-        { type: 'text-chunks', time0: 120, index: 0, dt: [], texts: ['a12-first'] },
-        { type: 'chunk', time: 120, chunk: { type: 'finish', reason: { kind: 'stop' } } },
-      ]],
-      ['b', 0, [
-        { type: 'text-chunks', time0: 210, index: 0, dt: [5], texts: ['b11-first', 'b11-second'] },
-        { type: 'chunk', time: 215, chunk: { type: 'finish', reason: { kind: 'stop' } } },
-      ]],
+      [
+        'a',
+        0,
+        [
+          { type: 'text-chunks', time0: 110, index: 0, dt: [5], texts: ['a11-first', 'a11-second'] },
+          { type: 'chunk', time: 115, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+        ],
+      ],
+      [
+        'a',
+        1,
+        [
+          { type: 'text-chunks', time0: 120, index: 0, dt: [], texts: ['a12-first'] },
+          { type: 'chunk', time: 120, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+        ],
+      ],
+      [
+        'b',
+        0,
+        [
+          { type: 'text-chunks', time0: 210, index: 0, dt: [5], texts: ['b11-first', 'b11-second'] },
+          { type: 'chunk', time: 215, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+        ],
+      ],
     ])
   })
 })
@@ -256,12 +271,8 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     expect(backend.records).toEqual([])
 
     coordinator.captureSession(session, firstBoundary)
-    expect(backend.ledger().map(record => record.attributes['event.type'])).toEqual([
-      'turn/start',
-      'user/message',
-      'assistant/message',
-    ])
-    expect(backend.ledger().map(record => record.attributes['event.seq'])).toEqual([0, 1, 2])
+    expect(backend.ledger().map((record) => record.attributes['event.type'])).toEqual(['turn/start', 'user/message', 'assistant/message'])
+    expect(backend.ledger().map((record) => record.attributes['event.seq'])).toEqual([0, 1, 2])
     expect(backend.ledger()[2]!.body).toMatchObject({
       stream: [
         { type: 'text-chunks', time0: 100, index: 0, dt: [], texts: ['first'] },
@@ -272,14 +283,14 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     expect(backend.ledger()).toHaveLength(3)
     coordinator.captureSession(session)
     coordinator.captureSession(session)
-    expect(backend.ledger().map(record => record.attributes['event.type'])).toEqual([
+    expect(backend.ledger().map((record) => record.attributes['event.type'])).toEqual([
       'turn/start',
       'user/message',
       'assistant/message',
       'assistant/message',
       'turn/end',
     ])
-    expect(backend.ledger().map(record => record.attributes['event.seq'])).toEqual([0, 1, 2, 3, 4])
+    expect(backend.ledger().map((record) => record.attributes['event.seq'])).toEqual([0, 1, 2, 3, 4])
     expect(backend.ledger()[3]!.body).toMatchObject({
       stream: [
         { type: 'text-chunks', time0: 200, index: 0, dt: [], texts: ['second'] },
@@ -299,7 +310,8 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
         inject: ['sessions'],
         apply: (inner: Context) => {
           coordinator = new SessionTelemetryCoordinator(inner, backend, {
-            capture: 'on-demand', includeHistory: true,
+            capture: 'on-demand',
+            includeHistory: true,
           })
         },
       })
@@ -311,9 +323,9 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
       expect(backend.records).toEqual([])
       coordinator.captureSession(child, boundary.seq)
       coordinator.captureSession(child, boundary.seq)
-      expect(backend.ledger().map(record => record.attributes['event.seq'])).toEqual([0, 1, 2, 3])
+      expect(backend.ledger().map((record) => record.attributes['event.seq'])).toEqual([0, 1, 2, 3])
       expect(backend.ledger().at(-1)?.attributes['event.seq']).toBe(boundary.seq)
-      expect(backend.ledger().every(record => record.attributes['session.id'] === child.id)).toBe(true)
+      expect(backend.ledger().every((record) => record.attributes['session.id'] === child.id)).toBe(true)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -347,7 +359,7 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
 
     coordinator.captureSession(session)
-    expect(backend.ledger().map(record => record.attributes['event.seq'])).toEqual([0, 2])
+    expect(backend.ledger().map((record) => record.attributes['event.seq'])).toEqual([0, 2])
     expect(warn).toHaveBeenCalled()
   })
 
@@ -369,7 +381,7 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
       },
     })
     coordinator.captureSession(session)
-    expect(second.ledger().map(record => record.attributes['event.seq'])).toEqual([0])
+    expect(second.ledger().map((record) => record.attributes['event.seq'])).toEqual([0])
   })
 
   it('registers no continuous capture, flush, or ops listeners', async () => {
@@ -388,7 +400,7 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     coordinator.captureSession(session)
     expect(redact).toHaveBeenCalledTimes(1)
     await fiber.dispose()
-    expect(backend.records.map(record => record.channel)).toEqual(['ledger'])
+    expect(backend.records.map((record) => record.channel)).toEqual(['ledger'])
   })
 })
 
@@ -409,23 +421,32 @@ describe('SessionTelemetryCoordinator adoption', () => {
       child.append('turn/start', { turn: 2 })
       child.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
       const resumedId = SessionId('restored-child')
-      const resumed = Session.fromRestore(resumedId, child.snapshotEvents(), { ...child.header, id: resumedId },
-        child.inheritedEventCount, 'shared-frozen')
+      const resumed = Session.fromRestore(
+        resumedId,
+        child.snapshotEvents(),
+        { ...child.header, id: resumedId },
+        child.inheritedEventCount,
+        'shared-frozen',
+      )
       const backend = new FakeBackend()
       let coordinator!: SessionTelemetryCoordinator
       await ctx.plugin({
-        name: 'seeded-resume-telemetry', inject: ['sessions'],
-        apply: (inner: Context) => { coordinator = new SessionTelemetryCoordinator(inner, backend, options) },
+        name: 'seeded-resume-telemetry',
+        inject: ['sessions'],
+        apply: (inner: Context) => {
+          coordinator = new SessionTelemetryCoordinator(inner, backend, options)
+        },
       })
       ctx.sessions.enter(resumed)
       ctx.sessions.announce(resumed)
       const expected = resumed.snapshotEvents().slice(options.includeHistory ? 0 : resumed.firstLiveSeq)
-      const captured = () => backend.ledger().filter(record => record.attributes['session.id'] === resumedId)
-      expect(captured().map(record => record.attributes['event.seq']))
-        .toEqual(options.capture === 'live' ? expected.map(event => event.seq) : [])
+      const captured = () => backend.ledger().filter((record) => record.attributes['session.id'] === resumedId)
+      expect(captured().map((record) => record.attributes['event.seq'])).toEqual(
+        options.capture === 'live' ? expected.map((event) => event.seq) : [],
+      )
       coordinator.captureSession(resumed)
       coordinator.captureSession(resumed)
-      expect(captured().map(record => record.attributes['event.seq'])).toEqual(expected.map(event => event.seq))
+      expect(captured().map((record) => record.attributes['event.seq'])).toEqual(expected.map((event) => event.seq))
       expect(expected.at(-1)?.type).toBe('session/end-seed')
     } finally {
       await ctx.fiber.dispose()
@@ -438,30 +459,39 @@ describe('SessionTelemetryCoordinator adoption', () => {
       const parent = liveSession(ctx, 'fork-parent')
       appendTurn(parent)
       parent.append('step/start', { turn: 1, step: 1 })
-      parent.append('assistant/message', {
-        turn: 1, step: 1, stream: [],
-        message: createAssistantMessage({
-          content: [{ type: 'tool-call', id: ToolCallId('fork-call'), name: 'bash', arguments: '{}' }],
-          source: { provider: 'mock', model: 'mock' },
-        }),
-      }, { surfaceOp: 'append' })
+      parent.append(
+        'assistant/message',
+        {
+          turn: 1,
+          step: 1,
+          stream: [],
+          message: createAssistantMessage({
+            content: [{ type: 'tool-call', id: ToolCallId('fork-call'), name: 'bash', arguments: '{}' }],
+            source: { provider: 'mock', model: 'mock' },
+          }),
+        },
+        { surfaceOp: 'append' },
+      )
       parent.append('tool/call', {
-        turn: 1, step: 1, callId: ToolCallId('fork-call'), name: 'bash', arguments: '{}',
+        turn: 1,
+        step: 1,
+        callId: ToolCallId('fork-call'),
+        name: 'bash',
+        arguments: '{}',
       })
       const child = ctx.sessions.fork(parent, undefined, SessionId('fork-child'))
       const ownEvents = child.snapshotEvents().slice(child.inheritedEventCount)
-      expect(ownEvents.map(event => event.type)).toEqual([
-        'session/end-seed', 'tool/result', 'step/end', 'turn/end',
-      ])
+      expect(ownEvents.map((event) => event.type)).toEqual(['session/end-seed', 'tool/result', 'step/end', 'turn/end'])
       expect(child.firstLiveSeq).toBe(child.inheritedEventCount + ownEvents.length)
-      const captured = () => backend.ledger().filter(record => record.attributes['session.id'] === child.id)
-      expect(captured().map(record => record.attributes['event.seq']))
-        .toEqual(capture === 'live' ? ownEvents.map(event => event.seq) : [])
+      const captured = () => backend.ledger().filter((record) => record.attributes['session.id'] === child.id)
+      expect(captured().map((record) => record.attributes['event.seq'])).toEqual(
+        capture === 'live' ? ownEvents.map((event) => event.seq) : [],
+      )
 
       coordinator.captureSession(child)
       coordinator.captureSession(child)
-      expect(captured().map(record => record.attributes['event.seq'])).toEqual(ownEvents.map(event => event.seq))
-      expect(captured().map(record => record.body)).toEqual(ownEvents.map(event => event.data))
+      expect(captured().map((record) => record.attributes['event.seq'])).toEqual(ownEvents.map((event) => event.seq))
+      expect(captured().map((record) => record.body)).toEqual(ownEvents.map((event) => event.data))
 
       await fiber.dispose()
       const second = new FakeBackend()
@@ -477,7 +507,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       expect(second.ledger()).toEqual([])
       const next = child.append('turn/start', { turn: 2 })
       reloaded.captureSession(child)
-      expect(second.ledger().map(record => record.attributes['event.seq'])).toEqual([next.seq])
+      expect(second.ledger().map((record) => record.attributes['event.seq'])).toEqual([next.seq])
     } finally {
       await ctx.fiber.dispose()
     }
@@ -499,8 +529,13 @@ describe('SessionTelemetryCoordinator adoption', () => {
     ctx.sessions.enter(child)
     ctx.sessions.announce(child)
 
-    const seqs = backend.ledger().map(r => [r.attributes['session.id'], r.attributes['event.seq']])
-    expect(seqs).toEqual(expect.arrayContaining([['seed-parent', 0], ['seed-parent', 1]]))
+    const seqs = backend.ledger().map((r) => [r.attributes['session.id'], r.attributes['event.seq']])
+    expect(seqs).toEqual(
+      expect.arrayContaining([
+        ['seed-parent', 0],
+        ['seed-parent', 1],
+      ]),
+    )
     expect(seqs.filter(([id]) => id === 'seeded')).toEqual([
       ['seeded', 2],
       ['seeded', 3],
@@ -535,14 +570,13 @@ describe('SessionTelemetryCoordinator adoption', () => {
     })
     ctx.sessions.enter(resumed)
     ctx.sessions.announce(resumed)
-    const ofResumed = () => backend.ledger()
-      .filter(r => r.attributes['session.id'] === 'resumed')
-    expect(ofResumed().map(r => r.attributes['event.seq'])).toEqual([2])
-    expect(ofResumed().every(r => r.attributes['session.format_version'] === SESSION_FORMAT_VERSION)).toBe(true)
+    const ofResumed = () => backend.ledger().filter((r) => r.attributes['session.id'] === 'resumed')
+    expect(ofResumed().map((r) => r.attributes['event.seq'])).toEqual([2])
+    expect(ofResumed().every((r) => r.attributes['session.format_version'] === SESSION_FORMAT_VERSION)).toBe(true)
     appendAssistantMessage(resumed, 1, 1, ['continuation'], 200)
     appendAssistantMessage(resumed, 1, 2, ['next step'], 300)
-    expect(ofResumed().map(r => r.attributes['event.seq'])).toEqual([2, 3, 4])
-    expect(ofResumed().map(r => (r.body as { stream?: { type: string; texts?: string[] }[] }).stream?.[0]?.texts)).toEqual([
+    expect(ofResumed().map((r) => r.attributes['event.seq'])).toEqual([2, 3, 4])
+    expect(ofResumed().map((r) => (r.body as { stream?: { type: string; texts?: string[] }[] }).stream?.[0]?.texts)).toEqual([
       undefined,
       ['continuation'],
       ['next step'],
@@ -566,7 +600,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, backend),
     })
     child.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const record = backend.ledger().find(r => r.attributes['session.id'] === 'stitch-child')!
+    const record = backend.ledger().find((r) => r.attributes['session.id'] === 'stitch-child')!
     expect(record.attributes['session.parent_id']).toBe('stitch-parent')
     expect(record.attributes['session.seed_length']).toBe(2)
   })
@@ -612,7 +646,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, second),
     })
     // Only window events past the same object's cursor are re-handed.
-    expect(second.ledger().map(r => [r.attributes['event.seq'], r.attributes['event.type']])).toEqual([
+    expect(second.ledger().map((r) => [r.attributes['event.seq'], r.attributes['event.type']])).toEqual([
       [2, 'assistant/message'],
       [3, 'turn/end'],
     ])
@@ -636,7 +670,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       inject: ['sessions'],
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, backend),
     })
-    expect(backend.ledger().map(r => r.attributes['event.seq'])).toEqual([0, 2])
+    expect(backend.ledger().map((r) => r.attributes['event.seq'])).toEqual([0, 2])
     expect(warn).toHaveBeenCalled()
   })
 
@@ -651,7 +685,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       inject: ['sessions'],
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, backend),
     })
-    expect(backend.ledger().map(r => r.attributes['event.seq'])).toEqual([0, 1])
+    expect(backend.ledger().map((r) => r.attributes['event.seq'])).toEqual([0, 1])
   })
 })
 
@@ -662,7 +696,9 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     let settled = false
     backend.flush.mockImplementation(() => {
       // The backend may kick off arbitrary async work; the loop's parallel must not wait for it.
-      void new Promise(resolve => setTimeout(resolve, 50)).then(() => { settled = true })
+      void new Promise((resolve) => setTimeout(resolve, 50)).then(() => {
+        settled = true
+      })
     })
     await ctx.parallel('session/flush', session)
     expect(backend.flush).toHaveBeenCalledTimes(1)
@@ -693,7 +729,7 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, backend),
     })
     expect(() => ctx.sessions.create(SessionId('vetoed'), { meta: {} })).toThrow('vetoed')
-    expect(backend.records.filter(r => r.channel === 'ops')).toHaveLength(0)
+    expect(backend.records.filter((r) => r.channel === 'ops')).toHaveLength(0)
   })
 
   it('emits each adopted session’s shutdown record before awaiting backend shutdown', async () => {
@@ -703,10 +739,10 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     await fiber.dispose()
     expect(backend.calls).toEqual(['emit:shutdown', 'emit:shutdown', 'shutdown'])
     expect(backend.shutdownResolved).toBe(true)
-    const ops = backend.records.filter(r => r.channel === 'ops')
-    expect(ops.map(r => r.attributes['session.id']).sort()).toEqual(['s1', 's2'])
-    expect(ops.every(r => r.attributes['telemetry.op'] === 'shutdown' && r.severity === 'info')).toBe(true)
-    expect(ops.every(r => !('event.seq' in r.attributes) && !('event.type' in r.attributes))).toBe(true)
+    const ops = backend.records.filter((r) => r.channel === 'ops')
+    expect(ops.map((r) => r.attributes['session.id']).sort()).toEqual(['s1', 's2'])
+    expect(ops.every((r) => r.attributes['telemetry.op'] === 'shutdown' && r.severity === 'info')).toBe(true)
+    expect(ops.every((r) => !('event.seq' in r.attributes) && !('event.type' in r.attributes))).toBe(true)
   })
 
   it('emits the shutdown marker at the session’s own disposal edge, then retires it', async () => {
@@ -718,16 +754,21 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     // activity and no marker as crashed, so a normally closed session in a
     // long-running host must not look like a crash), and the session retires
     // from the adopted set so unload neither retains it nor re-marks it.
-    const owner = await ctx.plugin(Object.assign((inner: Context) => {
-      inner.sessions.create(SessionId('ephemeral'), { meta: {} })
-    }, { inject: ['sessions'] }))
+    const owner = await ctx.plugin(
+      Object.assign(
+        (inner: Context) => {
+          inner.sessions.create(SessionId('ephemeral'), { meta: {} })
+        },
+        { inject: ['sessions'] },
+      ),
+    )
     await owner.dispose()
-    const atEdge = backend.records.filter(r => r.channel === 'ops')
-    expect(atEdge.map(r => r.attributes['session.id'])).toEqual(['ephemeral'])
+    const atEdge = backend.records.filter((r) => r.channel === 'ops')
+    expect(atEdge.map((r) => r.attributes['session.id'])).toEqual(['ephemeral'])
     expect(atEdge[0]!.attributes['telemetry.op']).toBe('shutdown')
     await fiber.dispose()
-    const ops = backend.records.filter(r => r.channel === 'ops')
-    expect(ops.map(r => r.attributes['session.id'])).toEqual(['ephemeral', 'survivor'])
+    const ops = backend.records.filter((r) => r.channel === 'ops')
+    expect(ops.map((r) => r.attributes['session.id'])).toEqual(['ephemeral', 'survivor'])
   })
 
   it('warns instead of throwing when backend shutdown fails', async () => {
@@ -737,7 +778,7 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     liveSession(ctx)
     await expect(fiber.dispose()).resolves.not.toThrow()
-    expect(warn.mock.calls.some(args => String(args[0]).includes('shutdown failed'))).toBe(true)
+    expect(warn.mock.calls.some((args) => String(args[0]).includes('shutdown failed'))).toBe(true)
   })
 
   it('contains emit failures: the append succeeds and capture heals', async () => {
@@ -749,7 +790,7 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     expect(warn).toHaveBeenCalled()
     backend.emitError = undefined
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    expect(backend.ledger().map(r => r.attributes['event.type'])).toEqual(['turn/end'])
+    expect(backend.ledger().map((r) => r.attributes['event.type'])).toEqual(['turn/end'])
   })
 
   it.each([
@@ -761,7 +802,7 @@ describe('SessionTelemetryCoordinator lifecycle and containment', () => {
     // Only the members the relay reads; the full Agent surface is irrelevant here.
     const agent = { id: 'agent-1', session } as Agent
     ctx.emit('agent/error', { agent, turn: 3, step: 2, error })
-    const record = backend.records.find(r => r.channel === 'ops')!
+    const record = backend.records.find((r) => r.channel === 'ops')!
     expect(record.severity).toBe('error')
     expect(record.attributes).toMatchObject({
       'telemetry.op': 'agent-error',

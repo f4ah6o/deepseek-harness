@@ -2,20 +2,24 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished } from 'vite-plus/test'
 import { parse } from 'yaml'
 import { approveBuilds, readPendingBuilds } from '../src/build-approval.ts'
 
 function fixture(text?: string) {
   const dir = mkdtempSync(join(tmpdir(), 'build-approval-'))
-  onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+  onTestFinished(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
   const filename = join(dir, 'pnpm-workspace.yaml')
   if (text !== undefined) writeFileSync(filename, text)
   return { dir, filename }
 }
 
 it('approves only named pending packages and preserves comments, decisions and settings', async () => {
-  const { dir, filename } = fixture('# profile settings\nother: &unrelated value\ncopy: *unrelated\nnodeLinker: hoisted\nallowBuilds:\n  native: set this to true or false\n  "@scope/other": set this to true or false\n  trusted: true\n  denied: false\n  "@scope/*": set this to true or false\n')
+  const { dir, filename } = fixture(
+    '# profile settings\nother: &unrelated value\ncopy: *unrelated\nnodeLinker: hoisted\nallowBuilds:\n  native: set this to true or false\n  "@scope/other": set this to true or false\n  trusted: true\n  denied: false\n  "@scope/*": set this to true or false\n',
+  )
   expect(await readPendingBuilds(dir)).toEqual(['native', '@scope/other'])
   await approveBuilds(dir, ['native'])
   const text = readFileSync(filename, 'utf8')
@@ -39,11 +43,14 @@ it('preserves pnpm file dependency selectors verbatim', async () => {
   expect(parse(readFileSync(filename, 'utf8'))).toEqual({ allowBuilds: { [name]: true } })
 })
 
-it.each([undefined, '{}\n', 'nodeLinker: hoisted\n', 'allowBuilds: {}\n'])('has no pending approval without pnpm placeholders: %s', async (text) => {
-  const { dir } = fixture(text)
-  expect(await readPendingBuilds(dir)).toEqual([])
-  await approveBuilds(dir, [])
-})
+it.each([undefined, '{}\n', 'nodeLinker: hoisted\n', 'allowBuilds: {}\n'])(
+  'has no pending approval without pnpm placeholders: %s',
+  async (text) => {
+    const { dir } = fixture(text)
+    expect(await readPendingBuilds(dir)).toEqual([])
+    await approveBuilds(dir, [])
+  },
+)
 
 it.each(['[', '[]\n', 'allowBuilds: false\n'])('rejects malformed workspace settings without rewriting them: %s', async (text) => {
   const { dir, filename } = fixture(text)

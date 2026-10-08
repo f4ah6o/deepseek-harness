@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TranscriptViewMode } from '../src/chat-settings.ts'
@@ -14,11 +14,14 @@ describe('Chat presentation policy', () => {
     ['standard', true, 'collapsed', true, true],
     ['detailed', true, 'history', true, true],
     ['verbose', false, 'none', true, false],
-  ] as const)('maps %s to stable presentation capabilities', (mode, foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail) => {
-    const policy = presentationPolicyFor(mode)
-    expect(policy).toEqual({ mode, foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail })
-    expect(presentationPolicyFor(mode)).toBe(policy)
-  })
+  ] as const)(
+    'maps %s to stable presentation capabilities',
+    (mode, foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail) => {
+      const policy = presentationPolicyFor(mode)
+      expect(policy).toEqual({ mode, foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail })
+      expect(presentationPolicyFor(mode)).toBe(policy)
+    },
+  )
 
   it('forwards mode notifications and removes the subscription on disposal', () => {
     const mode = createSnapshotStore<TranscriptViewMode>('compact')
@@ -40,25 +43,36 @@ describe('Chat presentation policy', () => {
     const foldRender = vi.fn()
     const previewRender = vi.fn()
     function Fold() {
-      const fold = usePresentation(policy => policy.foldCompletedTurns)
+      const fold = usePresentation((policy) => policy.foldCompletedTurns)
       foldRender(fold)
       return <span>{String(fold)}</span>
     }
     function Preview() {
-      const preview = usePresentation(policy => policy.settledReasoningPreview)
+      const preview = usePresentation((policy) => policy.settledReasoningPreview)
       previewRender(preview)
       return <span>{String(preview)}</span>
     }
-    render(<><Fold /><Preview /></>)
+    render(
+      <>
+        <Fold />
+        <Preview />
+      </>,
+    )
     expect(foldRender).toHaveBeenCalledTimes(1)
     expect(previewRender).toHaveBeenCalledTimes(1)
-    act(() => { mode.set('detailed') })
+    act(() => {
+      mode.set('detailed')
+    })
     expect(foldRender).toHaveBeenCalledTimes(1)
     expect(previewRender).toHaveBeenCalledTimes(2)
-    act(() => { mode.set('standard') })
+    act(() => {
+      mode.set('standard')
+    })
     expect(foldRender).toHaveBeenCalledTimes(1)
     expect(previewRender).toHaveBeenCalledTimes(2)
-    act(() => { mode.set('compact') })
+    act(() => {
+      mode.set('compact')
+    })
     expect(foldRender).toHaveBeenCalledTimes(1)
     expect(previewRender).toHaveBeenCalledTimes(3)
   })

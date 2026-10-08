@@ -2,7 +2,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import type { Context } from '@deepseek-ai/cordis'
 import { codingHarness, finalText, SYSTEM_PROMPT, waitForIdle } from './harness.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -31,18 +31,24 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('full loop: real model + real bas
     ctx = await codingHarness(workdir, { personaPrefix: SYSTEM_PROMPT })
     const agent = await ctx.agentLoop.create(SessionId('e2e-loop'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
 
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run `echo e2e-ok` with the bash tool and tell me its exact output.' }], source: { kind: 'user' } }))
+    agent.followup(
+      createUserMessage({
+        content: [{ type: 'text', text: 'Run `echo e2e-ok` with the bash tool and tell me its exact output.' }],
+        source: { kind: 'user' },
+      }),
+    )
     await waitForIdle(ctx, agent)
 
     const events = agent.session.snapshotEvents()
-    const calls = events.filter(event => event.type === 'tool/call')
+    const calls = events.filter((event) => event.type === 'tool/call')
     expect(calls.length).toBeGreaterThan(0)
-    expect(calls.some(event => event.data.name === 'bash')).toBe(true)
+    expect(calls.some((event) => event.data.name === 'bash')).toBe(true)
 
-    const results = events.filter(event => event.type === 'tool/result')
-    const resultTexts = results.flatMap(event =>
-      event.data.message.content.filter(block => block.type === 'text').map(block => block.text))
-    expect(resultTexts.some(text => text.includes('e2e-ok'))).toBe(true)
+    const results = events.filter((event) => event.type === 'tool/result')
+    const resultTexts = results.flatMap((event) =>
+      event.data.message.content.filter((block) => block.type === 'text').map((block) => block.text),
+    )
+    expect(resultTexts.some((text) => text.includes('e2e-ok'))).toBe(true)
 
     expect(finalText(events)).toContain('e2e-ok')
   }, 120_000)

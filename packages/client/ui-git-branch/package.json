@@ -28,7 +28,10 @@
       "platform": "web"
     }
   },
-  "scripts": { "bundle": "tsdown", "watch": "tsdown --watch" },
+  "scripts": {
+    "bundle": "vp pack",
+    "watch": "vp pack --watch"
+  },
   "license": "MIT",
   "peerDependencies": { "@deepseek-ai/cordis": "workspace:~" },
   "devDependencies": {

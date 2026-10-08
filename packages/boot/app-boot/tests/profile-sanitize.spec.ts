@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { initProfile, PROFILE_PATCH_FILENAME, PROFILE_TEMPLATES, readProfileManifest, sanitizeProfile } from '../src/index.ts'
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -82,13 +82,15 @@ it('leaves the patch untouched when profile JSON is invalid', () => {
   writeFileSync(manifestPath, '{broken')
   expect(() => sanitizeProfile('test', dir, bundles)).toThrow()
   expect(readFileSync(patch, 'utf8')).toBe(': broken YAML')
-  expect(readdirSync(dir).some(name => name.includes('.bak-'))).toBe(false)
+  expect(readdirSync(dir).some((name) => name.includes('.bak-'))).toBe(false)
 })
 
 it('propagates backup failures before changing activation', () => {
   const { dir, bundles, manifest, patch } = fixture()
   const error = Object.assign(new Error('patch rename denied'), { code: 'EACCES' })
-  vi.mocked(renameSync).mockImplementationOnce(() => { throw error })
+  vi.mocked(renameSync).mockImplementationOnce(() => {
+    throw error
+  })
   expect(() => sanitizeProfile('test', dir, bundles)).toThrow(error)
   expect(readFileSync(patch, 'utf8')).toBe(': broken YAML')
   expect(readProfileManifest('test', dir)).toEqual(manifest)

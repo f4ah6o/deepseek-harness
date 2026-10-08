@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   # Three enterprise jobs isolate coverage, static analysis, and the
   # build-backed consumer tail. The consumer job owns the only Linux build so
   # all three jobs enter runner allocation independently.
@@ -360,7 +359,6 @@ jobs:
       - name: Run compatibility, snapshot, and artifact gates
         run: pnpm run check:ci:consumers
 
-
   node-compat:
     if: github.event_name == 'pull_request'
     # Under the selfhosted leg this job admits only repository-owned PR code
@@ -392,8 +390,8 @@ jobs:
           # Pinned inside 24.0-24.11.1: those releases carry the v1 internal
           # loader while reporting major 24, and every other job tracks the
           # latest 24, which is v2. A bare `24` here would retest that same v2.
-          - node: '24.9'
-            name: node 24.9
+          - node: '24.11.1'
+            name: node 24.11.1
             runner: ubuntu-latest
             gate_concurrency: '1'
           - node: 26
@@ -451,7 +449,7 @@ jobs:
       # changes with the Node version, so this belongs to the version matrix
       # rather than to every commit's checks.
       - name: Check Loader internal shape detection
-        run: pnpm exec vitest run packages/boot/app-boot/tests/loader-shape.compat.spec.ts
+        run: pnpm exec vp test run packages/boot/app-boot/tests/loader-shape.compat.spec.ts
 
   python-sdk:
     if: github.event_name == 'pull_request'
@@ -678,7 +676,7 @@ jobs:
       - name: Run Windows-specific native tests
         shell: pwsh
         run: >-
-          pnpm exec vitest run
+          pnpm exec vp test run
           --no-file-parallelism
           --testTimeout 90000
           packages/shell/tool-pwsh/tests/loader.spec.ts
@@ -711,7 +709,18 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-bench, node-24-consumers, node-compat, python-sdk, python-runtime, windows-build, windows-native-tests]
+    needs:
+      [
+        node-24,
+        node-24-coverage,
+        node-24-bench,
+        node-24-consumers,
+        node-compat,
+        python-sdk,
+        python-runtime,
+        windows-build,
+        windows-native-tests,
+      ]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed

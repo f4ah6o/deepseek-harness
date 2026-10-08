@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AskUserQuestionAnswerItem } from '@deepseek-ai/dsh-user-questions/types'
-import { createWaterfallRequest, PendingQuestion, type QuestionCardSnapshot, type QuestionComposerProps } from '../src/client/contract/slots.ts'
+import {
+  createWaterfallRequest,
+  PendingQuestion,
+  type QuestionCardSnapshot,
+  type QuestionComposerProps,
+} from '../src/client/contract/slots.ts'
 import { createQuestionDraftStore } from '../src/client/draft-store.ts'
 import { QuestionComposer as Composer, parseRecommendedLabel } from '../src/client/QuestionComposer.tsx'
 import { en, zh } from '../src/client/locales.ts'
@@ -14,16 +19,22 @@ import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 
 // Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
-const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+const useResource = (() => ({
+  status: 'none' as const,
+  value: undefined,
+  failure: undefined,
+  reload: () => {},
+})) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = (selector) => selector({ activePanelId: null })
 
 afterEach(cleanup)
 
-
 const SID = 's1' as SessionId
 
-const seatOver = (dict: Record<string, string>, common: Record<string, string>): QuestionComposerProps['t'] =>
-  (key => dict[key] ?? common[key] ?? key)
+const seatOver =
+  (dict: Record<string, string>, common: Record<string, string>): QuestionComposerProps['t'] =>
+  (key) =>
+    dict[key] ?? common[key] ?? key
 
 type SessionState = Parameters<Parameters<QuestionComposerProps['useSession']>[0]>[0]
 type ConversationState = Parameters<Parameters<QuestionComposerProps['useConversation']>[0]>[0]
@@ -74,7 +85,9 @@ const chatState: ChatState = {
   nodes: {
     get: () => undefined,
     source: () => emptyNodeSource,
-    turnDataSource: () => { throw new Error('unused') },
+    turnDataSource: () => {
+      throw new Error('unused')
+    },
     processSource: () => emptyNodeSource,
     values: () => [],
   },
@@ -115,26 +128,39 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestion
   session: undefined,
   sessionId: SID,
   pendingInteraction: undefined,
-  useSession: selector => selector(sessionState),
-  useSessions: selector => selector(sessionList),
-  usePanelInfo, useResource,
-  useSessionStatus: selector => selector(attentionState),
+  useSession: (selector) => selector(sessionState),
+  useSessions: (selector) => selector(sessionList),
+  usePanelInfo,
+  useResource,
+  useSessionStatus: (selector) => selector(attentionState),
   useSessionRetainInfo: () => undefined,
-  useWorkspaces: selector => selector(workspaceState),
-  useConversation: selector => selector(conversationState),
-  useChat: selector => selector(chatState),
-  useTrajectory: selector => selector(trajectoryState),
-  useProjection: (() => undefined),
-  useInput: selector => selector(inputState),
+  useWorkspaces: (selector) => selector(workspaceState),
+  useConversation: (selector) => selector(conversationState),
+  useChat: (selector) => selector(chatState),
+  useTrajectory: (selector) => selector(trajectoryState),
+  useProjection: () => undefined,
+  useInput: (selector) => selector(inputState),
   inputActions: {
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
-    setDraft: () => { throw new Error('unused') },
-    persistDraft: () => { throw new Error('unused') },
-    addAttachments: () => { throw new Error('unused') },
-    removeAttachment: () => { throw new Error('unused') },
-    pruneAttachments: () => { throw new Error('unused') },
-    submit: () => { throw new Error('unused') },
+    setDraft: () => {
+      throw new Error('unused')
+    },
+    persistDraft: () => {
+      throw new Error('unused')
+    },
+    addAttachments: () => {
+      throw new Error('unused')
+    },
+    removeAttachment: () => {
+      throw new Error('unused')
+    },
+    pruneAttachments: () => {
+      throw new Error('unused')
+    },
+    submit: () => {
+      throw new Error('unused')
+    },
   },
   // The seat's key domain is question ∪ common.
   t: seatOver(zh, commonZh),
@@ -156,17 +182,20 @@ beforeEach(() => {
   localStorage.clear()
   const instance = createQuestionDraftStore().create(SID)
   draftInstance = instance
-  const useStore: QuestionComposerProps['useStore'] = selector => useSyncExternalStore(
-    listener => instance.subscribe(listener),
-    () => selector(instance.getSnapshot()),
-    () => selector(instance.getSnapshot()),
-  )
+  const useStore: QuestionComposerProps['useStore'] = (selector) =>
+    useSyncExternalStore(
+      (listener) => instance.subscribe(listener),
+      () => selector(instance.getSnapshot()),
+      () => selector(instance.getSnapshot()),
+    )
   kit = { ...kitBase, useStore, actions: instance.actions }
 })
 
 const QUESTIONS: PendingQuestion['questions'] = [
   {
-    id: 'profile', header: '偏好', question: '选择候选人类型',
+    id: 'profile',
+    header: '偏好',
+    question: '选择候选人类型',
     detail: '按当前空缺岗位的优先级选择。',
     options: [
       { label: '工程落地型 (Recommended)', description: '优先工程交付。' },
@@ -174,10 +203,13 @@ const QUESTIONS: PendingQuestion['questions'] = [
     ],
   },
   {
-    id: 'detail', question: '补充你的要求',
+    id: 'detail',
+    question: '补充你的要求',
   },
   {
-    id: 'signals', question: '选择重要信号（可多选）', multiSelect: true,
+    id: 'signals',
+    question: '选择重要信号（可多选）',
+    multiSelect: true,
     options: [{ label: '系统设计' }, { label: '代码质量' }, { label: '产品判断' }],
   },
 ]
@@ -185,7 +217,9 @@ const QUESTIONS: PendingQuestion['questions'] = [
 /** Pending waterfall fixture with observable Client response methods. */
 function wait(questions: PendingQuestion['questions'] = QUESTIONS, deadline?: number) {
   const carrier = new PendingQuestion(SID, questions)
-  const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
+  const request = createWaterfallRequest(deadline, undefined, (channel) => {
+    carrier.detachWaterfall(channel)
+  })
   carrier.attachWaterfall(request.channel)
   const answer = vi.spyOn(carrier, 'answer')
   const dismiss = vi.spyOn(carrier, 'dismiss')
@@ -231,9 +265,13 @@ describe('QuestionComposer', () => {
   })
 
   it('treats Enter on an unselected option as submit, without selecting it', () => {
-    const { carrier, answer } = wait([{
-      id: 'mode', question: 'Which mode?', options: [{ label: 'Alpha' }, { label: 'Beta' }],
-    }])
+    const { carrier, answer } = wait([
+      {
+        id: 'mode',
+        question: 'Which mode?',
+        options: [{ label: 'Alpha' }, { label: 'Beta' }],
+      },
+    ])
     render(<QuestionComposer matched={carrier} {...kit} />)
     const option = screen.getByRole('radio', { name: 'Alpha' })
     expect(fireEvent.keyDown(option, { key: 'Enter' })).toBe(false)
@@ -282,21 +320,25 @@ describe('QuestionComposer', () => {
     fireEvent.keyDown(multiCustom, { key: 'Enter' })
 
     // The domain face encoded the whole batch into one carrier envelope.
-    expect(answer).toHaveBeenCalledWith(answerBatch([
-      { id: 'profile', selected: ['工程落地型 (Recommended)'] },
-      { id: 'detail', selected: [], custom: '要能独立排查线上问题' },
-      { id: 'signals', selected: ['系统设计', '代码质量', '产品判断'], custom: '沟通能力' },
-    ]))
+    expect(answer).toHaveBeenCalledWith(
+      answerBatch([
+        { id: 'profile', selected: ['工程落地型 (Recommended)'] },
+        { id: 'detail', selected: [], custom: '要能独立排查线上问题' },
+        { id: 'signals', selected: ['系统设计', '代码质量', '产品判断'], custom: '沟通能力' },
+      ]),
+    )
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
   })
 
   it('renders plan detail through the shared assistant Markdown primitive', () => {
-    const { carrier } = wait([{
-      id: 'plan',
-      question: '批准这个计划吗？',
-      detail: '# 实施计划\n\n- **先验证**现状\n- 修改 `QuestionComposer`',
-      options: [{ label: '批准' }],
-    }])
+    const { carrier } = wait([
+      {
+        id: 'plan',
+        question: '批准这个计划吗？',
+        detail: '# 实施计划\n\n- **先验证**现状\n- 修改 `QuestionComposer`',
+        options: [{ label: '批准' }],
+      },
+    ])
     const view = render(<QuestionComposer matched={carrier} {...kit} />)
 
     expect(screen.getByRole('heading', { level: 1, name: '实施计划' })).toBeTruthy()
@@ -317,11 +359,13 @@ describe('QuestionComposer', () => {
     expect(screen.getByText('3 / 3')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '跳过' }))
 
-    expect(answer).toHaveBeenCalledWith(answerBatch([
-      { id: 'profile', selected: ['研究潜力型'] },
-      { id: 'detail', selected: [] },
-      { id: 'signals', selected: [] },
-    ]))
+    expect(answer).toHaveBeenCalledWith(
+      answerBatch([
+        { id: 'profile', selected: ['研究潜力型'] },
+        { id: 'detail', selected: [] },
+        { id: 'signals', selected: [] },
+      ]),
+    )
   })
 
   it('keeps IME Enter inside the custom input until composition finishes', () => {
@@ -396,18 +440,18 @@ describe('QuestionComposer', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
     // Line breaks reach the model verbatim: nothing along the way flattens them.
-    expect(answer).toHaveBeenCalledWith(answerBatch([
-      { id: 'profile', selected: [], custom: multiline },
-      { id: 'detail', selected: [], custom: multiline },
-      { id: 'signals', selected: ['系统设计'] },
-    ]))
+    expect(answer).toHaveBeenCalledWith(
+      answerBatch([
+        { id: 'profile', selected: [], custom: multiline },
+        { id: 'detail', selected: [], custom: multiline },
+        { id: 'signals', selected: ['系统设计'] },
+      ]),
+    )
   })
 
   it('surfaces cancellation failures and re-arms the controls', async () => {
     const { carrier, dismiss } = wait()
-    dismiss
-      .mockRejectedValueOnce(new Error('第一次取消失败'))
-      .mockRejectedValueOnce(new Error('第二次取消失败'))
+    dismiss.mockRejectedValueOnce(new Error('第一次取消失败')).mockRejectedValueOnce(new Error('第二次取消失败'))
     render(<QuestionComposer matched={carrier} {...kit} />)
 
     fireEvent.click(screen.getByRole('button', { name: '放弃整组问题' }))
@@ -425,9 +469,7 @@ describe('QuestionComposer', () => {
     fireEvent.click(screen.getByRole('radio', { name: /研究潜力型/ }))
     expect(screen.getByText('2 / 3')).toBeTruthy()
     const second = wait()
-    second.answer
-      .mockRejectedValueOnce(new Error('网络中断'))
-      .mockRejectedValueOnce('字符串错误')
+    second.answer.mockRejectedValueOnce(new Error('网络中断')).mockRejectedValueOnce('字符串错误')
     view.rerender(<QuestionComposer matched={second.carrier} {...kit} />)
     expect(screen.getByRole('radio', { name: /研究潜力型/ }).getAttribute('aria-checked')).toBe('false')
 
@@ -437,11 +479,14 @@ describe('QuestionComposer', () => {
     fireEvent.keyDown(custom, { key: 'Enter' })
     fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
-    expect(second.answer).toHaveBeenNthCalledWith(1, answerBatch([
-      { id: 'profile', selected: ['工程落地型 (Recommended)'] },
-      { id: 'detail', selected: [], custom: 'x' },
-      { id: 'signals', selected: ['系统设计'] },
-    ]))
+    expect(second.answer).toHaveBeenNthCalledWith(
+      1,
+      answerBatch([
+        { id: 'profile', selected: ['工程落地型 (Recommended)'] },
+        { id: 'detail', selected: [], custom: 'x' },
+        { id: 'signals', selected: ['系统设计'] },
+      ]),
+    )
     expect(await screen.findByText('网络中断')).toBeTruthy()
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
 
@@ -539,11 +584,13 @@ describe('PendingQuestion domain face', () => {
     fireEvent.click(screen.getByLabelText('下一题'))
     fireEvent.click(screen.getByRole('checkbox', { name: '系统设计' }))
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
-    expect(answer).toHaveBeenCalledWith(answerBatch([
-      { id: 'profile', selected: ['工程落地型 (Recommended)'] },
-      { id: 'detail', custom: '要能独立排查线上问题', selected: [] },
-      { id: 'signals', selected: ['系统设计'] },
-    ]))
+    expect(answer).toHaveBeenCalledWith(
+      answerBatch([
+        { id: 'profile', selected: ['工程落地型 (Recommended)'] },
+        { id: 'detail', custom: '要能独立排查线上问题', selected: [] },
+        { id: 'signals', selected: ['系统设计'] },
+      ]),
+    )
   })
 })
 
@@ -556,14 +603,20 @@ describe('parseRecommendedLabel', () => {
   })
 })
 
-const TIMED: PendingQuestion['questions'] = [{
-  id: 'scope', question: '选择范围', options: [{ label: '仅工具' }, { label: '全部' }],
-}]
+const TIMED: PendingQuestion['questions'] = [
+  {
+    id: 'scope',
+    question: '选择范围',
+    options: [{ label: '仅工具' }, { label: '全部' }],
+  },
+]
 
 /** A timed card as the Remote Event listener builds it: waterfall channel with a Client-decided deadline. */
 function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
   const carrier = new PendingQuestion(SID, TIMED, callId)
-  const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
+  const request = createWaterfallRequest(deadline, undefined, (channel) => {
+    carrier.detachWaterfall(channel)
+  })
   carrier.attachWaterfall(request.channel)
   void request.result.catch(() => {})
   return { carrier, request }
@@ -573,8 +626,9 @@ describe('timed card', () => {
   it.each([true, false])('does not autofocus before claiming and respects manual focus until readiness: %s', async (stillFocused) => {
     vi.useFakeTimers()
     const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], ToolCallId('claiming'))
-    const request = createWaterfallRequest(Date.now() + 2_000, undefined,
-      (channel) => { carrier.detachWaterfall(channel) })
+    const request = createWaterfallRequest(Date.now() + 2_000, undefined, (channel) => {
+      carrier.detachWaterfall(channel)
+    })
     try {
       render(<QuestionComposer matched={carrier} {...kit} />)
       const field = screen.getByPlaceholderText(zh['custom.placeholder'])
@@ -582,16 +636,22 @@ describe('timed card', () => {
 
       fireEvent.focus(field)
       if (!stillFocused) fireEvent.blur(field, { relatedTarget: document.body })
-      act(() => { carrier.attachWaterfall(request.channel) })
+      act(() => {
+        carrier.attachWaterfall(request.channel)
+      })
       expect(carrier.snapshot().countdown).toEqual({ remainingMs: 2_000, running: !stillFocused })
       if (stillFocused) {
-        await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5_000)
+        })
         expect(carrier.snapshot().channel).toBe('waterfall')
         fireEvent.blur(field, { relatedTarget: document.body })
         expect(carrier.snapshot().countdown).toEqual({ remainingMs: 2_000, running: true })
       }
     } finally {
-      act(() => { request.channel.resolve({ answers: [{ id: 'free', selected: [] }] }) })
+      act(() => {
+        request.channel.resolve({ answers: [{ id: 'free', selected: [] }] })
+      })
       await request.result
       cleanup()
       carrier.close()
@@ -604,19 +664,30 @@ describe('timed card', () => {
     try {
       const { carrier, request } = timedCard(Date.now() + 2_000)
       let settled = false
-      void request.result.then(() => { settled = true }, () => { settled = true })
+      void request.result.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        },
+      )
       render(<QuestionComposer matched={carrier} {...kit} />)
       const option = screen.getByRole('radio', { name: '仅工具' })
 
       fireEvent.focus(option)
       expect(carrier.snapshot()).toMatchObject({ waitState: 'focused', countdown: { running: false } })
       expect(screen.getByText(/已暂停/)).toBeTruthy()
-      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
       expect(settled).toBe(false)
 
       fireEvent.blur(option, { relatedTarget: document.body })
       expect(carrier.snapshot()).toMatchObject({ waitState: 'counting' })
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_100) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100)
+      })
       expect(settled).toBe(true)
     } finally {
       vi.useRealTimers()
@@ -628,24 +699,44 @@ describe('timed card', () => {
     try {
       const first = timedCard(Date.now() + 1_000)
       let firstSettled = false
-      void first.request.result.then(() => { firstSettled = true }, () => { firstSettled = true })
+      void first.request.result.then(
+        () => {
+          firstSettled = true
+        },
+        () => {
+          firstSettled = true
+        },
+      )
       const view = render(<QuestionComposer matched={first.carrier} {...kit} />)
 
       fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
       expect(first.carrier.snapshot()).toMatchObject({ waitState: 'editing', countdown: { running: false } })
       expect(draftInstance.getSnapshot().progressByRequest[first.carrier.key]?.wait).toBe('editing')
-      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
       expect(firstSettled).toBe(false)
 
       view.unmount()
       const restored = timedCard(Date.now() + 1_000)
       let restoredSettled = false
-      void restored.request.result.then(() => { restoredSettled = true }, () => { restoredSettled = true })
+      void restored.request.result.then(
+        () => {
+          restoredSettled = true
+        },
+        () => {
+          restoredSettled = true
+        },
+      )
       render(<QuestionComposer matched={restored.carrier} {...kit} />)
-      await act(async () => { await Promise.resolve() })
+      await act(async () => {
+        await Promise.resolve()
+      })
       expect(restored.carrier.snapshot()).toMatchObject({ waitState: 'editing', countdown: { running: false } })
       expect(screen.getByText('会一直等你回答')).toBeTruthy()
-      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
       expect(restoredSettled).toBe(false)
     } finally {
       vi.useRealTimers()
@@ -660,12 +751,17 @@ describe('timed card', () => {
       render(<QuestionComposer matched={carrier} {...kit} />)
       expect(screen.getByText(/秒后继续工作/)).toBeTruthy()
       expect(screen.getByRole('button', { name: '慢慢回答' })).toBeTruthy()
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_100) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_100)
+      })
 
       await rejection
       expect(carrier.snapshot()).toEqual({
-        state: 'open', waitState: 'counting', countdown: undefined,
-        channel: 'none', closed: false,
+        state: 'open',
+        waitState: 'counting',
+        countdown: undefined,
+        channel: 'none',
+        closed: false,
       })
       expect(screen.queryByText(/秒后继续工作/)).toBeNull()
       expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(true)
@@ -679,7 +775,9 @@ describe('timed card', () => {
       fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
       expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
       fireEvent.click(screen.getByRole('button', { name: '提交' }))
-      await act(async () => { await Promise.resolve() })
+      await act(async () => {
+        await Promise.resolve()
+      })
       expect(answer).toHaveBeenCalledWith({ answers: [{ id: 'scope', selected: ['仅工具'] }] })
     } finally {
       vi.useRealTimers()
@@ -691,14 +789,23 @@ describe('timed card', () => {
     try {
       const { carrier, request } = timedCard(Date.now() + 1_000)
       let settled = false
-      void request.result.then(() => { settled = true }, () => { settled = true })
+      void request.result.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        },
+      )
       render(<QuestionComposer matched={carrier} {...kit} />)
 
       fireEvent.click(screen.getByRole('button', { name: '慢慢回答' }))
 
       expect(screen.queryByText(/秒后继续工作/)).toBeNull()
       expect(screen.queryByRole('button', { name: '慢慢回答' })).toBeNull()
-      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
       expect(settled).toBe(false)
       expect(carrier.snapshot()).toMatchObject({ channel: 'waterfall', waitState: 'waiting' })
     } finally {
@@ -716,14 +823,20 @@ describe('timed card', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在提交…' }).disabled).toBe(true)
     expect(draftInstance.getSnapshot().progressByRequest[carrier.key]).toBeDefined()
 
-    act(() => { carrier.setState('continued') })
+    act(() => {
+      carrier.setState('continued')
+    })
 
     expect(screen.getByText('回答未送达，工作已继续，请再提交一次。')).toBeTruthy()
     expect(screen.getByRole('radio', { name: '仅工具' }).getAttribute('aria-checked')).toBe('true')
     const answer = vi.fn(async () => true)
-    act(() => { carrier.attachRpc({ answer }) })
+    act(() => {
+      carrier.attachRpc({ answer })
+    })
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
-    await vi.waitFor(() => { expect(answer).toHaveBeenCalledWith({ answers: [{ id: 'scope', selected: ['仅工具'] }] }) })
+    await vi.waitFor(() => {
+      expect(answer).toHaveBeenCalledWith({ answers: [{ id: 'scope', selected: ['仅工具'] }] })
+    })
   })
 
   it('steers an RPC reply, hides the panel, and rejects a duplicate before discard', async () => {
@@ -738,7 +851,9 @@ describe('timed card', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
-    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(hide).toHaveBeenCalledOnce()
+    })
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
     expect(screen.queryByText(zh['status.sent'])).toBeNull()
 
@@ -746,7 +861,9 @@ describe('timed card', () => {
     expect(await screen.findByText('a reply is already queued for this question')).toBeTruthy()
     expect(answer).toHaveBeenCalledTimes(2)
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
-    await vi.waitFor(() => { expect(answer).toHaveBeenCalledTimes(3) })
+    await vi.waitFor(() => {
+      expect(answer).toHaveBeenCalledTimes(3)
+    })
     await vi.waitFor(() => {
       expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
     })
@@ -766,7 +883,9 @@ describe('timed card', () => {
     fireEvent.click(screen.getByRole('radio', { name: '仅工具' }))
     fireEvent.click(screen.getByRole('button', { name: '提交' }))
 
-    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(hide).toHaveBeenCalledOnce()
+    })
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '提交' }).disabled).toBe(false)
   })
 
@@ -785,7 +904,9 @@ describe('timed card', () => {
     expect(screen.queryByLabelText('放弃整组问题')).toBeNull()
     fireEvent.click(screen.getByLabelText('收起问题面板，可从工具调用重新打开'))
 
-    await vi.waitFor(() => { expect(hide).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(hide).toHaveBeenCalledOnce()
+    })
     expect(answer).not.toHaveBeenCalled()
     expect(carrier.snapshot()).toMatchObject({ state: 'continued', channel: 'rpc', closed: false })
   })
@@ -822,7 +943,9 @@ describe('timed card', () => {
     fireEvent.click(screen.getByRole('radio', { name: '全部' }))
     expect(draftInstance.getSnapshot().progressByRequest[carrier.key]?.drafts[0]?.selected).toEqual(['全部'])
 
-    act(() => { carrier.close() })
+    act(() => {
+      carrier.close()
+    })
 
     expect(draftInstance.getSnapshot().progressByRequest[carrier.key]).toBeUndefined()
   })
@@ -919,8 +1042,11 @@ describe('review card', () => {
 
     expect(hide).toHaveBeenCalledOnce()
     expect(carrier.snapshot()).toEqual({
-      state: 'open', waitState: 'counting', countdown: undefined,
-      channel: 'none', closed: false,
+      state: 'open',
+      waitState: 'counting',
+      countdown: undefined,
+      channel: 'none',
+      closed: false,
     })
   })
 

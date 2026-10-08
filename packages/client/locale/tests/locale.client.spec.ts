@@ -1,17 +1,21 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm, type StubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { LocaleSettings, LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import { FALLBACK_LOCALE, LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-const make = (host?: StubConfigForm<LocaleSettings>): {
+const make = (
+  host?: StubConfigForm<LocaleSettings>,
+): {
   ctx: Context
   svc: LocaleRuntime
   events: LocaleSnapshot[]
 } => {
   const ctx = new Context()
   const events: LocaleSnapshot[] = []
-  ctx.on('locale/change', (snapshot) => { events.push(snapshot) })
+  ctx.on('locale/change', (snapshot) => {
+    events.push(snapshot)
+  })
   return { ctx, svc: new LocaleRuntime(ctx, host?.scope), events }
 }
 
@@ -100,7 +104,9 @@ describe('LocaleRuntime', () => {
   it('serves the LocaleFace: snapshot revision moves on switch and registration, subscribers fire, unsubscribe stops them', () => {
     const { svc } = make()
     const seen: number[] = []
-    const off = svc.subscribe(() => { seen.push(svc.getSnapshot().revision) })
+    const off = svc.subscribe(() => {
+      seen.push(svc.getSnapshot().revision)
+    })
     expect(svc.getSnapshot()).toBe(svc.getLocale())
     const r0 = svc.getSnapshot().revision
     svc.register('ns', 'zh', { k: 'v' })
@@ -117,8 +123,12 @@ describe('LocaleRuntime', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const seen: number[] = []
-      svc.subscribe(() => { throw new Error('boom') })
-      svc.subscribe(() => { seen.push(svc.getSnapshot().revision) })
+      svc.subscribe(() => {
+        throw new Error('boom')
+      })
+      svc.subscribe(() => {
+        seen.push(svc.getSnapshot().revision)
+      })
       svc.setLocale('en')
       expect(seen).toEqual([1])
       expect(spy).toHaveBeenCalledOnce()
@@ -179,7 +189,9 @@ describe('LocaleRuntime', () => {
 
   it('throws on unknown locale ids', () => {
     const { svc } = make()
-    expect(() => { svc.setLocale('fr') }).toThrow('not registered')
+    expect(() => {
+      svc.setLocale('fr')
+    }).toThrow('not registered')
   })
 
   it('registers an external locale for selection, translation, persistence, and reversible disposal', () => {
@@ -197,12 +209,12 @@ describe('LocaleRuntime', () => {
 
     dispose()
     expect(svc.getLocale().active).toBe('zh')
-    expect(svc.getLocale().locales.map(locale => locale.id)).toEqual(['zh', 'en'])
+    expect(svc.getLocale().locales.map((locale) => locale.id)).toEqual(['zh', 'en'])
     expect(svc.bind('ns')('hello')).toBe('Hello')
     const revision = svc.getLocale().revision
     dispose()
     expect(svc.getLocale().revision).toBe(revision)
-    expect(events.map(snapshot => snapshot.active)).toEqual(['ja', 'zh'])
+    expect(events.map((snapshot) => snapshot.active)).toEqual(['ja', 'zh'])
   })
 
   it('uses fallback copy until a language dictionary registers later', () => {
@@ -220,26 +232,18 @@ describe('LocaleRuntime', () => {
 
   it('rejects duplicate and malformed locale definitions', () => {
     const { svc } = make()
-    expect(() => svc.addLanguage({ id: 'EN', label: 'Other English', fallback: 'en' }))
-      .toThrow('already registered')
-    expect(() => svc.addLanguage({ id: 'bad locale', label: 'Bad', fallback: 'en' }))
-      .toThrow('not a BCP 47-style tag')
-    expect(() => svc.addLanguage({ id: '123', label: 'Numeric', fallback: 'en' }))
-      .toThrow('not a BCP 47-style tag')
-    expect(() => svc.addLanguage({ id: 'fr', label: '   ', fallback: 'en' }))
-      .toThrow('label must not be empty')
-    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'bad tag' }))
-      .toThrow('locale fallback')
-    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'de' }))
-      .toThrow('not registered')
+    expect(() => svc.addLanguage({ id: 'EN', label: 'Other English', fallback: 'en' })).toThrow('already registered')
+    expect(() => svc.addLanguage({ id: 'bad locale', label: 'Bad', fallback: 'en' })).toThrow('not a BCP 47-style tag')
+    expect(() => svc.addLanguage({ id: '123', label: 'Numeric', fallback: 'en' })).toThrow('not a BCP 47-style tag')
+    expect(() => svc.addLanguage({ id: 'fr', label: '   ', fallback: 'en' })).toThrow('label must not be empty')
+    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'bad tag' })).toThrow('locale fallback')
+    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'de' })).toThrow('not registered')
   })
 
   it('rejects malformed locale ids before dictionary registration', () => {
     const { svc } = make()
-    expect(() => svc.register('ns', 'bad locale', { hello: 'Bad' }))
-      .toThrow('not a BCP 47-style tag')
-    expect(() => svc.register('ns', '123', { hello: 'Numeric' }))
-      .toThrow('not a BCP 47-style tag')
+    expect(() => svc.register('ns', 'bad locale', { hello: 'Bad' })).toThrow('not a BCP 47-style tag')
+    expect(() => svc.register('ns', '123', { hello: 'Numeric' })).toThrow('not a BCP 47-style tag')
     expect(svc.bind('ns')('hello')).toBe('hello')
   })
 
@@ -269,11 +273,9 @@ describe('LocaleRuntime', () => {
     svc.setLocale('fr-CA')
     removeFr()
     expect(svc.bind('ns')('base')).toBe('English')
-    expect(() => svc.addLanguage({ id: 'de', label: 'Deutsch', fallback: 'fr-CA' }))
-      .toThrow('locale fallback "fr" is not registered')
-    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'fr-CA' }))
-      .toThrow('fallback cycle')
-    expect(svc.getLocale().locales.map(locale => locale.id)).toEqual(['zh', 'en', 'fr-CA'])
+    expect(() => svc.addLanguage({ id: 'de', label: 'Deutsch', fallback: 'fr-CA' })).toThrow('locale fallback "fr" is not registered')
+    expect(() => svc.addLanguage({ id: 'fr', label: 'Français', fallback: 'fr-CA' })).toThrow('fallback cycle')
+    expect(svc.getLocale().locales.map((locale) => locale.id)).toEqual(['zh', 'en', 'fr-CA'])
   })
 
   it('adopts a saved external locale when its definition registers later', () => {
@@ -284,7 +286,7 @@ describe('LocaleRuntime', () => {
 
     svc.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
     expect(svc.getLocale().active).toBe('ja')
-    expect(events.map(snapshot => snapshot.active)).toEqual(['ja'])
+    expect(events.map((snapshot) => snapshot.active)).toEqual(['ja'])
     expect(host.set).not.toHaveBeenCalled()
   })
 
@@ -354,8 +356,9 @@ describe('LocaleRuntime', () => {
     expect(svc.getLocale().active).toBe('zh')
     const remove = svc.addLanguage({ id: 'ja', label: '日本語', fallback: 'en', default: true })
     expect(svc.getLocale().active).toBe('ja')
-    expect(() => svc.addLanguage({ id: 'pt-BR', label: 'Português', fallback: 'en', default: true }))
-      .toThrow('locale default language "ja" is already registered')
+    expect(() => svc.addLanguage({ id: 'pt-BR', label: 'Português', fallback: 'en', default: true })).toThrow(
+      'locale default language "ja" is already registered',
+    )
     remove()
     expect(svc.getLocale().active).toBe('zh')
   })

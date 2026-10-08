@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { DEFAULT_READ_MAX_LINES, ReadBlock as LocalizedReadBlock, type ReadBlockLine } from '../src/index.ts'
@@ -22,11 +22,11 @@ function lines(count: number, first = 1): ReadBlockLine[] {
 }
 
 function rowTexts(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class^="_line_"]')].map(row => row.textContent ?? '')
+  return [...container.querySelectorAll('[class^="_line_"]')].map((row) => row.textContent ?? '')
 }
 
 function gutters(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class^="_gutter_"]')].map(cell => cell.textContent ?? '')
+  return [...container.querySelectorAll('[class^="_gutter_"]')].map((cell) => cell.textContent ?? '')
 }
 
 describe('highlightLines', () => {
@@ -35,11 +35,11 @@ describe('highlightLines', () => {
     expect(result).not.toBeUndefined()
     expect(result).toHaveLength(2)
     // The keyword run carries a color style through a --shiki-* custom property.
-    const keyword = result![0]!.find(span => span.text === 'const')
+    const keyword = result![0]!.find((span) => span.text === 'const')
     expect(keyword?.style?.color).toContain('var(--shiki-')
     // Whitespace between tokens is a run of its own; the comment is line two.
-    expect(result![0]!.map(span => span.text).join('')).toBe('const x = 1')
-    expect(result![1]!.map(span => span.text).join('')).toBe('// c')
+    expect(result![0]!.map((span) => span.text).join('')).toBe('const x = 1')
+    expect(result![1]!.map((span) => span.text).join('')).toBe('// c')
   })
 
   it('colors every run through a --shiki-* custom property', () => {
@@ -73,16 +73,20 @@ describe('highlightLines', () => {
     // not, so the first call renders plain and imports the grammar, and a
     // subscriber fires once it registers, after which the same call highlights.
     let notified = 0
-    const stop = subscribeGrammarLoaded(() => { notified += 1 })
+    const stop = subscribeGrammarLoaded(() => {
+      notified += 1
+    })
     // First touch: grammar not loaded yet, so plain fallback while it imports.
     expect(highlightLines('def f(): pass', 'py')).toBeUndefined()
     // The import + loadLanguageSync resolve on a microtask; wait for the notify.
-    await vi.waitFor(() => { expect(notified).toBeGreaterThan(0) })
+    await vi.waitFor(() => {
+      expect(notified).toBeGreaterThan(0)
+    })
     expect(grammarLoadCount()).toBeGreaterThan(0)
     const result = highlightLines('def f(): pass', 'py')
     expect(result).not.toBeUndefined()
     // `def` is a python keyword and carries a --shiki-* color once highlighted.
-    const keyword = result!.flat().find(span => span.text === 'def')
+    const keyword = result!.flat().find((span) => span.text === 'def')
     expect(keyword?.style?.color).toContain('var(--shiki-')
     stop()
   })
@@ -96,18 +100,14 @@ describe('ReadBlock rows', () => {
   })
 
   it('highlights the content for a known language into token spans', () => {
-    const view = render(
-      <ReadBlock label="a.ts" lang="ts" lines={[{ number: 1, text: 'const a = 1' }]} totalLines={1} />,
-    )
+    const view = render(<ReadBlock label="a.ts" lang="ts" lines={[{ number: 1, text: 'const a = 1' }]} totalLines={1} />)
     const content = view.container.querySelector('[class^="_content_"]')
     expect(content?.querySelectorAll('span[style]').length).toBeGreaterThan(1)
     expect(content?.textContent).toBe('const a = 1')
   })
 
   it('renders the content as bare text with no span wrappers for an unknown language', () => {
-    const view = render(
-      <ReadBlock label="a.cob" lang="cobol" lines={[{ number: 1, text: 'IDENT DIVISION.' }]} totalLines={1} />,
-    )
+    const view = render(<ReadBlock label="a.cob" lang="cobol" lines={[{ number: 1, text: 'IDENT DIVISION.' }]} totalLines={1} />)
     const content = view.container.querySelector('[class^="_content_"]')
     expect(content?.querySelectorAll('span').length).toBe(0)
     expect(content?.textContent).toBe('IDENT DIVISION.')
@@ -172,9 +172,7 @@ describe('ReadBlock height cap', () => {
   })
 
   it('caps at the documented default when maxLines is absent', () => {
-    const view = render(
-      <ReadBlock label="a" lines={lines(DEFAULT_READ_MAX_LINES + 1)} totalLines={DEFAULT_READ_MAX_LINES + 1} />,
-    )
+    const view = render(<ReadBlock label="a" lines={lines(DEFAULT_READ_MAX_LINES + 1)} totalLines={DEFAULT_READ_MAX_LINES + 1} />)
     expect(rowTexts(view.container)).toHaveLength(DEFAULT_READ_MAX_LINES)
     expect(view.getByRole('button', { name: '展开其余 1 行' })).toBeTruthy()
   })
@@ -204,7 +202,11 @@ describe('ReadBlock copy', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     render(<ReadBlock label="a" lines={lines(10)} totalLines={10} maxLines={4} />)
     fireEvent.click(screen.getByRole('button', { name: '复制' }))
-    expect(writeText).toHaveBeenCalledWith(lines(10).map(line => line.text).join('\n'))
+    expect(writeText).toHaveBeenCalledWith(
+      lines(10)
+        .map((line) => line.text)
+        .join('\n'),
+    )
     expect(await screen.findByRole('button', { name: '复制成功' })).toBeTruthy()
   })
 

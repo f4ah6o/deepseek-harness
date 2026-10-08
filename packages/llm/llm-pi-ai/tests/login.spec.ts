@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import type { AuthorizationInteraction, AuthorizationNotice, AuthorizationPrompt } from '@deepseek-ai/dsh-authorization'
@@ -14,8 +14,8 @@ const login = vi.hoisted(() => vi.fn())
 // The whole of what this module does with pi-ai is run one provider's login
 // against a collection built with the harness store, so the collection is the
 // boundary worth observing; a real login would open a browser.
-vi.mock('../src/models.ts', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/models.ts')>(),
+vi.mock('../src/models.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/models.ts')>()),
   createModels: () => ({ setProvider: () => {}, login }),
 }))
 
@@ -46,7 +46,9 @@ function surface(answer = 'typed'): AuthorizationInteraction & {
   return {
     notices,
     prompts,
-    notify: (notice) => { notices.push(notice) },
+    notify: (notice) => {
+      notices.push(notice)
+    },
     prompt: (prompt) => {
       prompts.push(prompt)
       return Promise.resolve(answer)
@@ -67,17 +69,19 @@ async function attempt(
     await credentialStoreFrom(ctx).modify(providerId, () => Promise.resolve(granted))
     return granted
   })
-  await expect(ctx.authorization.begin({
-    key: request.key ?? CODEX,
-    interaction: ui,
-    ...request.method === undefined ? {} : { method: request.method },
-  })).resolves.toEqual({ status: 'authorized' })
+  await expect(
+    ctx.authorization.begin({
+      key: request.key ?? CODEX,
+      interaction: ui,
+      ...(request.method === undefined ? {} : { method: request.method }),
+    }),
+  ).resolves.toEqual({ status: 'authorized' })
   return ui
 }
 
 afterEach(async () => {
   login.mockReset()
-  await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
+  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 describe('pi-ai login flows', () => {
@@ -87,15 +91,14 @@ describe('pi-ai login flows', () => {
 
     // The OAuth-only provider is exactly the case this exists for: nothing
     // else could ever configure it.
-    expect(offered.find(entry => entry.key === CODEX)?.methods)
-      .toEqual([{ id: 'oauth', label: expect.stringContaining('ChatGPT') as string }])
+    expect(offered.find((entry) => entry.key === CODEX)?.methods).toEqual([
+      { id: 'oauth', label: expect.stringContaining('ChatGPT') as string },
+    ])
     // A provider offering both keeps both, the subscription login first.
-    expect(offered.find(entry => entry.key === recordKeyFor('anthropic'))?.methods.map(one => one.id))
-      .toEqual(['oauth', 'api-key'])
+    expect(offered.find((entry) => entry.key === recordKeyFor('anthropic'))?.methods.map((one) => one.id)).toEqual(['oauth', 'api-key'])
     // A key-only provider still gets a flow, because pi-ai collects the key
     // through its own prompt rather than leaving it to the settings form.
-    expect(offered.find(entry => entry.key === recordKeyFor('deepseek'))?.methods.map(one => one.id))
-      .toEqual(['api-key'])
+    expect(offered.find((entry) => entry.key === recordKeyFor('deepseek'))?.methods.map((one) => one.id)).toEqual(['api-key'])
   })
 
   it('runs the pi-ai auth type the chosen method names', async () => {
@@ -188,11 +191,13 @@ describe('pi-ai login flows', () => {
       return new Promise(() => {})
     })
 
-    await expect(ctx.authorization.begin({
-      key: CODEX,
-      interaction: surface(),
-      signal: controller.signal,
-    })).resolves.toEqual({ status: 'cancelled' })
+    await expect(
+      ctx.authorization.begin({
+        key: CODEX,
+        interaction: surface(),
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual({ status: 'cancelled' })
     expect(seen?.aborted).toBe(true)
   })
 })

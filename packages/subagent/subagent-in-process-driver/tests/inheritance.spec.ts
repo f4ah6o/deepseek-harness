@@ -4,7 +4,7 @@
  * `approval/policy: never`.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,11 +47,7 @@ async function setupWalled(script: Script): Promise<{ ctx: Context; parent: Agen
   await ctx.plugin(ApprovalService)
   await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = await ctx.agentLoop.create(
-    SessionId('parent'),
-    { provider: 'mock', model: 'mock' },
-    { cwd: workspace },
-  )
+  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: workspace })
   return { ctx, parent }
 }
 
@@ -70,12 +66,15 @@ function spawnRequest(parent: Agent) {
 }
 
 function toolResultTexts(agent: Agent): string[] {
-  return agent.session.snapshotEvents()
+  return agent.session
+    .snapshotEvents()
     .filter((event): event is SessionEvent<'tool/result'> => event.type === 'tool/result')
-    .map(event => event.data.message.content
-      .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-      .map(block => block.text)
-      .join(''))
+    .map((event) =>
+      event.data.message.content
+        .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+        .map((block) => block.text)
+        .join(''),
+    )
 }
 
 describe('in-process policy inheritance', () => {
@@ -86,7 +85,7 @@ describe('in-process policy inheritance', () => {
       parent.session.append('permission/preset', { preset })
       setSandboxMode(parent.session, 'danger-full-access')
       ctx.provide('permissionPresets', {
-        current: (session: Session) => session === parent.session ? preset : 'custom',
+        current: (session: Session) => (session === parent.session ? preset : 'custom'),
       } as never)
 
       const run = await startInProcessRun(spawnRequest(parent), {})
@@ -115,7 +114,7 @@ describe('in-process policy inheritance', () => {
     parent.session.append('permission/preset', { preset })
     let currentPreset: 'auto' | 'danger-full-access' = preset
     ctx.provide('permissionPresets', {
-      current: (session: Session) => session === parent.session ? currentPreset : 'custom',
+      current: (session: Session) => (session === parent.session ? currentPreset : 'custom'),
     } as never)
 
     const starting = startInProcessRun(spawnRequest(parent), { seed })
@@ -125,7 +124,7 @@ describe('in-process policy inheritance', () => {
     try {
       await run.result
       const child = run.localAgent as Agent
-      expect(child.session.snapshotEvents().filter(event => event.type === 'permission/preset')).toMatchObject([
+      expect(child.session.snapshotEvents().filter((event) => event.type === 'permission/preset')).toMatchObject([
         { data: { preset: seedPreset } },
         { data: { preset } },
       ])
@@ -142,10 +141,7 @@ describe('in-process policy inheritance', () => {
     // No parent approval override: the child pin must not depend on one.
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
     const parentLogLength = parent.session.snapshotEvents().length
-    script.push(
-      toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }),
-      textResponse('child done'),
-    )
+    script.push(toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }), textResponse('child done'))
 
     const run = await startInProcessRun(spawnRequest(parent), {})
     try {
@@ -164,16 +160,17 @@ describe('in-process policy inheritance', () => {
       expect(child.session.inheritedEventCount).toBe(0)
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
       expect(ctx.approval.overrideOf(child.session)).toBe('never')
-      const request = child.session.snapshotEvents().find(
-        (event): event is SessionEvent<'request/header'> => event.type === 'request/header',
-      )
-      const systemNode = child.session.snapshotEvents().find(
-        (event): event is SessionEvent<'system/message'> => event.type === 'system/message',
-      )
-      const runtimeContext = child.session.snapshotEvents().find(
-        (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
-          && event.data.source.kind === 'runtime-context',
-      )
+      const request = child.session
+        .snapshotEvents()
+        .find((event): event is SessionEvent<'request/header'> => event.type === 'request/header')
+      const systemNode = child.session
+        .snapshotEvents()
+        .find((event): event is SessionEvent<'system/message'> => event.type === 'system/message')
+      const runtimeContext = child.session
+        .snapshotEvents()
+        .find(
+          (event): event is SessionEvent<'user/message'> => event.type === 'user/message' && event.data.source.kind === 'runtime-context',
+        )
       if (request === undefined || systemNode === undefined || runtimeContext === undefined) {
         throw new Error('child request lacks its system node or runtime policy context')
       }
@@ -181,7 +178,7 @@ describe('in-process policy inheritance', () => {
       expect(runtimeContext.seq).toBeLessThan(request.seq)
       const contextText = runtimeContext.data.content
         .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-        .map(block => block.text)
+        .map((block) => block.text)
         .join('\n')
       expect(contextText).toContain('Current DSH file policy: read-only')
       expect(contextText).toContain('Approval prompts are disabled')
@@ -192,7 +189,7 @@ describe('in-process policy inheritance', () => {
       expect(child.session.surface.nodes[0]).toBe(systemNode.seq)
       const systemText = systemHead.content
         .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-        .map(block => block.text)
+        .map((block) => block.text)
         .join('\n')
       expect(systemText).not.toContain('Approval prompts are disabled')
       expect(systemText).not.toContain('You are a delegated subagent')
@@ -209,10 +206,7 @@ describe('in-process policy inheritance', () => {
     setSandboxMode(parent.session, 'workspace-write')
     const seed = parent.session.snapshotEvents()
     setSandboxMode(parent.session, 'read-only')
-    script.push(
-      toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }),
-      textResponse('child done'),
-    )
+    script.push(toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }), textResponse('child done'))
 
     const run = await startInProcessRun(spawnRequest(parent), { seed })
     try {
@@ -223,7 +217,7 @@ describe('in-process policy inheritance', () => {
       expect(child.session.inheritedEventCount).toBe(1)
       expect(child.session.firstLiveSeq).toBe(seed.length)
       // seq 1 is the constructor's end-seed marker.
-      expect(child.session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toMatchObject([
+      expect(child.session.snapshotEvents().filter((event) => event.type === 'sandbox/mode')).toMatchObject([
         { seq: 0, data: { mode: 'workspace-write' } },
         { seq: 2, data: { mode: 'read-only', source: 'delegation' } },
       ])
@@ -259,18 +253,15 @@ describe('in-process policy inheritance', () => {
     const script: Script = []
     const { parent } = await setupWalled(script)
     const allowed = join(workspace, 'default-allowed.txt')
-    script.push(
-      toolCallResponse('write', 'write', { file_path: allowed, content: 'fine' }),
-      textResponse('child done'),
-    )
+    script.push(toolCallResponse('write', 'write', { file_path: allowed, content: 'fine' }), textResponse('child done'))
 
     const run = await startInProcessRun(spawnRequest(parent), {})
     try {
       await run.result
       const child = run.localAgent as Agent
       expect(await readFile(allowed, 'utf8')).toBe('fine')
-      expect(child.session.snapshotEvents().some(event => event.type === 'sandbox/mode')).toBe(false)
-      expect(child.session.snapshotEvents().filter(event => event.type === 'approval/policy')).toMatchObject([
+      expect(child.session.snapshotEvents().some((event) => event.type === 'sandbox/mode')).toBe(false)
+      expect(child.session.snapshotEvents().filter((event) => event.type === 'approval/policy')).toMatchObject([
         { seq: 0, data: { policy: 'never', source: 'delegation' } },
       ])
       expect(child.session.firstLiveSeq).toBe(0)
@@ -307,14 +298,11 @@ describe('in-process policy inheritance', () => {
 
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(consulted).toBe(false)
-      expect(toolResultTexts(child).join('\n'))
-        .toContain('the user rejected escalating this operation to "workspace-write"')
-      const asked = child.session.snapshotEvents().find(
-        (event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked',
-      )
-      const decided = child.session.snapshotEvents().find(
-        (event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided',
-      )
+      expect(toolResultTexts(child).join('\n')).toContain('the user rejected escalating this operation to "workspace-write"')
+      const asked = child.session.snapshotEvents().find((event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked')
+      const decided = child.session
+        .snapshotEvents()
+        .find((event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided')
       expect(asked?.data.toolName).toBe('write')
       expect(decided?.data).toMatchObject({ id: asked?.data.id, outcome: 'rejected' })
     } finally {

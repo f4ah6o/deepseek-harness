@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { PromptAssembly, TOOL_ORDER_REST } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -14,7 +14,7 @@ async function mount(config: { personaPrefix?: string; toolOrder?: string[] } = 
 }
 
 function names(assembly: PromptAssembly): string[] {
-  return assembly.tools.map(t => t.name)
+  return assembly.tools.map((t) => t.name)
 }
 
 describe('SystemPrompt tool order', () => {
@@ -52,13 +52,13 @@ describe('SystemPrompt tool order', () => {
     const ctx = await mount({ toolOrder: ['todo_write', 'ghost', TOOL_ORDER_REST, 'wraith'] })
     ctx.systemPrompt.tools(() => ({ schemas: [tool('bash'), tool('todo_write')] }))
     await expect(ctx.systemPrompt.assemble()).rejects.toThrow(
-      'toolOrder lists unregistered tools "ghost", "wraith"; known tools: bash, todo_write')
+      'toolOrder lists unregistered tools "ghost", "wraith"; known tools: bash, todo_write',
+    )
   })
 
   it('names the single unregistered tool when no tools are registered at all', async () => {
     const ctx = await mount({ toolOrder: ['ghost', TOOL_ORDER_REST] })
-    await expect(ctx.systemPrompt.assemble()).rejects.toThrow(
-      'toolOrder lists unregistered tool "ghost"; known tools: (none)')
+    await expect(ctx.systemPrompt.assemble()).rejects.toThrow('toolOrder lists unregistered tool "ghost"; known tools: (none)')
   })
 
   it.each([
@@ -67,15 +67,14 @@ describe('SystemPrompt tool order', () => {
   ])('rejects a provider tool named like the reserved rest entry %s', async (_case, toolOrder) => {
     const ctx = await mount(toolOrder === undefined ? {} : { toolOrder })
     ctx.systemPrompt.tools(() => ({ schemas: [tool(TOOL_ORDER_REST)] }))
-    await expect(ctx.systemPrompt.assemble()).rejects.toThrow(
-      `tool provider returned reserved tool name "${TOOL_ORDER_REST}"`)
+    await expect(ctx.systemPrompt.assemble()).rejects.toThrow(`tool provider returned reserved tool name "${TOOL_ORDER_REST}"`)
   })
 
   it('keeps collection order between tools that share a name (stable sort)', async () => {
     const ctx = await mount()
     ctx.systemPrompt.tools(() => ({ schemas: [tool('dup', 'first'), tool('anchor'), tool('dup', 'second')] }))
     const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.tools.map(t => t.description)).toEqual(['anchor', 'first', 'second'])
+    expect(assembly.tools.map((t) => t.description)).toEqual(['anchor', 'first', 'second'])
   })
 
   it('canonicalizes BEFORE the assemble waterfall: listeners see the ordered list and own their own edits', async () => {
@@ -83,7 +82,7 @@ describe('SystemPrompt tool order', () => {
     ctx.systemPrompt.tools(() => ({ schemas: [tool('zulu'), tool('alpha')] }))
     let seen: string[] | undefined
     ctx.on('system-prompt/assemble', function (assembly, _context, next) {
-      seen = assembly.tools.map(t => t.name)
+      seen = assembly.tools.map((t) => t.name)
       // A listener-appended tool is NOT re-sorted — same contract as sections:
       // canonicalization applies to what the registry contributed, and a
       // listener owns the determinism of what it emits.

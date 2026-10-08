@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -6,9 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId, type Message } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import {
-  SESSION_FORMAT_VERSION, Session, SessionId, type SessionEvent, type UserMessage,
-} from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, SessionId, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
@@ -40,7 +38,7 @@ afterEach(async () => {
 })
 
 async function tempDir(name: string): Promise<string> {
-  const dir = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
+  const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
   tempDirs.push(dir)
   return dir
 }
@@ -65,7 +63,11 @@ async function setup(home: string, config: toolSkill.Config = {}): Promise<Conte
 function agentForCwd(cwd: string): Agent {
   const id = SessionId(`tool-skill-${cwd}`)
   const session = Session.create(id, [], {
-    version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
+    version: SESSION_FORMAT_VERSION,
+    id,
+    createdAt: 0,
+    cwd,
+    isSeeded: false,
   })
   return {
     ctx: new Context(),
@@ -77,9 +79,11 @@ function agentForCwd(cwd: string): Agent {
     send: () => {},
     followup: () => {},
     steer: () => {},
-    inject: () => { throw new Error('step-boundary catalog must not use agent.inject()') },
+    inject: () => {
+      throw new Error('step-boundary catalog must not use agent.inject()')
+    },
     cancel() {},
-    runMaintenance: task => task(new AbortController().signal),
+    runMaintenance: (task) => task(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
   }
 }
@@ -95,9 +99,11 @@ function sessionAgent(session: Session, id = 'tool-skill-agent'): Agent {
     send: () => {},
     followup: () => {},
     steer: () => {},
-    inject: () => { throw new Error('step-boundary catalog must not use agent.inject()') },
+    inject: () => {
+      throw new Error('step-boundary catalog must not use agent.inject()')
+    },
     cancel() {},
-    runMaintenance: task => task(new AbortController().signal),
+    runMaintenance: (task) => task(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
   }
   return agent
@@ -105,18 +111,20 @@ function sessionAgent(session: Session, id = 'tool-skill-agent'): Agent {
 
 function openMessageTurn(session: Session, turn = 1): void {
   session.append('turn/start', { turn })
-  session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text: `turn ${turn}` }],
-    source: { kind: 'user' },
-  }), { surfaceOp: 'append' })
+  session.append(
+    'user/message',
+    createUserMessage({
+      content: [{ type: 'text', text: `turn ${turn}` }],
+      source: { kind: 'user' },
+    }),
+    { surfaceOp: 'append' },
+  )
 }
 
 async function fireStep(ctx: Context, agent: Agent, turn: number, step: number): Promise<void> {
   const signal = new AbortController().signal
-  const decision = await agentEvents(ctx, agent).waterfall(
-    'agent/pre-step',
-    { messages: [], turn, step, signal },
-    () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
+  const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [], turn, step, signal }, () =>
+    Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
     for (const message of decision.messages) {
@@ -125,37 +133,43 @@ async function fireStep(ctx: Context, agent: Agent, turn: number, step: number):
   }
 }
 
-async function proposeStep(
-  ctx: Context,
-  agent: Agent,
-  messages: UserMessage[],
-): Promise<PreStepDecision> {
+async function proposeStep(ctx: Context, agent: Agent, messages: UserMessage[]): Promise<PreStepDecision> {
   const signal = new AbortController().signal
-  return await agentEvents(ctx, agent).waterfall(
-    'agent/pre-step',
-    { messages, turn: 1, step: 1, signal },
-    () => Promise.resolve({ kind: 'enter' as const, messages }),
+  return await agentEvents(ctx, agent).waterfall('agent/pre-step', { messages, turn: 1, step: 1, signal }, () =>
+    Promise.resolve({ kind: 'enter' as const, messages }),
   )
 }
 
 function catalogMessages(session: Session): Extract<SessionEvent, { type: 'user/message' }>[] {
-  return session.snapshotEvents().filter((event): event is Extract<SessionEvent, { type: 'user/message' }> => event.type === 'user/message'
-    && event.data.source.kind === 'skill-catalog')
+  return session
+    .snapshotEvents()
+    .filter(
+      (event): event is Extract<SessionEvent, { type: 'user/message' }> =>
+        event.type === 'user/message' && event.data.source.kind === 'skill-catalog',
+    )
 }
 
 function readableCatalog(event: Extract<SessionEvent, { type: 'user/message' }>): boolean {
   const entries = (event.data.source as { entries?: unknown }).entries
-  return Array.isArray(entries)
-    && entries.every(entry => typeof entry === 'object' && entry !== null
-      && typeof (entry as { name?: unknown }).name === 'string'
-      && typeof (entry as { description?: unknown }).description === 'string')
+  return (
+    Array.isArray(entries) &&
+    entries.every(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as { name?: unknown }).name === 'string' &&
+        typeof (entry as { description?: unknown }).description === 'string',
+    )
+  )
 }
 
 function catalogContent(entries: string[]): Message['content'] {
-  return [{
-    type: 'text',
-    text: ['<system-reminder>', '<available_skills>', ...entries, '</available_skills>', '</system-reminder>'].join('\n'),
-  }]
+  return [
+    {
+      type: 'text',
+      text: ['<system-reminder>', '<available_skills>', ...entries, '</available_skills>', '</system-reminder>'].join('\n'),
+    },
+  ]
 }
 
 async function composePrefix(ctx: Context, cwd: string, signal = new AbortController().signal): Promise<Message[]> {
@@ -163,10 +177,8 @@ async function composePrefix(ctx: Context, cwd: string, signal = new AbortContro
 }
 
 async function composePrefixForAgent(ctx: Context, agent: Agent, signal = new AbortController().signal): Promise<Message[]> {
-  const decision = await agentEvents(ctx, agent).waterfall(
-    'agent/pre-step',
-    { messages: [], turn: 1, step: 1, signal },
-    () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
+  const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', { messages: [], turn: 1, step: 1, signal }, () =>
+    Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
     for (const message of decision.messages) {
@@ -179,9 +191,16 @@ async function composePrefixForAgent(ctx: Context, agent: Agent, signal = new Ab
 async function mintAgentScope(ctx: Context, subject: string | Agent): Promise<{ agent: Agent; scope: Scope }> {
   const agent = typeof subject === 'string' ? agentForCwd(subject) : subject
   let scope!: Scope
-  await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) }, {
-    inject: ['tools'],
-  }))
+  await ctx.plugin(
+    Object.assign(
+      (inner: Context) => {
+        scope = createScope(inner, agent)
+      },
+      {
+        inject: ['tools'],
+      },
+    ),
+  )
   return { agent, scope }
 }
 
@@ -197,7 +216,7 @@ describe('dsh-tool-skill', () => {
     ctx.skills.register({ name: 'lifecycle-skill', description: 'Lifecycle', source: 'runtime', content: 'body' })
 
     const fiber = await ctx.plugin(toolSkill)
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['skill'])
+    expect(ctx.tools.schemas().map((tool) => tool.name)).toEqual(['skill'])
     expect(await composePrefix(ctx, '/workspace')).toHaveLength(1)
     expect(ctx.tools.get('skill')?.presentCall?.({ name: 'project-skill' })).toEqual({
       card: 'generic',
@@ -210,7 +229,7 @@ describe('dsh-tool-skill', () => {
     expect(await composePrefix(ctx, '/workspace')).toEqual([])
 
     toolSkill.apply(ctx)
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['skill'])
+    expect(ctx.tools.schemas().map((tool) => tool.name)).toEqual(['skill'])
   })
 
   it('forwards the step abort signal to skill discovery', async () => {
@@ -303,23 +322,25 @@ describe('dsh-tool-skill', () => {
             { name: 'z-skill', description: 'Long description Long description Long descript...' },
           ],
         },
-        content: [{
-          type: 'text',
-          text: [
-            '<system-reminder>',
-            'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
-            '',
-            '<available_skills>',
-            '- `a-skill`: Use {{placeholder}} &lt;safely&gt; &amp; carefully.',
-            '- `model-only-skill`: Model-only skill.',
-            '- `z-skill`: Long description Long description Long descript...',
-            '</available_skills>',
-            '',
-            "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
-            'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
-            '</system-reminder>',
-          ].join('\n'),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: [
+              '<system-reminder>',
+              'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
+              '',
+              '<available_skills>',
+              '- `a-skill`: Use {{placeholder}} &lt;safely&gt; &amp; carefully.',
+              '- `model-only-skill`: Model-only skill.',
+              '- `z-skill`: Long description Long description Long descript...',
+              '</available_skills>',
+              '',
+              "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
+              'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
+              '</system-reminder>',
+            ].join('\n'),
+          },
+        ],
       },
     ])
     const rendered = JSON.stringify(prefix[1])
@@ -539,18 +560,26 @@ describe('dsh-tool-skill', () => {
     const session = Session.create(SessionId('catalog-resume'))
     const agent = sessionAgent(session)
     openMessageTurn(session)
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'prose a reader cannot rely on' }],
-      source: {
-        kind: 'skill-catalog',
-        form: 'catalog',
-        entries: [{ name: 'old-skill', description: 'Old skill' }],
-      },
-    }), { surfaceOp: 'append' })
-    session.append('user/message', createUserMessage({
-      content: catalogContent(['- `resumed-skill`: Resumed skill']),
-      source: { kind: 'dsh-tool-skill' },
-    }), { surfaceOp: 'append' })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'prose a reader cannot rely on' }],
+        source: {
+          kind: 'skill-catalog',
+          form: 'catalog',
+          entries: [{ name: 'old-skill', description: 'Old skill' }],
+        },
+      }),
+      { surfaceOp: 'append' },
+    )
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: catalogContent(['- `resumed-skill`: Resumed skill']),
+        source: { kind: 'dsh-tool-skill' },
+      }),
+      { surfaceOp: 'append' },
+    )
 
     await fireStep(ctx, agent, 1, 1)
 
@@ -597,17 +626,21 @@ describe('dsh-tool-skill', () => {
       { kind: 'skill-catalog', form: 'catalog', entries: [{ name: 'x' }] },
       { kind: 'skill-catalog', form: 'catalog', entries: [{ description: 'no name' }] },
     ]) {
-      session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'unreadable catalog' }],
-        source: source as never,
-      }), { surfaceOp: 'append' })
+      session.append(
+        'user/message',
+        createUserMessage({
+          content: [{ type: 'text', text: 'unreadable catalog' }],
+          source: source as never,
+        }),
+        { surfaceOp: 'append' },
+      )
     }
 
     await expect(fireStep(ctx, agent, 1, 1)).resolves.toBeUndefined()
 
     // None of the six counted as published, so the live catalog lands as a
     // first publication rather than a replacement.
-    const published = catalogMessages(session).filter(event => readableCatalog(event))
+    const published = catalogMessages(session).filter((event) => readableCatalog(event))
     expect(published).toHaveLength(1)
     expect(published[0]?.data.source).toMatchObject({ kind: 'skill-catalog', form: 'catalog' })
     expect(published[0]?.data.source).not.toHaveProperty('update')
@@ -622,8 +655,7 @@ describe('dsh-tool-skill', () => {
     openMessageTurn(session)
     Object.defineProperty(session, 'eventAt', { value: () => undefined })
 
-    await expect(fireStep(ctx, agent, 1, 1))
-      .rejects.toThrow('skill catalog cannot read seq 1 below the current Session length')
+    await expect(fireStep(ctx, agent, 1, 1)).rejects.toThrow('skill catalog cannot read seq 1 below the current Session length')
   })
 
   it('re-establishes the current catalog after compaction hides its durable message', async () => {
@@ -641,13 +673,17 @@ describe('dsh-tool-skill', () => {
     expect(JSON.stringify(await composePrefixForAgent(ctx, agent))).toContain('first-skill')
     const initial = catalogMessages(session)[0]
     if (initial === undefined) throw new Error('expected initial catalog')
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'compacted history' }],
-      source: checkpointSource('skill-compaction'),
-    }), {
-      surfaceOp: { op: 'replace', startSeq: initial.seq, endSeq: initial.seq },
-      sourceEventSeqs: [initial.seq],
-    })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'compacted history' }],
+        source: checkpointSource('skill-compaction'),
+      }),
+      {
+        surfaceOp: { op: 'replace', startSeq: initial.seq, endSeq: initial.seq },
+        sourceEventSeqs: [initial.seq],
+      },
+    )
 
     await fireStep(ctx, agent, 1, 1)
 
@@ -771,14 +807,16 @@ describe('dsh-tool-skill', () => {
     const ctx = await setup(home)
     ctx.skills.register({ name: 'listed-skill', description: 'Listed', source: 'runtime', content: 'body' })
     const { agent, scope } = await mintAgentScope(ctx, '/workspace')
-    scope.ctx.tools.register(defineContentToolFixture({
-      name: 'skill',
-      description: 'A scoped tool with unrelated semantics.',
-      parameters: {},
-      execute() {
-        return Promise.resolve([{ type: 'text', text: 'shadow' }])
-      },
-    }))
+    scope.ctx.tools.register(
+      defineContentToolFixture({
+        name: 'skill',
+        description: 'A scoped tool with unrelated semantics.',
+        parameters: {},
+        execute() {
+          return Promise.resolve([{ type: 'text', text: 'shadow' }])
+        },
+      }),
+    )
 
     expect(ctx.tools.get('skill', agent)).not.toBe(ctx.tools.get('skill'))
     expect(await composePrefixForAgent(ctx, agent)).toEqual([])
@@ -824,18 +862,20 @@ describe('dsh-tool-skill', () => {
     const block = result.content[0]
     expect(block?.type).toBe('text')
     if (block?.type !== 'text') throw new Error('expected text skill result')
-    expect(block.text).toBe([
-      '<skill_content name="project-skill">',
-      '<skill_resources>',
-      `Base directory for this skill: ${join(project, '.dsh/skills/project-skill')}`,
-      'Resolve relative paths mentioned by this skill against the base directory before using them. Load referenced resources only as needed.',
-      '</skill_resources>',
-      '',
-      '<skill_instructions>',
-      'Project instructions.',
-      '</skill_instructions>',
-      '</skill_content>',
-    ].join('\n'))
+    expect(block.text).toBe(
+      [
+        '<skill_content name="project-skill">',
+        '<skill_resources>',
+        `Base directory for this skill: ${join(project, '.dsh/skills/project-skill')}`,
+        'Resolve relative paths mentioned by this skill against the base directory before using them. Load referenced resources only as needed.',
+        '</skill_resources>',
+        '',
+        '<skill_instructions>',
+        'Project instructions.',
+        '</skill_instructions>',
+        '</skill_content>',
+      ].join('\n'),
+    )
     expect(block.text).not.toContain('# Skill:')
   })
 
@@ -866,16 +906,37 @@ describe('dsh-tool-skill', () => {
       content: 'Provider instructions.',
     })
 
-    const opaque = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c2'), name: 'skill', arguments: { name: 'opaque-skill' } })
-    const url = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c3'), name: 'skill', arguments: { name: 'url-skill' } })
-    const provider = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c4'), name: 'skill', arguments: { name: 'provider-skill' } })
+    const opaque = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c2'),
+      name: 'skill',
+      arguments: { name: 'opaque-skill' },
+    })
+    const url = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c3'),
+      name: 'skill',
+      arguments: { name: 'url-skill' },
+    })
+    const provider = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c4'),
+      name: 'skill',
+      arguments: { name: 'provider-skill' },
+    })
 
     if (opaque.content[0]?.type !== 'text' || url.content[0]?.type !== 'text' || provider.content[0]?.type !== 'text') {
       throw new Error('expected text tool results')
     }
-    expect(opaque.content[0].text).toContain('<skill_resources>\nResources for this skill: runtime memory\nLoad referenced resources only as needed.\n</skill_resources>')
-    expect(url.content[0].text).toContain('<skill_resources>\nBase URL for this skill: https://skills.example.test/url-skill\nResolve relative URLs mentioned by this skill against the base URL before using them. Load referenced resources only as needed.\n</skill_resources>')
-    expect(provider.content[0].text).toContain('<skill_resources>\nResources for this skill are managed by provider "runtime".\nLoad referenced resources only as needed.\n</skill_resources>')
+    expect(opaque.content[0].text).toContain(
+      '<skill_resources>\nResources for this skill: runtime memory\nLoad referenced resources only as needed.\n</skill_resources>',
+    )
+    expect(url.content[0].text).toContain(
+      '<skill_resources>\nBase URL for this skill: https://skills.example.test/url-skill\nResolve relative URLs mentioned by this skill against the base URL before using them. Load referenced resources only as needed.\n</skill_resources>',
+    )
+    expect(provider.content[0].text).toContain(
+      '<skill_resources>\nResources for this skill are managed by provider "runtime".\nLoad referenced resources only as needed.\n</skill_resources>',
+    )
   })
 
   it('rejects an unknown resource-base kind at the canonical output boundary', async () => {
@@ -890,7 +951,12 @@ describe('dsh-tool-skill', () => {
       content: 'Rogue instructions.',
     })
 
-    const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c5'), name: 'skill', arguments: { name: 'rogue-resource-skill' } })
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c5'),
+      name: 'skill',
+      arguments: { name: 'rogue-resource-skill' },
+    })
 
     expect(result.isError).toBe(true)
     expect(result.error?.info?.code).toBe('INVALID_TOOL_OUTPUT')
@@ -902,7 +968,10 @@ describe('dsh-tool-skill', () => {
   it('returns isError for unknown, invalid, and model-disabled skills', async () => {
     const home = await tempDir('tool-errors')
     await writeSkill(join(home, '.dsh/skills'), 'hidden-skill', 'Hidden skill', 'Hidden instructions.')
-    await writeFile(join(home, '.dsh/skills/hidden-skill/SKILL.md'), '---\nname: hidden-skill\ndescription: Hidden skill\ndisable-model-invocation: true\n---\n\nHidden instructions.\n')
+    await writeFile(
+      join(home, '.dsh/skills/hidden-skill/SKILL.md'),
+      '---\nname: hidden-skill\ndescription: Hidden skill\ndisable-model-invocation: true\n---\n\nHidden instructions.\n',
+    )
     const ctx = await setup(home)
     ctx.skills.register({
       name: 'model-only-skill',
@@ -912,10 +981,30 @@ describe('dsh-tool-skill', () => {
       content: 'Model-only instructions.',
     })
 
-    const unknown = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'skill', arguments: { name: 'missing' } })
-    const invalid = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c2'), name: 'skill', arguments: { name: 'Bad_Name' } })
-    const disabled = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c3'), name: 'skill', arguments: { name: 'hidden-skill' } })
-    const modelOnly = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c4'), name: 'skill', arguments: { name: 'model-only-skill' } })
+    const unknown = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c1'),
+      name: 'skill',
+      arguments: { name: 'missing' },
+    })
+    const invalid = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c2'),
+      name: 'skill',
+      arguments: { name: 'Bad_Name' },
+    })
+    const disabled = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c3'),
+      name: 'skill',
+      arguments: { name: 'hidden-skill' },
+    })
+    const modelOnly = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c4'),
+      name: 'skill',
+      arguments: { name: 'model-only-skill' },
+    })
 
     expect(unknown.isError).toBe(true)
     expect(invalid.isError).toBe(true)
@@ -974,9 +1063,24 @@ describe('dsh-tool-skill', () => {
       },
     }))
 
-    const denied = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c6'), name: 'skill', arguments: { name: 'denied-skill' } })
-    const raced = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c7'), name: 'skill', arguments: { name: 'policy-race-skill' } })
-    const vanished = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c8'), name: 'skill', arguments: { name: 'vanishing-skill' } })
+    const denied = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c6'),
+      name: 'skill',
+      arguments: { name: 'denied-skill' },
+    })
+    const raced = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c7'),
+      name: 'skill',
+      arguments: { name: 'policy-race-skill' },
+    })
+    const vanished = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: ToolCallId('c8'),
+      name: 'skill',
+      arguments: { name: 'vanishing-skill' },
+    })
 
     expect(denied.isError).toBe(true)
     expect(raced.isError).toBe(true)
@@ -1022,7 +1126,7 @@ describe('user-explicit invocation injection', () => {
     const second = gesture('plain follow-up prose')
     const decision = await proposeStep(ctx, agent, [first, second])
     if (decision.kind !== 'enter') throw new Error('expected enter')
-    const kinds = decision.messages.map(message => (message.source as { kind: string }).kind)
+    const kinds = decision.messages.map((message) => (message.source as { kind: string }).kind)
     // Background injections (the catalog here) sit between the claimed batch
     // and the invoked body: the material the model must act on comes last.
     expect(kinds.slice(0, 2)).toEqual(['user', 'user'])
@@ -1041,20 +1145,26 @@ describe('user-explicit invocation injection', () => {
     const { ctx, agent } = await invokeHarness()
     const decision = await proposeStep(ctx, agent, [gesture('/shared-skill go')])
     if (decision.kind !== 'enter') throw new Error('expected enter')
-    expect(decision.messages.some(message =>
-      (message.source as { kind?: string; name?: string }).kind === 'skill-invocation'
-      && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
+    expect(
+      decision.messages.some(
+        (message) =>
+          (message.source as { kind?: string; name?: string }).kind === 'skill-invocation' &&
+          (message.source as { name?: string }).name === 'shared-skill',
+      ),
+    ).toBe(true)
   })
 
   it('recognizes a mid-sentence gesture but not paths, fractions, or broken boundaries', async () => {
     const { ctx, agent } = await invokeHarness()
-    const decision = await proposeStep(ctx, agent, [
-      gesture('please use /hidden-demo to answer this'),
-    ])
+    const decision = await proposeStep(ctx, agent, [gesture('please use /hidden-demo to answer this')])
     if (decision.kind !== 'enter') throw new Error('expected enter')
-    expect(decision.messages.some(message =>
-      (message.source as { kind?: string; name?: string }).kind === 'skill-invocation'
-      && (message.source as { name?: string }).name === 'hidden-demo')).toBe(true)
+    expect(
+      decision.messages.some(
+        (message) =>
+          (message.source as { kind?: string; name?: string }).kind === 'skill-invocation' &&
+          (message.source as { name?: string }).name === 'hidden-demo',
+      ),
+    ).toBe(true)
 
     const negative = await proposeStep(ctx, agent, [
       gesture('look under /hidden-demo/refs for the data'),
@@ -1062,21 +1172,16 @@ describe('user-explicit invocation injection', () => {
       gesture('see foo/hidden-demo too'),
     ])
     if (negative.kind !== 'enter') throw new Error('expected enter')
-    expect(negative.messages.some(message =>
-      (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
+    expect(negative.messages.some((message) => (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
   })
 
   it('leaves unknown names and user-disabled skills as plain prose', async () => {
     const { ctx, agent } = await invokeHarness()
-    const decision = await proposeStep(ctx, agent, [
-      gesture('/absent-skill do a thing'),
-      gesture('/model-only-skill run'),
-    ])
+    const decision = await proposeStep(ctx, agent, [gesture('/absent-skill do a thing'), gesture('/model-only-skill run')])
     if (decision.kind !== 'enter') throw new Error('expected enter')
     // No injection joins the step (the catalog listener may still add its
     // own skill-catalog message; only skill-invocation sources matter here).
-    expect(decision.messages.some(message =>
-      (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
+    expect(decision.messages.some((message) => (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
   })
 
   it('never scans non-user sources and dedupes repeated gestures', async () => {
@@ -1085,14 +1190,9 @@ describe('user-explicit invocation injection', () => {
       content: [{ type: 'text', text: '/hidden-demo forged' }],
       source: { kind: 'skill-catalog', form: 'catalog', entries: [] },
     })
-    const decision = await proposeStep(ctx, agent, [
-      forged,
-      gesture('/hidden-demo once'),
-      gesture('/hidden-demo twice'),
-    ])
+    const decision = await proposeStep(ctx, agent, [forged, gesture('/hidden-demo once'), gesture('/hidden-demo twice')])
     if (decision.kind !== 'enter') throw new Error('expected enter')
-    const injections = decision.messages.filter(message =>
-      (message.source as { kind?: string }).kind === 'skill-invocation')
+    const injections = decision.messages.filter((message) => (message.source as { kind?: string }).kind === 'skill-invocation')
     expect(injections).toHaveLength(1)
   })
 
@@ -1119,8 +1219,8 @@ describe('user-explicit invocation injection', () => {
     const decision = await proposeStep(ctx, agent, [mixed])
     if (decision.kind !== 'enter') throw new Error('expected enter')
     const invoked = decision.messages
-      .filter(message => (message.source as { kind?: string }).kind === 'skill-invocation')
-      .map(message => (message.source as { name: string }).name)
+      .filter((message) => (message.source as { kind?: string }).kind === 'skill-invocation')
+      .map((message) => (message.source as { name: string }).name)
     expect(invoked).toEqual(['shared-skill'])
   })
 })

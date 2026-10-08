@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { spawn } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { clearedProxyEnv, installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { scrubbedParentEnv } from '../src/index.ts'
@@ -34,19 +34,25 @@ beforeAll(async () => {
     socket.end()
   })
   const address = await new Promise<AddressInfo>((resolve) => {
-    proxy.listen(0, '127.0.0.1', () => { resolve(proxy.address() as AddressInfo) })
+    proxy.listen(0, '127.0.0.1', () => {
+      resolve(proxy.address() as AddressInfo)
+    })
   })
   proxyUrl = `http://127.0.0.1:${String(address.port)}`
 })
 
 afterAll(async () => {
-  await new Promise<void>((resolve) => { proxy.close(() => { resolve() }) })
+  await new Promise<void>((resolve) => {
+    proxy.close(() => {
+      resolve()
+    })
+  })
 })
 
 beforeEach(() => {
   seen = []
   const names = Object.keys(clearedProxyEnv())
-  saved = Object.fromEntries(names.map(name => [name, process.env[name]]))
+  saved = Object.fromEntries(names.map((name) => [name, process.env[name]]))
   for (const name of names) Reflect.deleteProperty(process.env, name)
 })
 
@@ -62,12 +68,19 @@ function childFetch(target: string, env: Record<string, string>): Promise<string
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      ['-e', `fetch(${JSON.stringify(target)}).then(r=>r.text()).then(t=>console.log(t)).catch(e=>console.log('ERR'+String(e.cause?.code)))`],
+      [
+        '-e',
+        `fetch(${JSON.stringify(target)}).then(r=>r.text()).then(t=>console.log(t)).catch(e=>console.log('ERR'+String(e.cause?.code)))`,
+      ],
       { env, stdio: ['ignore', 'pipe', 'ignore'] },
     )
     let out = ''
-    child.stdout.on('data', (chunk: Buffer) => { out += chunk.toString() })
-    child.on('close', () => { resolve(out.trim()) })
+    child.stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    child.on('close', () => {
+      resolve(out.trim())
+    })
   })
 }
 
@@ -120,10 +133,12 @@ describe('child process egress', () => {
     process.env.HTTP_PROXY = proxyUrl
     process.env.https_proxy = 'socks5://127.0.0.1:1080'
     const dispose = await installProxyFromEnvironment(
-      createLaunchEnvironmentSnapshot([{
-        source: 'process',
-        values: { HTTP_PROXY: proxyUrl, https_proxy: 'socks5://127.0.0.1:1080' },
-      }]),
+      createLaunchEnvironmentSnapshot([
+        {
+          source: 'process',
+          values: { HTTP_PROXY: proxyUrl, https_proxy: 'socks5://127.0.0.1:1080' },
+        },
+      ]),
       () => undefined,
     )
     try {

@@ -13,7 +13,7 @@ import { formatSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { isSpilledShellCall, terminalCardModel } from '../src/client/tool/models/terminal-card-model.ts'
 
 const spillReference = {
@@ -52,7 +52,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
           return { ...request, cwd: process.cwd(), timeoutMs: 120_000 }
         }
         async run(spec: PtcRunSpec): Promise<PtcRunResult> {
-          const tool = spec.bindings.find(binding => binding.global === 'tools')?.functions[name]
+          const tool = spec.bindings.find((binding) => binding.global === 'tools')?.functions[name]
           if (tool === undefined) throw new Error('missing fixture binding')
           const blocks = await tool(shellArgs)
           expect(blocks).toEqual([{ type: 'text', text }])
@@ -61,15 +61,21 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
       }
       await ctx.plugin(BindingRuntime)
     }
-    ctx.effect(() => ctx.tools.register(defineContentToolFixture({
-      name,
-      description: 'Return deterministic shell text without spawning a process.',
-      parameters: {
-        command: { type: 'string', required: true },
-        description: { type: 'string', required: true },
-      },
-      async execute() { return [{ type: 'text', text }] },
-    })))
+    ctx.effect(() =>
+      ctx.tools.register(
+        defineContentToolFixture({
+          name,
+          description: 'Return deterministic shell text without spawning a process.',
+          parameters: {
+            command: { type: 'string', required: true },
+            description: { type: 'string', required: true },
+          },
+          async execute() {
+            return [{ type: 'text', text }]
+          },
+        }),
+      ),
+    )
     const session = Session.create(SessionId('spill-terminal'))
     // The tool pipeline reads only the owner session; no agent loop runs here.
     const agent = { session } as Agent
@@ -79,10 +85,12 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
       agent,
       signal: new AbortController().signal,
       name: nested ? 'run_code' : name,
-      arguments: nested ? {
-        code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); return blocks[0].text === ${JSON.stringify(text)};`,
-        description: 'Dispatch shell fixture through the tool pipeline',
-      } : shellArgs,
+      arguments: nested
+        ? {
+            code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); return blocks[0].text === ${JSON.stringify(text)};`,
+            description: 'Dispatch shell fixture through the tool pipeline',
+          }
+        : shellArgs,
     })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('shell fixture execution failed')
@@ -90,23 +98,37 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
     let block: ToolResultNode
     if (nested) {
       expect(result.value).toMatchObject({ result: true })
-      const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
+      const dispatches = session.snapshotEvents().filter((event) => event.type === 'tool/ptc-dispatch')
       expect(dispatches).toHaveLength(1)
       const event = dispatches[0]!
       block = {
-        kind: 'tool-result', seq: event.seq, time: event.time, callTime: null,
-        callId: event.data.subCallId, parentCallId: event.data.parentCallId,
-        name: event.data.name, args: PartialArguments.fromText(JSON.stringify(event.data.arguments)),
+        kind: 'tool-result',
+        seq: event.seq,
+        time: event.time,
+        callTime: null,
+        callId: event.data.subCallId,
+        parentCallId: event.data.parentCallId,
+        name: event.data.name,
+        args: PartialArguments.fromText(JSON.stringify(event.data.arguments)),
         call: { name: event.data.name, argsRaw: JSON.stringify(event.data.arguments) },
-        content: event.data.content, isError: event.data.isError, subCalls: [],
+        content: event.data.content,
+        isError: event.data.isError,
+        subCalls: [],
       }
     } else {
       expect(result.value).toEqual([{ type: 'text', text }])
       block = {
-        kind: 'tool-result', seq: 1, time: 1, callTime: null, callId,
-        name, args: PartialArguments.fromText(JSON.stringify(shellArgs)),
+        kind: 'tool-result',
+        seq: 1,
+        time: 1,
+        callTime: null,
+        callId,
+        name,
+        args: PartialArguments.fromText(JSON.stringify(shellArgs)),
         call: { name, argsRaw: JSON.stringify(shellArgs) },
-        content: result.content, isError: result.isError, subCalls: [],
+        content: result.content,
+        isError: result.isError,
+        subCalls: [],
       }
     }
     expect(block.isError).toBe(false)

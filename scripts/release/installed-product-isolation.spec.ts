@@ -3,7 +3,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { verifyInstalledProductIsolation } from './installed-product-isolation.ts'
 
 const roots: string[] = []
@@ -39,20 +39,15 @@ describe('installed default-product isolation', () => {
     expect(verifyInstalledProductIsolation(entry)).toBe(2)
   })
 
-  it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
-    'rejects a transitive experimental %s',
-    (section) => {
-      const root = fixture()
-      const entry = writePackage(root, '@deepseek-ai/dsh', { dependencies: { thirdParty: '1.0.0' } })
-      writePackage(root, 'thirdParty', { [section]: { [experimental]: '1.0.0' } })
+  it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])('rejects a transitive experimental %s', (section) => {
+    const root = fixture()
+    const entry = writePackage(root, '@deepseek-ai/dsh', { dependencies: { thirdParty: '1.0.0' } })
+    writePackage(root, 'thirdParty', { [section]: { [experimental]: '1.0.0' } })
 
-      expect(() => verifyInstalledProductIsolation(entry)).toThrow(
-        `@deepseek-ai/dsh -> thirdParty -> ${experimental}`,
-      )
-    },
-  )
+    expect(() => verifyInstalledProductIsolation(entry)).toThrow(`@deepseek-ai/dsh -> thirdParty -> ${experimental}`)
+  })
 
-  it('skips the entry package\'s optional bundles, which must be installed, and still rejects other experimental edges', () => {
+  it("skips the entry package's optional bundles, which must be installed, and still rejects other experimental edges", () => {
     const root = fixture()
     const entry = writePackage(root, '@deepseek-ai/dsh', { dependencies: { core: '1.0.0', [experimental]: '1.0.0' } })
     writePackage(root, 'core', {})
@@ -63,7 +58,9 @@ describe('installed default-product isolation', () => {
     expect(() => verifyInstalledProductIsolation(entry, [experimental])).toThrow(`core -> ${experimental}`)
 
     const missing = writePackage(root, '@deepseek-ai/dsh-missing', { dependencies: { absent: '1.0.0' } })
-    expect(() => verifyInstalledProductIsolation(missing, ['absent'])).toThrow('optional bundle is missing: @deepseek-ai/dsh-missing -> absent')
+    expect(() => verifyInstalledProductIsolation(missing, ['absent'])).toThrow(
+      'optional bundle is missing: @deepseek-ai/dsh-missing -> absent',
+    )
   })
 
   it('rejects experimental identities hidden behind an installed alias', () => {

@@ -2,13 +2,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { createUserMessage, LlmAdapter, LlmError, resolveRetryPolicy  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, LlmError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -21,18 +21,21 @@ let context: Context | undefined
 
 class TransientOnceAdapter extends LlmAdapter {
   requests = 0
-  private readonly retryPolicy = resolveRetryPolicy({
-    mode: 'normal',
-    maxRetries: 1,
-    retryableCodes: ['RATE_LIMIT', 'SERVER'],
-    backoff: { initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
-  }, 'loader test provider retryPolicy')
+  private readonly retryPolicy = resolveRetryPolicy(
+    {
+      mode: 'normal',
+      maxRetries: 1,
+      retryableCodes: ['RATE_LIMIT', 'SERVER'],
+      backoff: { initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+    },
+    'loader test provider retryPolicy',
+  )
 
   override providerRetryPolicy(_provider: string): ResolvedRetryPolicy {
     return this.retryPolicy
   }
 
-  async * stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
+  async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests += 1
     if (this.requests === 1) throw new LlmError('temporary outage', 'SERVER')
     yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -100,8 +103,8 @@ describe('real Loader composition', () => {
     ])
 
     const unloaded = [...loaded.loader.entries()]
-      .filter(entry => entry.fiber === undefined && !entry.disabled)
-      .map(entry => entry.options.name)
+      .filter((entry) => entry.fiber === undefined && !entry.disabled)
+      .map((entry) => entry.options.name)
     expect(unloaded).toEqual([])
     expect(loaded.agents).toBeInstanceOf(AgentRegistry)
 
@@ -112,7 +115,7 @@ describe('real Loader composition', () => {
     await agent.whenIdle()
 
     expect(adapter.requests).toBe(2)
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter((event) => event.type === 'llm/retry')).toHaveLength(1)
     expect(agent.session.deriveMessages().at(-1)).toMatchObject({
       role: 'assistant',
       content: [{ type: 'text', text: 'recovered' }],

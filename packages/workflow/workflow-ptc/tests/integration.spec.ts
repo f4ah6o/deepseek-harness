@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -63,10 +63,7 @@ return { prose, verdict: judged.verdict, confidence: judged.confidence }`,
   })
 
   it('a child that fails against its schema (nudges exhausted) reaches the script as null', async () => {
-    const { ctx, parent } = await setup([
-      textResponse('prose only'),
-      textResponse('still prose after the nudge'),
-    ])
+    const { ctx, parent } = await setup([textResponse('prose only'), textResponse('still prose after the nudge')])
     const run = ctx.workflowEngine.start({
       meta: { name: 'null-path', description: 'schema failure maps to null' },
       script: `const judged = await agent('judge it', { schema: { type: 'object', properties: { v: { type: 'string' } } } })
@@ -83,8 +80,12 @@ return { got: judged === null ? 'null' : 'value' }`,
     const { ctx, parent } = await setup([textResponse('child complete')])
     const logs: string[] = []
     const visible: boolean[] = []
-    ctx.on('workflow/log', (_info, message) => { logs.push(message) })
-    ctx.on('workflow/agent-start', (_info, child) => { visible.push(ctx.agents.get(child.childId) !== undefined) })
+    ctx.on('workflow/log', (_info, message) => {
+      logs.push(message)
+    })
+    ctx.on('workflow/agent-start', (_info, child) => {
+      visible.push(ctx.agents.get(child.childId) !== undefined)
+    })
     const run = ctx.workflowEngine.start({
       meta: { name: 'progress-burst', description: 'ordered progress and child visibility' },
       script: 'for (let index = 0; index < 200; index++) log(String(index)); return await agent("finish")',

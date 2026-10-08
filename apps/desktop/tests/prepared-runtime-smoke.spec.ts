@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { smokePreparedRuntime } from '../scripts/smoke-prepared-runtime.ts'
 import { smokeDesktopRuntime } from '../scripts/smoke-runtime.ts'
 import { verifyDesktopRuntime, writeDesktopRuntime } from '../src/runtime-tree.ts'
@@ -10,8 +10,10 @@ import { runtimeFixture } from './runtime-fixture.ts'
 const { payload } = vi.hoisted(() => ({ payload: vi.fn(async (..._args: unknown[]) => ({ stdout: '' })) }))
 vi.mock('node:child_process', async (importOriginal) => {
   const { promisify } = await import('node:util')
-  return { ...await importOriginal<typeof import('node:child_process')>(),
-    execFile: Object.assign(vi.fn(), { [promisify.custom]: payload }) }
+  return {
+    ...(await importOriginal<typeof import('node:child_process')>()),
+    execFile: Object.assign(vi.fn(), { [promisify.custom]: payload }),
+  }
 })
 vi.mock('../scripts/smoke-runtime.ts', () => ({ smokeDesktopRuntime: vi.fn(async () => {}) }))
 
@@ -28,10 +30,14 @@ it('smokes an x64 target verified on an arm64 build host without revalidating ag
   roots.push(root)
   const fixture = runtimeFixture(root)
   const target = { platform: 'darwin' as const, arch: 'x64' }
-  writeDesktopRuntime(root, fixture.release, fixture.sharedPackages.map(entry => entry.name), target)
+  writeDesktopRuntime(
+    root,
+    fixture.release,
+    fixture.sharedPackages.map((entry) => entry.name),
+    target,
+  )
   Object.defineProperty(process, 'arch', { ...hostArch, value: 'arm64' })
-  await expect(verifyDesktopRuntime(root, fixture.release.version, { ...target, arch: process.arch }))
-    .rejects.toThrow(/incompatible/u)
+  await expect(verifyDesktopRuntime(root, fixture.release.version, { ...target, arch: process.arch })).rejects.toThrow(/incompatible/u)
   const descriptor = await verifyDesktopRuntime(root, fixture.release.version, target)
   const electron = join(root, 'target-electron')
   const resources = join(root, 'runtime')

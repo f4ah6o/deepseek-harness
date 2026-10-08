@@ -3,9 +3,16 @@ import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import {
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
+} from './scaffold.ts'
 import { connectFreshWorkspace } from './support.ts'
 
 const expected = fileURLToPath(new URL('./expected/shortcuts-panels', import.meta.url))
@@ -42,12 +49,16 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
   beforeAll(async () => {
     browser = await chromium.launch()
   }, 120_000)
-  afterAll(async () => { await browser?.close() })
+  afterAll(async () => {
+    await browser?.close()
+  })
 
-  it.each([
-    { platform: 'MacIntel', primary: 'Meta', aria: 'Shift+Meta+,' },
-    { platform: 'Win32', primary: 'Control', aria: 'Control+Shift+,' },
-  ].flatMap(platform => (['left', 'right'] as const).map(closeFirst => ({ ...platform, closeFirst }))))('targets panes and closes $closeFirst first with $platform bindings', async ({ platform, primary, aria, closeFirst }) => {
+  it.each(
+    [
+      { platform: 'MacIntel', primary: 'Meta', aria: 'Shift+Meta+,' },
+      { platform: 'Win32', primary: 'Control', aria: 'Control+Shift+,' },
+    ].flatMap((platform) => (['left', 'right'] as const).map((closeFirst) => ({ ...platform, closeFirst }))),
+  )('targets panes and closes $closeFirst first with $platform bindings', async ({ platform, primary, aria, closeFirst }) => {
     const scaffold: WebScaffold = await launchWebScaffold({
       extraOverlayPath: [
         fileURLToPath(new URL('./fixtures/sidebar-terminal.patch.yml', import.meta.url)),
@@ -57,20 +68,39 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
     const context = await browser.newContext({ locale: 'en-US', timezoneId: 'Asia/Shanghai', viewport: { width: 1680, height: 1000 } })
     try {
       // Device-label/DOM branch evidence only; physical Windows input has its own acceptance checklist.
-      await context.addInitScript((value) => { Object.defineProperty(navigator, 'platform', { value }) }, platform)
+      await context.addInitScript((value) => {
+        Object.defineProperty(navigator, 'platform', { value })
+      }, platform)
       const page = await context.newPage()
       const tripwire = watchConsole(page)
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      const before = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
+      const before = new Set(scaffold.ctx.agents.list().map((agent) => agent.id))
       await connectFreshWorkspace(page, scaffold.workspaceCwd)
-      const agent = scaffold.ctx.agents.list().find(agent => !before.has(agent.id))
+      const agent = scaffold.ctx.agents.list().find((agent) => !before.has(agent.id))
       if (agent === undefined) throw new Error('The workspace did not create a Session')
       // A settled fixture activates the ordinary Session UI; this scenario issues no model requests.
       agent.session.append('turn/start', { turn: 1 })
-      agent.session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Prepare panel actions.' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+      agent.session.append(
+        'user/message',
+        createUserMessage({ content: [{ type: 'text', text: 'Prepare panel actions.' }], source: { kind: 'user' } }),
+        { surfaceOp: 'append' },
+      )
       agent.session.append('step/start', { turn: 1, step: 1 })
-      agent.session.append('assistant/message', { turn: 1, step: 1, stream: [], message: createMessage({ role: 'assistant', content: [{ type: 'text', text: 'Panel actions are ready.' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } }) }, { surfaceOp: 'append' })
+      agent.session.append(
+        'assistant/message',
+        {
+          turn: 1,
+          step: 1,
+          stream: [],
+          message: createMessage({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Panel actions are ready.' }],
+            source: { kind: 'model', provider: 'fixture', model: 'fixture' },
+          }),
+        },
+        { surfaceOp: 'append' },
+      )
       agent.session.append('step/end', { turn: 1, step: 1 })
       agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await scaffold.ctx.sessions.flush(agent.session)
@@ -82,10 +112,13 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       expect(await composer.innerText()).toContain('T5 draft remains unsent')
       const eventCount = agent.session.seq
       const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
-      const paneAppearance = () => panel.locator('[data-dockkit-pane]').evaluateAll(panes => panes.map((pane) => {
-        const style = getComputedStyle(pane)
-        return { outline: style.outlineStyle, shadow: style.boxShadow }
-      }))
+      const paneAppearance = () =>
+        panel.locator('[data-dockkit-pane]').evaluateAll((panes) =>
+          panes.map((pane) => {
+            const style = getComputedStyle(pane)
+            return { outline: style.outlineStyle, shadow: style.boxShadow }
+          }),
+        )
       const plainPane = { outline: 'none', shadow: 'none' }
 
       for (const { label, previous } of [
@@ -95,10 +128,10 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
         await bind(page, primary, label, previous)
         await composer.click()
         await page.keyboard.press(`${primary}+Shift+,`)
-        const openedPage = label === 'Browser' ? panel.getByPlaceholder('Enter an HTTP(S) address')
-          : panel.locator('[data-sidebar-terminal]')
+        const openedPage =
+          label === 'Browser' ? panel.getByPlaceholder('Enter an HTTP(S) address') : panel.locator('[data-sidebar-terminal]')
         await openedPage.waitFor()
-        const focusedAfterOpening = await panel.locator('[data-dockkit-pane]').evaluate(pane => pane.contains(document.activeElement))
+        const focusedAfterOpening = await panel.locator('[data-dockkit-pane]').evaluate((pane) => pane.contains(document.activeElement))
         expect(await paneAppearance()).toEqual([plainPane])
         await page.keyboard.press(`${primary}+Alt+W`)
         await expect.poll(() => page.locator('[data-sidebar-right-open]').count(), { message: label }).toBe(0)
@@ -136,7 +169,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       expect(await panel.locator('[data-sidebar-terminal]').count()).toBe(0)
       await page.keyboard.press('Escape')
       await page.getByRole('menu').waitFor({ state: 'detached' })
-      expect(await shellMenu.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await shellMenu.evaluate((element) => element === document.activeElement)).toBe(true)
 
       await bind(page, primary, 'Browser', 'Toggle right sidebar')
       const browserGuide = panel.locator('[data-sidebar-right-guide-entry="browser"]')
@@ -157,15 +190,18 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await panel.getByPlaceholder('Enter an HTTP(S) address').focus()
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab', { name: /Browser/ }).count()).toBe(2)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate((pane) => document.activeElement === pane)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
       await page.keyboard.press(`${primary}+Alt+W`)
       await expect.poll(() => panel.getByRole('tab', { name: /Browser/ }).count()).toBe(1)
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab', { name: /Browser/ }).count()).toBe(2)
       await expect.poll(() => panel.getByRole('button', { name: 'Disable sandbox restrictions', exact: true }).isEnabled()).toBe(true)
-      await compareOrRefreshGolden(join(expected, 'browser.expected.md'),
-        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd), mode)
+      await compareOrRefreshGolden(
+        join(expected, 'browser.expected.md'),
+        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd),
+        mode,
+      )
       await panel.locator('[data-dockkit-tab-close]').last().click()
       await panel.locator('[data-dockkit-tab-close]').click()
       await page.getByRole('button', { name: 'Open right sidebar', exact: true }).click()
@@ -173,11 +209,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await composer.click()
       await page.keyboard.press(`${primary}+Shift+,`)
       await panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).waitFor()
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate((pane) => document.activeElement === pane)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
       await page.keyboard.press(`${primary}+Shift+,`)
       expect(await panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).count()).toBe(1)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate((pane) => document.activeElement === pane)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
 
       await bind(page, primary, 'Toggle panel fullscreen', 'Workspace files')
@@ -186,7 +222,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       expect(await page.locator('[data-sidebar-right-panel="fullscreen"]').count()).toBe(0)
       const filesTab = panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' })
       await filesTab.focus()
-      await expect.poll(() => filesTab.evaluate(element => document.activeElement === element)).toBe(true)
+      await expect.poll(() => filesTab.evaluate((element) => document.activeElement === element)).toBe(true)
       await page.keyboard.press(`${primary}+Shift+,`)
       await page.locator('[data-sidebar-right-panel="fullscreen"]').waitFor()
       expect(await paneAppearance()).toEqual([plainPane])
@@ -199,7 +235,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(2)
       const left = panel.locator('[data-dockkit-pane][data-dockkit-column="0"]')
       const right = panel.locator('[data-dockkit-pane][data-dockkit-column="1"]')
-      expect(await right.evaluate(pane => document.activeElement === pane)).toBe(true)
+      expect(await right.evaluate((pane) => document.activeElement === pane)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane, plainPane])
       const disabled = right.locator('[data-dockkit-split-button]')
       expect(await disabled.isDisabled()).toBe(true)
@@ -224,8 +260,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await expect.poll(() => right.getByRole('tab').count()).toBe(3)
       await expect.poll(() => right.locator('.xterm-rows').innerText()).toContain('bash-')
       expect(await left.getByRole('tab').count()).toBe(1)
-      await compareOrRefreshGolden(join(expected, 'panels.expected.md'),
-        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd), mode)
+      await compareOrRefreshGolden(
+        join(expected, 'panels.expected.md'),
+        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd),
+        mode,
+      )
       await bind(page, primary, 'Refresh current page', 'New terminal')
       await right.locator('.xterm-helper-textarea').focus()
       await page.keyboard.press(`${primary}+Shift+,`)
@@ -245,8 +284,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await composer.click()
       await page.keyboard.press(`${primary}+Shift+,`)
       expect(await right.getByRole('tab').count()).toBe(2)
-      await compareOrRefreshGolden(join(expected, 'page-actions.expected.md'),
-        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd), mode)
+      await compareOrRefreshGolden(
+        join(expected, 'page-actions.expected.md'),
+        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd),
+        mode,
+      )
       const menuTab = left.getByRole('tab', { name: /Files/ })
       await menuTab.locator('[data-dockkit-tab-close]').focus()
       await page.getByRole('tooltip').filter({ hasText: 'Close' }).waitFor()
@@ -256,8 +298,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
         expect(await page.getByRole('tooltip').count()).toBe(0)
         expect(await page.getByRole('menuitem').getAttribute('aria-keyshortcuts')).toBeNull()
         if (attempt === 0) {
-          await compareOrRefreshGolden(join(expected, 'tab-menu.expected.md'),
-            await captureStableAria(page, '[data-dockkit-tab-menu]', scaffold.workspaceCwd), mode)
+          await compareOrRefreshGolden(
+            join(expected, 'tab-menu.expected.md'),
+            await captureStableAria(page, '[data-dockkit-tab-menu]', scaffold.workspaceCwd),
+            mode,
+          )
         } else {
           await page.getByRole('menuitem').focus()
         }
@@ -266,15 +311,15 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
         expect(await left.getByRole('tab').count()).toBe(1)
         expect(await right.getByRole('tab').count()).toBe(2)
       }
-      expect(await menuTab.evaluate(tab => tab === document.activeElement)).toBe(true)
-      expect(await menuTab.evaluate(tab => getComputedStyle(tab).outlineStyle)).toBe('none')
+      expect(await menuTab.evaluate((tab) => tab === document.activeElement)).toBe(true)
+      expect(await menuTab.evaluate((tab) => getComputedStyle(tab).outlineStyle)).toBe('none')
       await (closeFirst === 'right' ? right : left).getByRole('tab').last().focus()
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab').count()).toBe(2)
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab').count()).toBe(1)
       expect(await panel.locator('[data-dockkit-pane]').count()).toBe(1)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => pane === document.activeElement)).toBe(true)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate((pane) => pane === document.activeElement)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => page.locator('[data-sidebar-right-open]').count()).toBe(0)
@@ -285,16 +330,25 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await (closeFirst === 'left' ? left : right).getByRole('tab').focus()
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab').count()).toBe(1)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => pane === document.activeElement)).toBe(true)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate((pane) => pane === document.activeElement)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
-      await compareOrRefreshGolden(join(expected, 'guide-close.expected.md'),
-        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd), mode)
+      await compareOrRefreshGolden(
+        join(expected, 'guide-close.expected.md'),
+        await captureStableAria(page, '[data-sidebar-right-panel]', scaffold.workspaceCwd),
+        mode,
+      )
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => page.locator('[data-sidebar-right-open]').count()).toBe(0)
       expect(await composer.innerText()).toContain('T5 draft remains unsent')
       expect(agent.session.seq).toBe(eventCount)
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
-    } finally { try { await context.close() } finally { await scaffold.close() } }
+    } finally {
+      try {
+        await context.close()
+      } finally {
+        await scaffold.close()
+      }
+    }
   })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -12,8 +12,13 @@ import { createAppearanceRowStore } from '../src/client/settings-store.ts'
 import type { ThemePreference } from '../src/client/index.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
-const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+const useResource = (() => ({
+  status: 'none' as const,
+  value: undefined,
+  failure: undefined,
+  reload: () => {},
+})) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = (selector) => selector({ activePanelId: null })
 
 afterEach(cleanup)
 
@@ -25,20 +30,24 @@ const COPY: Record<string, string> = {
 }
 
 function emptySessions() {
-  const store = createSnapshotStore<SessionListState>(
-    { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
+  const store = createSnapshotStore<SessionListState>({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
   return bindSnapshotSelector(store)
 }
 function emptyWorkspaces() {
   const store = createSnapshotStore<WorkspaceSnapshot>({
-    items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+    items: [],
+    archivedSessionIds: [],
+    pinnedSessionIds: [],
+    state: 'idle',
+    phase: 'ready',
+    error: null,
   })
   return bindSnapshotSelector(store)
 }
 
 type AttentionSnapshot = Parameters<Parameters<AppearanceRowComponentProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionStatus: AppearanceRowComponentProps['useSessionStatus'] = selector => selector(noAttention)
+const useSessionStatus: AppearanceRowComponentProps['useSessionStatus'] = (selector) => selector(noAttention)
 
 function mount(preference: ThemePreference = 'system') {
   // Real store instance — the sanctioned zero-machinery path for tests.
@@ -48,7 +57,9 @@ function mount(preference: ThemePreference = 'system') {
   const props: AppearanceRowComponentProps = {
     useSessions: emptySessions(),
     useSessionStatus,
-    usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
+    usePanelInfo,
+    useSessionRetainInfo: () => undefined,
+    useResource,
     useWorkspaces: emptyWorkspaces(),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
@@ -59,8 +70,7 @@ function mount(preference: ThemePreference = 'system') {
   return { store, setTheme }
 }
 
-const pressed = (name: RegExp): string | null =>
-  screen.getByRole('button', { name }).getAttribute('aria-pressed')
+const pressed = (name: RegExp): string | null => screen.getByRole('button', { name }).getAttribute('aria-pressed')
 
 describe('AppearanceRow', () => {
   it('renders the title and three cubes with the preference cube selected', () => {
@@ -77,7 +87,9 @@ describe('AppearanceRow', () => {
     expect(b.setTheme).toHaveBeenCalledWith('light')
     // No store write yet: selection is unchanged.
     expect(pressed(/Dark/)).toBe('true')
-    act(() => { b.store.actions.sync('light', 1) })
+    act(() => {
+      b.store.actions.sync('light', 1)
+    })
     expect(pressed(/Light/)).toBe('true')
     expect(pressed(/Dark/)).toBe('false')
   })

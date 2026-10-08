@@ -1,18 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import TypertRegistry, {
-  typertEndpoint,
-  typertKey,
-  typertPackageKey,
-  type TypertContribution,
-} from '@deepseek-ai/dsh-typert-registry'
-import type {
-  InvocationDescriptor,
-  TypertContext,
-  TypertLookup,
-  TypertRemoteContribution,
-} from '@deepseek-ai/dsh-typert-protocol'
+import TypertRegistry, { typertEndpoint, typertKey, typertPackageKey, type TypertContribution } from '@deepseek-ai/dsh-typert-registry'
+import type { InvocationDescriptor, TypertContext, TypertLookup, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { apply as applyClientRegistry, inject as clientRegistryInject } from '../src/client/index.ts'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -39,24 +29,30 @@ function toolsContribution(schema: z.ZodType = z.object({ name: z.string() })): 
     schemas: [{ name: 'ToolInput', create: () => schema }],
     invocations: [],
     model: {
-      services: [{
-        key: 'tools',
-        exportName: 'ToolRuntime',
-        summary: 'Tool registry and execution pipeline.',
-        tags: [],
-        members: [{
-          kind: 'method',
-          name: 'register',
-          signature: 'register(definition: ToolDefinition): () => void',
-        }],
-        types: [{ name: 'ToolDefinition', declaration: 'export interface ToolDefinition {}' }],
-      }],
-      events: [{
-        name: 'tools/change',
-        mode: 'emit',
-        signature: "'tools/change'(): void",
-        tags: [],
-      }],
+      services: [
+        {
+          key: 'tools',
+          exportName: 'ToolRuntime',
+          summary: 'Tool registry and execution pipeline.',
+          tags: [],
+          members: [
+            {
+              kind: 'method',
+              name: 'register',
+              signature: 'register(definition: ToolDefinition): () => void',
+            },
+          ],
+          types: [{ name: 'ToolDefinition', declaration: 'export interface ToolDefinition {}' }],
+        },
+      ],
+      events: [
+        {
+          name: 'tools/change',
+          mode: 'emit',
+          signature: "'tools/change'(): void",
+          tags: [],
+        },
+      ],
       objects: [],
     },
   }
@@ -69,12 +65,14 @@ function invocation(id = '@fixture/remote#goals/create'): InvocationDescriptor {
     namespace: 'goals',
     method: 'create',
     invocation: { kind: 'direct' },
-    parameters: [{
-      name: 'request',
-      wire: 'request',
-      source: 'json',
-      codec: { mode: 'src-json' },
-    }],
+    parameters: [
+      {
+        name: 'request',
+        wire: 'request',
+        source: 'json',
+        codec: { mode: 'src-json' },
+      },
+    ],
     result: { mode: 'src-json' },
   }
 }
@@ -83,18 +81,21 @@ function scopedInvocation(): InvocationDescriptor {
   return {
     ...invocation('@fixture/remote#goals/create-scoped'),
     scope: { context: 'fixture', wire: 'agentId' },
-    parameters: [{
-      name: 'agent',
-      wire: 'agentId',
-      source: 'lookup',
-      lookup: 'fixture',
-      codec: { mode: 'src-json' },
-    }, {
-      name: 'request',
-      wire: 'request',
-      source: 'json',
-      codec: { mode: 'src-json' },
-    }],
+    parameters: [
+      {
+        name: 'agent',
+        wire: 'agentId',
+        source: 'lookup',
+        lookup: 'fixture',
+        codec: { mode: 'src-json' },
+      },
+      {
+        name: 'request',
+        wire: 'request',
+        source: 'json',
+        codec: { mode: 'src-json' },
+      },
+    ],
   }
 }
 
@@ -103,7 +104,8 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const decode = (value: unknown) => value
     const descriptor: InvocationDescriptor = {
-      ...invocation(), result: { mode: 'strict', typeSymbol: 'fixture#bytes', create: () => ({ parse: decode }), decode },
+      ...invocation(),
+      result: { mode: 'strict', typeSymbol: 'fixture#bytes', create: () => ({ parse: decode }), decode },
     }
     const dispose = ctx.typert.register({ ...toolsContribution(), invocations: [descriptor] })
     expect(ctx.typert.local.get('goals/create')?.result).toBe(descriptor.result)
@@ -146,10 +148,14 @@ describe('TypertRegistry', () => {
 
   it('follows the registering plugin fiber lifecycle', async () => {
     const ctx = await makeCtx()
-    const fiber = ctx.plugin(Object.assign(
-      (child: Context) => { child.typert.register(toolsContribution()) },
-      { inject: ['typert'] },
-    ))
+    const fiber = ctx.plugin(
+      Object.assign(
+        (child: Context) => {
+          child.typert.register(toolsContribution())
+        },
+        { inject: ['typert'] },
+      ),
+    )
     await fiber
     expect(ctx.typert.getPackage('@deepseek-ai/dsh-tools')).toBeDefined()
 
@@ -183,17 +189,16 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     ctx.typert.register(toolsContribution())
 
-    expect(() => ctx.typert.register({ ...toolsContribution(), package: '' }))
-      .toThrow('invalid package name')
-    expect(() => ctx.typert.register({ ...toolsContribution(), package: 'bad#package' }))
-      .toThrow('invalid package name')
-    expect(() => ctx.typert.register({ ...toolsContribution(), face: 'worker' as 'host' }))
-      .toThrow('invalid face')
-    expect(() => ctx.typert.register({
-      ...toolsContribution(),
-      package: '@fixture/schema-name',
-      schemas: [{ name: 'bad#name', create: () => z.string() }],
-    })).toThrow('invalid schema name')
+    expect(() => ctx.typert.register({ ...toolsContribution(), package: '' })).toThrow('invalid package name')
+    expect(() => ctx.typert.register({ ...toolsContribution(), package: 'bad#package' })).toThrow('invalid package name')
+    expect(() => ctx.typert.register({ ...toolsContribution(), face: 'worker' as 'host' })).toThrow('invalid face')
+    expect(() =>
+      ctx.typert.register({
+        ...toolsContribution(),
+        package: '@fixture/schema-name',
+        schemas: [{ name: 'bad#name', create: () => z.string() }],
+      }),
+    ).toThrow('invalid schema name')
 
     expect(ctx.typert.list({ package: '@fixture/absent' })).toEqual([])
     expect(ctx.typert.list({ face: 'client' })).toEqual([])
@@ -225,7 +230,9 @@ describe('TypertRegistry', () => {
     const descriptor = invocation()
     const contribution = { ...toolsContribution(), invocations: [descriptor] }
     const changes: string[] = []
-    ctx.typert.local.subscribe((change) => { changes.push(`${change.kind}:${change.key}`) })
+    ctx.typert.local.subscribe((change) => {
+      changes.push(`${change.kind}:${change.key}`)
+    })
 
     expect(ctx.typert.local.hasSeen('goals/create')).toBe(false)
     const dispose = ctx.typert.register(contribution)
@@ -248,30 +255,35 @@ describe('TypertRegistry', () => {
     const first = invocation()
     ctx.typert.register({ ...toolsContribution(), invocations: [first] })
 
-    expect(() => ctx.typert.remotes.register({
-      package: '@fixture/duplicate-endpoint',
-      descriptors: [invocation('@fixture/remote#first'), invocation('@fixture/remote#second')],
-    })).toThrow('endpoint "goals/create" is already registered')
-    expect(() => ctx.typert.remotes.register({
-      package: '@fixture/duplicate-id',
-      descriptors: [
-        invocation('@fixture/remote#same'),
-        { ...invocation('@fixture/remote#same'), method: 'rename' },
-      ],
-    })).toThrow('invocation id "@fixture/remote#same" is already registered')
-    expect(() => ctx.typert.register({
-      ...toolsContribution(),
-      package: '@fixture/existing-endpoint',
-      invocations: [{ ...first, id: '@fixture/local#other' }],
-    })).toThrow('endpoint "goals/create" is already registered')
+    expect(() =>
+      ctx.typert.remotes.register({
+        package: '@fixture/duplicate-endpoint',
+        descriptors: [invocation('@fixture/remote#first'), invocation('@fixture/remote#second')],
+      }),
+    ).toThrow('endpoint "goals/create" is already registered')
+    expect(() =>
+      ctx.typert.remotes.register({
+        package: '@fixture/duplicate-id',
+        descriptors: [invocation('@fixture/remote#same'), { ...invocation('@fixture/remote#same'), method: 'rename' }],
+      }),
+    ).toThrow('invocation id "@fixture/remote#same" is already registered')
+    expect(() =>
+      ctx.typert.register({
+        ...toolsContribution(),
+        package: '@fixture/existing-endpoint',
+        invocations: [{ ...first, id: '@fixture/local#other' }],
+      }),
+    ).toThrow('endpoint "goals/create" is already registered')
   })
 
   it.each(['create#v2', 'create goal', '.', '..'])('rejects untransportable invocation method %s', async (method) => {
     const ctx = await makeCtx()
-    expect(() => ctx.typert.remotes.register({
-      package: '@fixture/invalid-endpoint',
-      descriptors: [{ ...invocation(), method }],
-    })).toThrow('RPC endpoint segment characters')
+    expect(() =>
+      ctx.typert.remotes.register({
+        package: '@fixture/invalid-endpoint',
+        descriptors: [{ ...invocation(), method }],
+      }),
+    ).toThrow('RPC endpoint segment characters')
   })
 
   it('mounts Remote contributions in the calling fiber and withdraws them exactly', async () => {
@@ -282,11 +294,17 @@ describe('TypertRegistry', () => {
       descriptors: [descriptor],
     }
     const changes: string[] = []
-    ctx.typert.remotes.subscribe((change) => { changes.push(`${change.kind}:${change.key}`) })
-    const fiber = ctx.plugin(Object.assign(
-      (child: Context) => { child.typert.remotes.register(contribution) },
-      { inject: ['typert'] },
-    ))
+    ctx.typert.remotes.subscribe((change) => {
+      changes.push(`${change.kind}:${change.key}`)
+    })
+    const fiber = ctx.plugin(
+      Object.assign(
+        (child: Context) => {
+          child.typert.remotes.register(contribution)
+        },
+        { inject: ['typert'] },
+      ),
+    )
     await fiber
 
     expect(ctx.typert.remotes.get('goals/create')).toBe(descriptor)
@@ -305,33 +323,44 @@ describe('TypertRegistry', () => {
     await dispose()
 
     const cases: readonly [InvocationDescriptor, string][] = [
-      [{
-        ...descriptor,
-        invocation: {
-          kind: 'context',
-          context: 'fixture',
-          wire: 'scopeId',
-          codec: { mode: 'src-json' },
+      [
+        {
+          ...descriptor,
+          invocation: {
+            kind: 'context',
+            context: 'fixture',
+            wire: 'scopeId',
+            codec: { mode: 'src-json' },
+          },
         },
-      }, 'Context receiver cannot declare a direct scope projection'],
+        'Context receiver cannot declare a direct scope projection',
+      ],
       [{ ...descriptor, scope: { context: 'fixture', wire: 'missingId' } }, 'must select its only lookup parameter'],
-      [{
-        ...descriptor,
-        parameters: [...descriptor.parameters, {
-          name: 'other',
-          wire: 'otherId',
-          source: 'lookup',
-          lookup: 'fixture',
-          codec: { mode: 'src-json' },
-        }],
-      }, 'must select its only lookup parameter'],
+      [
+        {
+          ...descriptor,
+          parameters: [
+            ...descriptor.parameters,
+            {
+              name: 'other',
+              wire: 'otherId',
+              source: 'lookup',
+              lookup: 'fixture',
+              codec: { mode: 'src-json' },
+            },
+          ],
+        },
+        'must select its only lookup parameter',
+      ],
       [{ ...descriptor, scope: { context: 'other', wire: 'agentId' } }, 'must select its only lookup parameter'],
     ]
     for (const [index, [candidate, message]] of cases.entries()) {
-      expect(() => ctx.typert.remotes.register({
-        package: `@fixture/rejected-${String(index)}`,
-        descriptors: [candidate],
-      })).toThrow(message)
+      expect(() =>
+        ctx.typert.remotes.register({
+          package: `@fixture/rejected-${String(index)}`,
+          descriptors: [candidate],
+        }),
+      ).toThrow(message)
     }
     expect(ctx.typert.remotes.list()).toEqual([])
   })
@@ -345,26 +374,28 @@ describe('TypertRegistry', () => {
       wire: 'agentId',
       hostTypeSymbol: '@fixture/agent#Agent',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === object.id ? object : undefined,
+      resolve: (id) => (id === object.id ? object : undefined),
     })
     const disposeHost = ctx.typert.contexts.registerHost('registryFixture', {
       wire: 'agentId',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === object.id ? scoped : undefined,
+      resolve: (id) => (id === object.id ? scoped : undefined),
     })
     const disposeClient = ctx.typert.contexts.registerClient('registryFixture', {
-      identity: candidate => candidate === scoped ? object.id : undefined,
-      resolve: id => id === object.id ? scoped : undefined,
+      identity: (candidate) => (candidate === scoped ? object.id : undefined),
+      resolve: (id) => (id === object.id ? scoped : undefined),
     })
 
     expect(ctx.typert.lookups.get('fixture')?.resolve('agent-1')).toBe(object)
-    expect(ctx.typert.lookups.definitions()).toEqual([{
-      key: 'fixture',
-      parameter: 'agent',
-      wire: 'agentId',
-      hostTypeSymbol: '@fixture/agent#Agent',
-      wireTypeSymbol: '@fixture/session#SessionId',
-    }])
+    expect(ctx.typert.lookups.definitions()).toEqual([
+      {
+        key: 'fixture',
+        parameter: 'agent',
+        wire: 'agentId',
+        hostTypeSymbol: '@fixture/agent#Agent',
+        wireTypeSymbol: '@fixture/session#SessionId',
+      },
+    ])
     expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('agent-1')).toBe(scoped)
     expect(ctx.typert.contexts.getClient('registryFixture')?.identity(scoped)).toBe('agent-1')
     expect(ctx.typert.contexts.getClient('registryFixture')?.resolve('agent-1')).toBe(scoped)
@@ -380,8 +411,7 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const fallback = { id: 'fallback' }
     const configured = { id: 'configured' }
-    const disposeResolver = ctx.typert.lookups.configure('fixture', async id =>
-      id === configured.id ? configured : undefined)
+    const disposeResolver = ctx.typert.lookups.configure('fixture', async (id) => (id === configured.id ? configured : undefined))
 
     expect(ctx.typert.lookups.get('fixture')).toBeUndefined()
     const disposeProvider = ctx.typert.lookups.register('fixture', {
@@ -389,7 +419,7 @@ describe('TypertRegistry', () => {
       wire: 'agentId',
       hostTypeSymbol: '@fixture/agent#Agent',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === fallback.id ? fallback : undefined,
+      resolve: (id) => (id === fallback.id ? fallback : undefined),
     })
     await expect(ctx.typert.lookups.get('fixture')?.resolve('configured')).resolves.toBe(configured)
     expect(() => ctx.typert.lookups.configure('fixture', () => undefined)).toThrow('already configured')
@@ -401,7 +431,7 @@ describe('TypertRegistry', () => {
       wire: 'agentId',
       hostTypeSymbol: '@fixture/agent#Agent',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === fallback.id ? fallback : undefined,
+      resolve: (id) => (id === fallback.id ? fallback : undefined),
     })
     await expect(ctx.typert.lookups.get('fixture')?.resolve('configured')).resolves.toBe(configured)
 
@@ -414,14 +444,15 @@ describe('TypertRegistry', () => {
     const ctx = await makeCtx()
     const fallback = ctx.extend()
     const configured = ctx.extend()
-    const disposeResolver = ctx.typert.contexts.configureHost('registryFixture', async id =>
-      id === 'configured' ? configured : undefined)
+    const disposeResolver = ctx.typert.contexts.configureHost('registryFixture', async (id) =>
+      id === 'configured' ? configured : undefined,
+    )
 
     expect(ctx.typert.contexts.getHost('registryFixture')).toBeUndefined()
     const disposeProvider = ctx.typert.contexts.registerHost('registryFixture', {
       wire: 'agentId',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === 'fallback' ? fallback : undefined,
+      resolve: (id) => (id === 'fallback' ? fallback : undefined),
     })
     await expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('configured')).resolves.toBe(configured)
     expect(() => ctx.typert.contexts.configureHost('registryFixture', () => undefined)).toThrow('already configured')
@@ -431,7 +462,7 @@ describe('TypertRegistry', () => {
     const disposeReloadedProvider = ctx.typert.contexts.registerHost('registryFixture', {
       wire: 'agentId',
       wireTypeSymbol: '@fixture/session#SessionId',
-      resolve: id => id === 'fallback' ? fallback : undefined,
+      resolve: (id) => (id === 'fallback' ? fallback : undefined),
     })
     await expect(ctx.typert.contexts.getHost('registryFixture')?.resolve('configured')).resolves.toBe(configured)
 
@@ -489,8 +520,7 @@ describe('TypertRegistry', () => {
       { ...lookup, hostTypeSymbol: '@fixture#Session' },
       { ...lookup, wireTypeSymbol: '@fixture#SessionId' },
     ]) {
-      expect(() => ctx.typert.lookups.register('fixture', changed))
-        .toThrow('changed its wire declaration during this registry lifetime')
+      expect(() => ctx.typert.lookups.register('fixture', changed)).toThrow('changed its wire declaration during this registry lifetime')
     }
     ctx.typert.lookups.register('fixture', lookup)
     expect(changes).toHaveLength(6)
@@ -526,81 +556,122 @@ describe('TypertRegistry', () => {
     const malformed: readonly [InvocationDescriptor, string][] = [
       [{ ...invocation(), id: '' }, 'invocation id'],
       [{ ...invocation(), mode: bogusMode as 'stream' }, 'mode must be "stream"'],
-      [{
-        ...invocation(),
-        mode: 'stream',
-        uplink: { codec: { mode: 'strict', typeSymbol: '', create: () => z.string() } },
-      }, 'uplink type symbol'],
+      [
+        {
+          ...invocation(),
+          mode: 'stream',
+          uplink: { codec: { mode: 'strict', typeSymbol: '', create: () => z.string() } },
+        },
+        'uplink type symbol',
+      ],
       [{ ...invocation(), namespace: 'bad/name' }, 'namespace'],
       [{ ...invocation(), implementation: 'bad/name' }, 'implementation method'],
-      [{
-        ...invocation(),
-        cancellation: { parameter: 'abort' } as unknown as { readonly parameter: 'signal' },
-      }, 'cancellation parameter'],
-      [{
-        ...invocation(),
-        parameters: [
-          ...invocation().parameters,
-          { name: 'other', wire: 'request', source: 'json', codec: { mode: 'src-json' } },
-        ],
-      }, 'repeats wire field'],
-      [{
-        ...invocation(),
-        parameters: [{ name: 'agent', wire: 'agentId', source: 'lookup', codec: { mode: 'src-json' } }],
-      }, 'has no lookup key'],
-      [{
-        ...invocation(),
-        parameters: [{
-          name: 'agent',
-          wire: 'agentId',
-          source: 'lookup',
-          lookup: 'fixture',
-          acceptsUndefined: true,
-          codec: { mode: 'src-json' },
-        }],
-      }, 'cannot accept undefined'],
-      [{
-        ...invocation(),
-        parameters: [{
-          name: 'request', wire: 'request', source: 'json', lookup: 'fixture', codec: { mode: 'src-json' },
-        }],
-      }, 'JSON parameter'],
-      [{
-        ...invocation(),
-        invocation: {
-          kind: 'context', context: 'registryFixture', wire: 'request', codec: { mode: 'src-json' },
+      [
+        {
+          ...invocation(),
+          cancellation: { parameter: 'abort' } as unknown as { readonly parameter: 'signal' },
         },
-      }, 'repeats wire field'],
-      [{
-        ...invocation(),
-        result: { mode: 'strict', typeSymbol: '', create: () => z.string() },
-      }, 'type symbol'],
-      [{
-        ...invocation(),
-        result: { mode: 'strict', typeSymbol: '@fixture#Broken', create: {} as () => z.ZodType },
-      }, 'has no create'],
+        'cancellation parameter',
+      ],
+      [
+        {
+          ...invocation(),
+          parameters: [...invocation().parameters, { name: 'other', wire: 'request', source: 'json', codec: { mode: 'src-json' } }],
+        },
+        'repeats wire field',
+      ],
+      [
+        {
+          ...invocation(),
+          parameters: [{ name: 'agent', wire: 'agentId', source: 'lookup', codec: { mode: 'src-json' } }],
+        },
+        'has no lookup key',
+      ],
+      [
+        {
+          ...invocation(),
+          parameters: [
+            {
+              name: 'agent',
+              wire: 'agentId',
+              source: 'lookup',
+              lookup: 'fixture',
+              acceptsUndefined: true,
+              codec: { mode: 'src-json' },
+            },
+          ],
+        },
+        'cannot accept undefined',
+      ],
+      [
+        {
+          ...invocation(),
+          parameters: [
+            {
+              name: 'request',
+              wire: 'request',
+              source: 'json',
+              lookup: 'fixture',
+              codec: { mode: 'src-json' },
+            },
+          ],
+        },
+        'JSON parameter',
+      ],
+      [
+        {
+          ...invocation(),
+          invocation: {
+            kind: 'context',
+            context: 'registryFixture',
+            wire: 'request',
+            codec: { mode: 'src-json' },
+          },
+        },
+        'repeats wire field',
+      ],
+      [
+        {
+          ...invocation(),
+          result: { mode: 'strict', typeSymbol: '', create: () => z.string() },
+        },
+        'type symbol',
+      ],
+      [
+        {
+          ...invocation(),
+          result: { mode: 'strict', typeSymbol: '@fixture#Broken', create: {} as () => z.ZodType },
+        },
+        'has no create',
+      ],
     ]
     for (const [index, [descriptor, message]] of malformed.entries()) {
-      expect(() => ctx.typert.remotes.register({
-        package: `@fixture/malformed-${String(index)}`,
-        descriptors: [descriptor],
-      })).toThrow(message)
+      expect(() =>
+        ctx.typert.remotes.register({
+          package: `@fixture/malformed-${String(index)}`,
+          descriptors: [descriptor],
+        }),
+      ).toThrow(message)
     }
 
-    expect(() => ctx.typert.lookups.register('bad#key' as 'fixture', {
-      parameter: 'agent',
-      wire: 'agent/id',
-      hostTypeSymbol: '',
-      wireTypeSymbol: '',
-      resolve: () => undefined,
-    })).toThrow('lookup key')
-    expect(() => ctx.typert.lookups.register('fixture', {
-      parameter: 'agent',
-      wire: 'agent/id',
-      hostTypeSymbol: '@fixture#Agent',
-      wireTypeSymbol: '@fixture#AgentId',
-      resolve: () => undefined,
-    })).toThrow('lookup wire field')
+    expect(() =>
+      ctx.typert.lookups.register('bad#key' as 'fixture', {
+        parameter: 'agent',
+        wire: 'agent/id',
+        hostTypeSymbol: '',
+        wireTypeSymbol: '',
+        resolve: () => undefined,
+      }),
+    ).toThrow('lookup key')
+    expect(() =>
+      ctx.typert.lookups.register('fixture', {
+        parameter: 'agent',
+        wire: 'agent/id',
+        hostTypeSymbol: '@fixture#Agent',
+        wireTypeSymbol: '@fixture#AgentId',
+        resolve: () => undefined,
+      }),
+    ).toThrow('lookup wire field')
   })
 
   it('installs the registry through the Client entry without importing the Host entry', async () => {
@@ -612,10 +683,16 @@ describe('TypertRegistry', () => {
   it('contains change-listener failures and still notifies later listeners', async () => {
     const ctx = await makeCtx()
     const warnings: unknown[] = []
-    ctx.logger.warn = ((message: unknown) => { warnings.push(message) }) as typeof ctx.logger.warn
+    ctx.logger.warn = ((message: unknown) => {
+      warnings.push(message)
+    }) as typeof ctx.logger.warn
     let observed = 0
-    ctx.typert.remotes.subscribe(() => { throw new Error('observer failed') })
-    ctx.typert.remotes.subscribe(() => { observed += 1 })
+    ctx.typert.remotes.subscribe(() => {
+      throw new Error('observer failed')
+    })
+    ctx.typert.remotes.subscribe(() => {
+      observed += 1
+    })
 
     ctx.typert.remotes.register({ package: '@fixture/remote', descriptors: [invocation()] })
 

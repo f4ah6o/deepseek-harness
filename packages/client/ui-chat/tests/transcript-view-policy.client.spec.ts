@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ChatSettings } from '../src/chat-settings.ts'
 import { TranscriptViewPolicy } from '../src/client/transcript-view.ts'
@@ -44,7 +44,12 @@ describe('TranscriptViewPolicy', () => {
     const host = stubConfigForm<ChatSettings>()
     const policy = new TranscriptViewPolicy(host.scope, 'standard')
 
-    host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' }, revision: 1, writable: true })
+    host.publish({
+      status: 'ready',
+      value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' },
+      revision: 1,
+      writable: true,
+    })
     expect(policy.mode.getSnapshot()).toBe('detailed')
     expect(host.set).not.toHaveBeenCalled()
     policy.setMode('detailed')
@@ -60,14 +65,24 @@ describe('TranscriptViewPolicy', () => {
 
   it.each(['normal', 'expanded'] as const)('reads an initial Host %s setting as Detailed without writing it back', (mode) => {
     const host = stubConfigForm<ChatSettings>()
-    host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' }, revision: 1, writable: true })
+    host.publish({
+      status: 'ready',
+      value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' },
+      revision: 1,
+      writable: true,
+    })
     expect(new TranscriptViewPolicy(host.scope, 'standard').mode.getSnapshot()).toBe('detailed')
     expect(host.set).not.toHaveBeenCalled()
   })
 
   it.each(['compact', 'standard', 'detailed', 'verbose'] as const)('preserves an explicit %s setting without migration writes', (mode) => {
     const host = stubConfigForm<ChatSettings>()
-    host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' }, revision: 1, writable: true })
+    host.publish({
+      status: 'ready',
+      value: { linkOpening: 'sidebar', transcriptView: mode, performanceUsage: 'detailed' },
+      revision: 1,
+      writable: true,
+    })
     const policy = new TranscriptViewPolicy(host.scope)
     expect(policy.mode.getSnapshot()).toBe(mode)
     expect(host.set).not.toHaveBeenCalled()

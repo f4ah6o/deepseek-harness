@@ -1,12 +1,9 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
-import {
-  Config, apply,
-} from '@deepseek-ai/dsh-client-locale'
-
+import { Config, apply } from '@deepseek-ai/dsh-client-locale'
 
 describe('locale host', () => {
   it('registers an open locale preference with the Host settings lifecycle', async () => {
@@ -24,4 +21,4 @@ describe('locale host', () => {
   })
 })
 
-it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(ctx => ctx.plugin(HostPlugin)))
+it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage((ctx) => ctx.plugin(HostPlugin)))

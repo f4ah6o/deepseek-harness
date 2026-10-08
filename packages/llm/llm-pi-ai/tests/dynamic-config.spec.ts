@@ -1,5 +1,5 @@
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,8 +18,7 @@ const initialConfigs = new WeakMap<Context, LlmPiAi.Options>()
 
 /** Minimal foreign adapter: only needs to own a route the pi-ai plugin then wants. */
 class StubAdapter extends LlmAdapter {
-
-  override async * stream(): AsyncIterable<never> {
+  override async *stream(): AsyncIterable<never> {
     throw new Error('stub adapter must never stream')
   }
 }
@@ -38,11 +37,7 @@ async function home(): Promise<string> {
   return dir
 }
 
-async function boot(
-  dir: string,
-  config: LlmPiAi.Options,
-  options: { authorization?: boolean } = {},
-): Promise<Context> {
+async function boot(dir: string, config: LlmPiAi.Options, options: { authorization?: boolean } = {}): Promise<Context> {
   const ctx = new Context()
   cleanups.push(async () => {
     await ctx.fiber.dispose()
@@ -62,7 +57,7 @@ describe('login flows in a real composition', () => {
     // Zero routes configured: signing in is what makes a route worth adding,
     // so the offer cannot wait for a profile to name the provider.
     const codex = ctx.authorization.describe(LlmPiAi.recordKeyFor('openai-codex'))
-    expect(codex?.methods.map(method => method.id)).toEqual(['oauth'])
+    expect(codex?.methods.map((method) => method.id)).toEqual(['oauth'])
   })
 
   it('mounts without the seam, and simply offers no sign-in', async () => {
@@ -80,22 +75,32 @@ describe('request-level dynamic profiles', () => {
     vi.stubEnv('PI_DYNAMIC_KEY', '')
     const dir = await home()
     const server = await mockServer([{ events: textEvents }, { events: textEvents }])
-    const known = getBuiltinModels('openrouter').find(model => model.api === 'openai-completions')!
-    const stored = { providers: { openrouter: {
-      apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url,
-      models: [{ id: known.id }, { id: '111' }],
-    } } }
+    const known = getBuiltinModels('openrouter').find((model) => model.api === 'openai-completions')!
+    const stored = {
+      providers: {
+        openrouter: {
+          apiKeyEnv: 'PI_DYNAMIC_KEY',
+          baseURL: server.url,
+          models: [{ id: known.id }, { id: '111' }],
+        },
+      },
+    }
     await writeFile(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_DYNAMIC_KEY: fake-key\n', { mode: 0o600 })
     const ctx = await boot(dir, stored)
-    const failure = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
-      + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
+    const failure =
+      'llm-pi-ai: provider "openrouter" model "111" needs an api; ' +
+      "the installed catalog does not describe it, so set the route's api to the wire protocol its endpoint speaks"
 
     expect(ctx.llm.listProviders()).toEqual([{ id: 'openrouter', name: 'openrouter' }])
     expect(ctx.llm.listConfigurableProviders()).toContainEqual({
-      provider: 'openrouter', displayName: 'openrouter', settingsNs: 'llm-pi-ai',
-      settingsPath: ['providers', 'openrouter'], declared: false, error: failure,
+      provider: 'openrouter',
+      displayName: 'openrouter',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'openrouter'],
+      declared: false,
+      error: failure,
     })
-    expect((await ctx.llm.listModels('openrouter')).map(model => model.id)).toEqual([known.id])
+    expect((await ctx.llm.listModels('openrouter')).map((model) => model.id)).toEqual([known.id])
     const bad = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
     expect(bad.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_CONFIG', message: failure } })
     expect(server.requests).toHaveLength(0)
@@ -103,14 +108,14 @@ describe('request-level dynamic profiles', () => {
     expect(good.message.content).toEqual([{ type: 'text', text: 'hello' }])
 
     await configurations.get(ctx)!.update({ providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } } })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openrouter', 'deepseek'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openrouter', 'deepseek'])
     const beforeRejected: unknown = configurations.get(ctx)!.entry.options.config
     await expect(configurations.get(ctx)!.update({ providers: { openrouter: { displayName: 'Edited' } } })).rejects.toThrow(failure)
     expect(configurations.get(ctx)!.entry.options.config).toEqual(beforeRejected)
 
     const diagnostics: Array<string | undefined> = []
     ctx.on('llm/adapters-updated', () => {
-      diagnostics.push(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'openrouter')?.error)
+      diagnostics.push(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'openrouter')?.error)
     })
     await configurations.get(ctx)!.update({ providers: { openrouter: { api: 'openai-completions' } } })
     expect(diagnostics).toEqual([undefined])
@@ -122,22 +127,24 @@ describe('request-level dynamic profiles', () => {
 
   it('allows removing an obsolete override and deleting a route whose catalog cannot be built', async () => {
     const dir = await home()
-    const stored = { providers: {
-      anthropic: { modelOverrides: { 'removed-model': { maxTokens: 4096 } } },
-      'retired-route': {},
-    } }
+    const stored = {
+      providers: {
+        anthropic: { modelOverrides: { 'removed-model': { maxTokens: 4096 } } },
+        'retired-route': {},
+      },
+    }
     const ctx = await boot(dir, stored)
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'anthropic')?.error)
-      .toContain('modelOverrides names "removed-model"')
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'retired-route')?.error)
-      .toContain('resolves no models')
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'anthropic')?.error).toContain(
+      'modelOverrides names "removed-model"',
+    )
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'retired-route')?.error).toContain('resolves no models')
     expect((await ctx.llm.listModels('anthropic')).length).toBeGreaterThan(0)
     await expect(ctx.llm.resolveModelInfo('anthropic', 'removed-model')).rejects.toThrow('modelOverrides names "removed-model"')
     await expect(ctx.llm.resolveModelInfo('retired-route', 'anything')).rejects.toThrow('resolves no models')
     await configurations.get(ctx)!.replace({ providers: { anthropic: {} } })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'anthropic', name: 'anthropic' }])
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'retired-route')).toBeUndefined()
-    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'anthropic')?.error).toBeUndefined()
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'retired-route')).toBeUndefined()
+    expect(ctx.llm.listConfigurableProviders().find((entry) => entry.provider === 'anthropic')?.error).toBeUndefined()
   })
 
   it('mounts bare and dormant, then registers routes the moment settings supply providers', async () => {
@@ -167,7 +174,7 @@ describe('request-level dynamic profiles', () => {
     await configurations.get(ctx)!.update({
       providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } },
     })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['deepseek'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['deepseek'])
     await expect(ctx.llm.listModels('deepseek')).resolves.not.toHaveLength(0)
 
     const result = await assemble(ctx, { provider: 'deepseek', model: 'deepseek-flash', messages: [] })
@@ -181,21 +188,17 @@ describe('request-level dynamic profiles', () => {
 
   it('adds a provider route from settings and drops it when the user layer resets', async () => {
     const dir = await home()
-    await writeFile(
-      join(dir, '.credentials.yaml'),
-      'version: 1\nrefs:\n  PI_LIVE_KEY: live-key\n  PI_OTHER_KEY: other\n',
-      { mode: 0o600 },
-    )
+    await writeFile(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_LIVE_KEY: live-key\n  PI_OTHER_KEY: other\n', { mode: 0o600 })
     const server = await mockServer([{ events: textEvents }])
     const ctx = await boot(dir, {
       providers: { openai: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: 'http://127.0.0.1:1/v1' } },
     })
 
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai'])
     await configurations.get(ctx)!.update({
       providers: { deepseek: { apiKeyEnv: 'PI_LIVE_KEY', baseURL: server.url } },
     })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai', 'deepseek'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai', 'deepseek'])
 
     const result = await assemble(ctx, { provider: 'deepseek', model: 'deepseek-flash', messages: [] })
     expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
@@ -204,7 +207,7 @@ describe('request-level dynamic profiles', () => {
     // Reset the user layer: the settings-born route unregisters, the
     // composition route stays.
     await configurations.get(ctx)!.replace(initialConfigs.get(ctx)!)
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai'])
     const removed = await assemble(ctx, { provider: 'deepseek', model: 'deepseek-flash', messages: [] })
     expect(removed.finish).toMatchObject({ kind: 'error', failure: { code: 'NO_ADAPTER' } })
   })
@@ -243,7 +246,7 @@ describe('request-level dynamic profiles', () => {
       maxDelayMs: 100,
       jitterRatio: 0.2,
     })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai'])
   })
 
   it('refuses a settings write this adapter could not serve, leaving its routes alone', async () => {
@@ -254,23 +257,20 @@ describe('request-level dynamic profiles', () => {
     // that lists no models of its own. The section schema resolves the whole
     // profile set, so this is refused where it is written rather than stored
     // and then quietly disabling every route in the namespace.
-    await expect(configurations.get(ctx)!.update({ providers: { 'not-a-real-provider': {} } }))
-      .rejects.toThrow(/resolves no models/)
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+    await expect(configurations.get(ctx)!.update({ providers: { 'not-a-real-provider': {} } })).rejects.toThrow(/resolves no models/)
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai'])
 
-    await expect(configurations.get(ctx)!.update({
-      providers: { openai: { headers: { 'bad header name': 'value' } } },
-    })).rejects.toThrow(/provider "openai" header "bad header name" is not valid for Fetch/)
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openai'])
+    await expect(
+      configurations.get(ctx)!.update({
+        providers: { openai: { headers: { 'bad header name': 'value' } } },
+      }),
+    ).rejects.toThrow(/provider "openai" header "bad header name" is not valid for Fetch/)
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(['openai'])
   })
 
   it('keeps serving its routes when a settings-born route collides with another adapter', async () => {
     const dir = await home()
-    await writeFile(
-      join(dir, '.credentials.yaml'),
-      'version: 1\nrefs:\n  PI_LIVE_KEY: live-key\n  PI_OTHER_KEY: other\n',
-      { mode: 0o600 },
-    )
+    await writeFile(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_LIVE_KEY: live-key\n  PI_OTHER_KEY: other\n', { mode: 0o600 })
     const server = await mockServer([{ events: textEvents }, { events: textEvents }])
     const ctx = await boot(dir, { providers: { openai: { apiKeyEnv: 'PI_LIVE_KEY', baseURL: `${server.url}/v1` } } })
     // Another adapter owns `anthropic`; the registry must refuse to hand it over.
@@ -286,7 +286,12 @@ describe('request-level dynamic profiles', () => {
     // The conflicting swap was refused whole: the previous route set still
     // owns openai (an eager dispose would have dropped it), and anthropic
     // still belongs to its original adapter.
-    expect(ctx.llm.listProviders().map(provider => provider.id).sort()).toEqual(['anthropic', 'openai'])
+    expect(
+      ctx.llm
+        .listProviders()
+        .map((provider) => provider.id)
+        .sort(),
+    ).toEqual(['anthropic', 'openai'])
     const result = await assemble(ctx, { provider: 'openai', model: 'gpt-4.1', messages: [] })
     expect(result.finish.kind).toBe('error')
     expect(server.paths).toEqual(['/v1/responses'])
@@ -294,7 +299,12 @@ describe('request-level dynamic profiles', () => {
     // Reverting to the working configuration re-applies, even though its
     // facts equal the ones the registry already holds.
     await configurations.get(ctx)!.replace(initialConfigs.get(ctx)!)
-    expect(ctx.llm.listProviders().map(provider => provider.id).sort()).toEqual(['anthropic', 'openai'])
+    expect(
+      ctx.llm
+        .listProviders()
+        .map((provider) => provider.id)
+        .sort(),
+    ).toEqual(['anthropic', 'openai'])
     await assemble(ctx, { provider: 'openai', model: 'gpt-4.1', messages: [] })
     expect(server.paths).toEqual(['/v1/responses', '/v1/responses'])
   })
@@ -302,11 +312,11 @@ describe('request-level dynamic profiles', () => {
   it('ignores a settings document that merely reorders its provider keys', async () => {
     const dir = await home()
     const ctx = await boot(dir, { providers: { openai: {}, anthropic: {} } })
-    const before = ctx.llm.listProviders().map(provider => provider.id)
+    const before = ctx.llm.listProviders().map((provider) => provider.id)
 
     // Same routes, different YAML key order: nothing about the registration
     // changed, so no swap should happen at all.
     await configurations.get(ctx)!.update({ providers: { anthropic: {}, openai: {} } })
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(before)
+    expect(ctx.llm.listProviders().map((provider) => provider.id)).toEqual(before)
   })
 })

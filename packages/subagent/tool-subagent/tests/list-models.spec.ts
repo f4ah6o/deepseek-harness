@@ -1,16 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, {
-  ToolCallId,
-  LlmAdapter,
-  ReasoningEffortId,
-} from '@deepseek-ai/dsh-llm'
-import type {
-  GenerateOptions,
-  LlmModelInfo,
-  LlmResolvedModelInfo,
-  StreamChunk,
-} from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { ToolCallId, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -54,16 +45,20 @@ class CatalogAdapter extends LlmAdapter {
   }
 
   stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return (async function* () { yield { type: 'finish' as const, reason: { kind: 'stop' as const } } })()
+    return (async function* () {
+      yield { type: 'finish' as const, reason: { kind: 'stop' as const } }
+    })()
   }
 }
 
-async function setupListTool(routes = [
-  { provider: 'alpha', model: 'fast' },
-  { provider: 'alpha', model: 'plain' },
-  { provider: 'beta', model: 'fast' },
-  { provider: 'beta', model: 'plain' },
-]) {
+async function setupListTool(
+  routes = [
+    { provider: 'alpha', model: 'fast' },
+    { provider: 'alpha', model: 'plain' },
+    { provider: 'beta', model: 'fast' },
+    { provider: 'beta', model: 'plain' },
+  ],
+) {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SystemPrompt)
@@ -148,7 +143,7 @@ describe('list_subagent_models', () => {
     expect(tools.get('list_subagent_models')).toBeUndefined()
   })
 
-  it('lists one provider\'s advertised models without treating the catalog as a whitelist', async () => {
+  it("lists one provider's advertised models without treating the catalog as a whitelist", async () => {
     const ctx = await setupListTool()
     ctx.llm.registerAdapter(['alpha'], new CatalogAdapter())
     const result = await call(ctx, { provider: 'alpha' })
@@ -162,8 +157,7 @@ describe('list_subagent_models', () => {
 
     expect(text(await call(ctx, {}))).toBe('alpha — ALPHA API')
     expect(text(await call(ctx, { provider: 'alpha' }))).toBe('alpha/fast — Fast: Focused work.')
-    expect(text(await call(ctx, { provider: 'alpha', model: 'unlisted' })))
-      .toContain('alpha/unlisted — Fast')
+    expect(text(await call(ctx, { provider: 'alpha', model: 'unlisted' }))).toContain('alpha/unlisted — Fast')
 
     const denied = await call(ctx, { provider: 'alpha', model: 'plain' })
     expect(denied.isError).toBe(true)
@@ -196,10 +190,7 @@ describe('list_subagent_models', () => {
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await call(ctx, { provider: 'alpha', model: 'fast' })
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(
-      'alpha/fast — Fast: Focused work.\nReasoning efforts:\n'
-      + 'low — Low\nhigh (default) — High: Quality first.',
-    )
+    expect(text(result)).toBe('alpha/fast — Fast: Focused work.\nReasoning efforts:\n' + 'low — Low\nhigh (default) — High: Quality first.')
   })
 
   it('renders exact models without reasoning metadata', async () => {

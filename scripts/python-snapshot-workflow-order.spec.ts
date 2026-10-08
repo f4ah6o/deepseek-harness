@@ -10,7 +10,7 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../packages/core/agent-loop/tests/mock-adapter.ts'
 import type {} from '@deepseek-ai/dsh-tool-workflow/types'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 // @ts-expect-error Scenario plugins are runtime JavaScript without declaration artifacts.
 import * as fixtureModule from './fixtures/python-snapshot-workflow-order.mjs'
 
@@ -20,7 +20,9 @@ const fixture = fixtureModule as unknown as {
   apply(ctx: Context, config: { parentSessionId: string; prompt: string }): void
 }
 const cleanups: (() => Promise<unknown>)[] = []
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
+})
 
 async function harness() {
   const ctx = new Context()
@@ -39,12 +41,25 @@ async function harness() {
   const messages = [createUserMessage({ content: [{ type: 'text', text: config.prompt }], source: { kind: 'user' } })]
   const decision: PreStepDecision = { kind: 'enter', messages }
   const next = vi.fn(async () => decision)
-  const start = (owner = parent, childId = agent.id) => owner.append('tool-workflow/agent-start', {
-    runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId,
-  })
-  const step = (overrides = {}) => agentEvents(ctx, agent).waterfall('agent/pre-step', {
-    turn: 1, step: 1, messages, signal: controller.signal, ...overrides,
-  }, next)
+  const start = (owner = parent, childId = agent.id) =>
+    owner.append('tool-workflow/agent-start', {
+      runId: WorkflowRunId('run'),
+      seq: 1,
+      label: 'workflow-child',
+      childId,
+    })
+  const step = (overrides = {}) =>
+    agentEvents(ctx, agent).waterfall(
+      'agent/pre-step',
+      {
+        turn: 1,
+        step: 1,
+        messages,
+        signal: controller.signal,
+        ...overrides,
+      },
+      next,
+    )
   return { ctx, fiber, parent, other, session, agent, controller, decision, next, start, step }
 }
 
@@ -76,15 +91,20 @@ describe('advanced Python snapshot workflow ordering', () => {
     ctx.llm.registerAdapter(['mock'], adapter)
     const parent = await ctx.agentLoop.create(SessionId(config.parentSessionId), { provider: 'mock', model: 'mock' })
     const run = await ctx.subagents.start('spawn', {
-      parent, prompt: [{ type: 'text', text: config.prompt }], signal: new AbortController().signal,
+      parent,
+      prompt: [{ type: 'text', text: config.prompt }],
+      signal: new AbortController().signal,
     })
     cleanups.push(() => run.dispose())
     const child = await entered.promise
     expect(child.id).toBe(run.id)
     expect(adapter.requests).toHaveLength(0)
-    expect(child.session.snapshotEvents().some(event => event.type === 'subagent/descriptor')).toBe(false)
+    expect(child.session.snapshotEvents().some((event) => event.type === 'subagent/descriptor')).toBe(false)
     parent.session.append('tool-workflow/agent-start', {
-      runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId: child.id,
+      runId: WorkflowRunId('run'),
+      seq: 1,
+      label: 'workflow-child',
+      childId: child.id,
     })
     expect((await run.result).output).toEqual([{ type: 'text', text: 'child complete' }])
     expect(adapter.requests).toHaveLength(1)
@@ -117,9 +137,8 @@ describe('advanced Python snapshot workflow ordering', () => {
 
   it.each(['prompt', 'parent', 'turn', 'step'])('does not hold an unrelated %s', async (difference) => {
     const h = await harness()
-    const overrides = difference === 'prompt' ? { messages: [] }
-      : difference === 'turn' ? { turn: 2 }
-        : difference === 'step' ? { step: 2 } : {}
+    const overrides =
+      difference === 'prompt' ? { messages: [] } : difference === 'turn' ? { turn: 2 } : difference === 'step' ? { step: 2 } : {}
     if (difference === 'parent') {
       const session = h.ctx.sessions.create(SessionId('unrelated-child'), { meta: { parentSession: h.other.id } })
       Object.assign(h.agent, { session })

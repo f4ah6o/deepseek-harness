@@ -6,7 +6,7 @@
 // apart from code-block.client.spec.tsx so its lazy-grammar timing cannot
 // race that file's first-touch assertions (files run isolated).
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { cleanup, render } from '@testing-library/react'
 import { CodeBlock } from '../src/markdown/CodeBlock.tsx'
 import { StreamingHighlightSession } from '../src/markdown/highlight.ts'
@@ -28,7 +28,7 @@ function readPre(root: HTMLElement) {
     classes: [...pre!.classList].sort().join(' '),
     tabIndex: pre!.getAttribute('tabindex'),
     text: pre!.textContent,
-    lines: [...pre!.querySelectorAll('.line')].map(line =>
+    lines: [...pre!.querySelectorAll('.line')].map((line) =>
       [...line.querySelectorAll('span[style]')].map((span) => {
         const style = (span as HTMLElement).style
         return `${span.textContent ?? ''}|${style.color}|${style.fontStyle}|${style.fontWeight}|${style.textDecoration}`
@@ -41,7 +41,7 @@ describe('StreamingHighlightSession', () => {
   it('reconstructs the code verbatim and colors tokens through --shiki-* properties', () => {
     const code = 'const a = 1\n// note\nconst b = "x"'
     const lines = new StreamingHighlightSession().update(code, 'ts')
-    expect(lines?.map(line => line.map(span => span.text).join('')).join('\n')).toBe(code)
+    expect(lines?.map((line) => line.map((span) => span.text).join('')).join('\n')).toBe(code)
     expect(lines?.[0]?.[0]).toEqual({ text: 'const', style: { color: 'var(--shiki-token-keyword)' } })
     expect(lines?.[1]?.[0]?.style.color).toBe('var(--shiki-token-comment)')
   })
@@ -58,7 +58,7 @@ describe('StreamingHighlightSession', () => {
     }
   })
 
-  it('keeps completed lines\' span arrays identical across growth and re-tokenizes only the tail', () => {
+  it("keeps completed lines' span arrays identical across growth and re-tokenizes only the tail", () => {
     const session = new StreamingHighlightSession()
     const first = session.update('const a = 1\nlet', 'ts')
     expect(first).toBeDefined()
@@ -74,8 +74,8 @@ describe('StreamingHighlightSession', () => {
     expect(first?.appended).toHaveLength(1)
     expect(first?.tail).toHaveLength(1)
     expect(second?.appended).toHaveLength(1)
-    expect(second?.appended[0]?.map(span => span.text).join('')).toBe('let b = 2')
-    expect(second?.tail[0]?.map(span => span.text).join('')).toBe('// tail')
+    expect(second?.appended[0]?.map((span) => span.text).join('')).toBe('let b = 2')
+    expect(second?.tail[0]?.map((span) => span.text).join('')).toBe('// tail')
     expect(second?.generation).toBe(first?.generation)
     expect(session.updateFrame('const a = 1\nlet b = 2\n// tail', 'ts')).toBe(second)
   })
@@ -90,7 +90,7 @@ describe('StreamingHighlightSession', () => {
       code += `${line}\n`
       const frame = session.updateFrame(code, 'ts')
       expect(frame?.appended).toHaveLength(1)
-      expect(frame?.appended[0]?.map(span => span.text).join('')).toBe(line)
+      expect(frame?.appended[0]?.map((span) => span.text).join('')).toBe(line)
       generation ??= frame?.generation
       expect(frame?.generation).toBe(generation)
       appended += frame?.appended.length ?? 0
@@ -136,11 +136,14 @@ describe('StreamingHighlightSession', () => {
   it('a lazy grammar reports plain until it registers, then highlights on the next update', async () => {
     const session = new StreamingHighlightSession()
     expect(session.update('print(1)', 'python')).toBeUndefined()
-    await vi.waitFor(() => {
-      const lines = session.update('print(1)', 'python')
-      expect(lines?.[0]?.map(span => span.text).join('')).toBe('print(1)')
-      expect(lines?.[0]?.length).toBeGreaterThan(1)
-    }, { timeout: 5_000 })
+    await vi.waitFor(
+      () => {
+        const lines = session.update('print(1)', 'python')
+        expect(lines?.[0]?.map((span) => span.text).join('')).toBe('print(1)')
+        expect(lines?.[0]?.length).toBeGreaterThan(1)
+      },
+      { timeout: 5_000 },
+    )
   })
 
   it('a trailing newline renders as a real empty last line (settled-arm parity)', () => {
@@ -178,14 +181,17 @@ describe('StreamingHighlightSession', () => {
     // Span text carries no \r for completed lines, exactly like the settled
     // arm's shiki output.
     const lines = session.update(code, 'bash')
-    expect(lines?.map(line => line.map(span => span.text).join('')).join('\n')).toBe('echo a \\\nb\nc')
+    expect(lines?.map((line) => line.map((span) => span.text).join('')).join('\n')).toBe('echo a \\\nb\nc')
   })
 
   it('markdown markup styles (bold/italic/underline) reach the spans once the grammar loads', async () => {
     const snippet = '# Heading\n**bold words** and *italic* and a [link with spaces](https://x.example) tail'
-    await vi.waitFor(() => {
-      expect(new StreamingHighlightSession().update('# x', 'md')).toBeDefined()
-    }, { timeout: 5_000 })
+    await vi.waitFor(
+      () => {
+        expect(new StreamingHighlightSession().update('# x', 'md')).toBeDefined()
+      },
+      { timeout: 5_000 },
+    )
     const session = new StreamingHighlightSession()
     for (let end = 1; end <= snippet.length; end++) {
       const slice = snippet.slice(0, end)
@@ -194,9 +200,9 @@ describe('StreamingHighlightSession', () => {
     const lines = session.update(snippet, 'md')
     expect(lines?.[0]?.[0]?.style.fontWeight).toBe('bold')
     const spans = lines?.[1] ?? []
-    expect(spans.some(span => span.style.fontWeight === 'bold')).toBe(true)
-    expect(spans.some(span => span.style.fontStyle === 'italic')).toBe(true)
-    expect(spans.some(span => span.style.textDecoration === 'underline')).toBe(true)
+    expect(spans.some((span) => span.style.fontWeight === 'bold')).toBe(true)
+    expect(spans.some((span) => span.style.fontStyle === 'italic')).toBe(true)
+    expect(spans.some((span) => span.style.textDecoration === 'underline')).toBe(true)
   })
 })
 
@@ -210,9 +216,12 @@ describe('CodeBlock streaming arm', () => {
 
   it('a markdown fence matches the settled swap including font styles, and a CRLF fence matches too', async () => {
     // md is a lazy grammar: wait for it so both arms highlight.
-    await vi.waitFor(() => {
-      expect(new StreamingHighlightSession().update('# x', 'md')).toBeDefined()
-    }, { timeout: 5_000 })
+    await vi.waitFor(
+      () => {
+        expect(new StreamingHighlightSession().update('# x', 'md')).toBeDefined()
+      },
+      { timeout: 5_000 },
+    )
     const md = '# Heading\n**bold words** and *italic* and a [link with spaces](https://x.example) tail\n'
     const mdStreamed = render(<CodeBlock code={md} lang="md" streaming {...LABELS} />)
     const mdSettled = render(<CodeBlock code={md} lang="md" {...LABELS} />)
@@ -230,7 +239,7 @@ describe('CodeBlock streaming arm', () => {
     expect(readPre(crlfStreamed.container)).toEqual(readPre(crlfSettled.container))
   })
 
-  it('keeps completed lines\' DOM nodes as the code grows and appends the new ones', () => {
+  it("keeps completed lines' DOM nodes as the code grows and appends the new ones", () => {
     const view = render(<CodeBlock code={'const a = 1\nlet partial\n'} lang="ts" streaming {...LABELS} />)
     const firstLine = view.container.querySelector('pre.shiki .line')
     expect(firstLine).not.toBeNull()
@@ -248,9 +257,7 @@ describe('CodeBlock streaming arm', () => {
     const view = render(<CodeBlock code={'const first = 1\n'} lang="ts" streaming {...LABELS} />)
     const firstLine = view.container.querySelector('pre.shiki .line')
     expect(firstLine).not.toBeNull()
-    view.rerender(
-      <CodeBlock code={'const first = 1\nconst second = 2\nlet tail'} lang="ts" streaming {...LABELS} />,
-    )
+    view.rerender(<CodeBlock code={'const first = 1\nconst second = 2\nlet tail'} lang="ts" streaming {...LABELS} />)
     expect(view.container.querySelector('pre.shiki .line')).toBe(firstLine)
   })
 
@@ -272,7 +279,12 @@ describe('CodeBlock streaming arm', () => {
     expect(line).not.toBeNull()
     const loader = new StreamingHighlightSession()
     expect(loader.update('puts 1', 'ruby')).toBeUndefined()
-    await vi.waitFor(() => { expect(loader.update('puts 1', 'ruby')).toBeDefined() }, { timeout: 5_000 })
+    await vi.waitFor(
+      () => {
+        expect(loader.update('puts 1', 'ruby')).toBeDefined()
+      },
+      { timeout: 5_000 },
+    )
     expect(view.container.querySelector('pre.shiki .line')).toBe(line)
   })
 

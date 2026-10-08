@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 
 const root = resolve(import.meta.dirname, '..')
 const script = resolve(root, 'scripts/build-exe-for-python-sdk.ts')
@@ -50,17 +50,12 @@ describe('Python runtime executable builder CLI', () => {
   })
 
   it('runs pnpm through its JavaScript entrypoint without a command shell', () => {
-    const result = run(
-      { npm_execpath: 'C:\\tools\\pnpm.cjs' },
-      '--skip-build',
-      '--dry-run',
-      '--targets=node24-macos-arm64',
-    )
+    const result = run({ npm_execpath: 'C:\\tools\\pnpm.cjs' }, '--skip-build', '--dry-run', '--targets=node24-macos-arm64')
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain(`${process.execPath} C:\\tools\\pnpm.cjs run verify-runtime-closure`)
     expect(result.stdout).toContain(`${process.execPath} C:\\tools\\pnpm.cjs --filter dsh-python-runtime-closure deploy`)
-    const deploy = result.stdout.split('\n').find(line => line.includes(' --filter dsh-python-runtime-closure deploy'))
+    const deploy = result.stdout.split('\n').find((line) => line.includes(' --filter dsh-python-runtime-closure deploy'))
     expect(deploy).toContain('--prod --config.allow-unused-patches=true')
     expect(result.stdout.split('--config.allow-unused-patches=true')).toHaveLength(2)
     expect(result.stdout).not.toContain(resolve(root, 'python/sdk-runtime/runtime-bootstrap.mjs'))
@@ -91,12 +86,7 @@ describe('Python runtime executable builder CLI', () => {
   })
 
   it('accepts the macOS x64 pkg target', () => {
-    const result = run(
-      { npm_execpath: 'C:\\tools\\pnpm.cjs' },
-      '--skip-build',
-      '--dry-run',
-      '--targets=node24-macos-x64',
-    )
+    const result = run({ npm_execpath: 'C:\\tools\\pnpm.cjs' }, '--skip-build', '--dry-run', '--targets=node24-macos-x64')
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('exec pkg')
@@ -106,12 +96,7 @@ describe('Python runtime executable builder CLI', () => {
   })
 
   it('rejects a Windows arm64 product before any build step', () => {
-    const result = run(
-      { npm_execpath: 'C:\\tools\\pnpm.cjs' },
-      '--skip-build',
-      '--dry-run',
-      '--targets=node24-win-arm64',
-    )
+    const result = run({ npm_execpath: 'C:\\tools\\pnpm.cjs' }, '--skip-build', '--dry-run', '--targets=node24-win-arm64')
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('Windows supports x64 only')

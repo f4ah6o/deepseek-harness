@@ -1,8 +1,8 @@
 /**
  * Quick comprehensive documentation-standard tests: the reference example
- * stays valid, the consolidated `dsh-doc` skill carries no stale copied
- * website values or prototype-era language, and the kind system maps each
- * label to exactly one skill template. Session release records match the
+ * stays valid, the consolidated `dsh-doc` skill carries no prototype-era
+ * language, and the kind system maps each label to exactly one skill template.
+ * Session release records match the
  * writer bound, bilingual counterpart, and evidence links. These run in `pnpm run test` and
  * `pnpm run test:docs` to guard the standard between heavier corpus gates.
  * @module scripts/doc-standard.spec
@@ -11,7 +11,7 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { JSON_SCHEMA, load } from 'js-yaml'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { readCurrentSessionFormatVersion } from './gen-session-format-catalog.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -25,9 +25,8 @@ const PACKAGE_README_GLOBS = [
 ] as const
 
 function packageReadmes(): string[] {
-  return PACKAGE_README_GLOBS
-    .flatMap(pattern => globSync(pattern, { cwd: root, exclude: ['**/node_modules/**'] }))
-    .map(file => file.replaceAll('\\', '/'))
+  return PACKAGE_README_GLOBS.flatMap((pattern) => globSync(pattern, { cwd: root, exclude: ['**/node_modules/**'] }))
+    .map((file) => file.replaceAll('\\', '/'))
     .sort()
 }
 
@@ -116,7 +115,10 @@ function readFrontmatter(file: string): Record<string, unknown> {
 }
 
 function packageDir(file: string): string {
-  return file.replaceAll('\\', '/').replace(/\/README\.zh\.md$/, '').replace(/\/README\.md$/, '')
+  return file
+    .replaceAll('\\', '/')
+    .replace(/\/README\.zh\.md$/, '')
+    .replace(/\/README\.md$/, '')
 }
 
 /** Whether the package manifest declares `dsh.bundle.patch`. */
@@ -152,9 +154,17 @@ function packageReadmeMetadataErrors(file: string, metadata: Record<string, unkn
 function packageReadmeStructureErrors(file: string, source: string): string[] {
   const chinese = file.endsWith('.zh.md')
   const required = chinese
-    ? [[/^## 概述$/m, '概述'], [/^## 目录$/m, '目录'], [/^#{2,3} 开发备注$/m, '开发备注']] as const
-    : [[/^## Summary$/m, 'Summary'], [/^## Table of Contents$/m, 'Table of Contents'], [/^#{2,3} Dev Note$/m, 'Dev Note']] as const
-  return required.flatMap(([pattern, label]) => pattern.test(source) ? [] : [`missing ${label}`])
+    ? ([
+        [/^## 概述$/m, '概述'],
+        [/^## 目录$/m, '目录'],
+        [/^#{2,3} 开发备注$/m, '开发备注'],
+      ] as const)
+    : ([
+        [/^## Summary$/m, 'Summary'],
+        [/^## Table of Contents$/m, 'Table of Contents'],
+        [/^#{2,3} Dev Note$/m, 'Dev Note'],
+      ] as const)
+  return required.flatMap(([pattern, label]) => (pattern.test(source) ? [] : [`missing ${label}`]))
 }
 
 interface SessionFormatRelease {
@@ -178,19 +188,21 @@ function validateSessionFormatRelease(source: string, currentWriterVersion: numb
     throw new Error('Session format release record requires exactly latestReleasedVersion and evidenceTag')
   }
   const { latestReleasedVersion, evidenceTag } = metadata as Record<string, unknown>
-  if (typeof latestReleasedVersion !== 'number' || !Number.isSafeInteger(latestReleasedVersion)
-    || latestReleasedVersion < 0) {
+  if (typeof latestReleasedVersion !== 'number' || !Number.isSafeInteger(latestReleasedVersion) || latestReleasedVersion < 0) {
     throw new Error('latestReleasedVersion must be a non-negative safe integer')
   }
   if (latestReleasedVersion > currentWriterVersion) {
     throw new Error('latestReleasedVersion must not exceed the current writer version')
   }
-  if (typeof evidenceTag !== 'string'
-    || !/^dsh-v\d+\.\d+\.\d+(?:-[\dA-Za-z]+(?:[.-][\dA-Za-z]+)*)?(?:\+[\dA-Za-z]+(?:[.-][\dA-Za-z]+)*)?$/u.test(evidenceTag)) {
+  if (
+    typeof evidenceTag !== 'string' ||
+    !/^dsh-v\d+\.\d+\.\d+(?:-[\dA-Za-z]+(?:[.-][\dA-Za-z]+)*)?(?:\+[\dA-Za-z]+(?:[.-][\dA-Za-z]+)*)?$/u.test(evidenceTag)
+  ) {
     throw new Error('evidenceTag must be a non-empty dsh-v version tag without URL delimiters')
   }
-  const hasEvidence = normalized.split('\n').some(line =>
-    line.includes(`\`${evidenceTag}\``) && line.includes('`packages/core/session/src/types.ts`'))
+  const hasEvidence = normalized
+    .split('\n')
+    .some((line) => line.includes(`\`${evidenceTag}\``) && line.includes('`packages/core/session/src/types.ts`'))
   if (!hasEvidence) throw new Error('Missing matching evidence tag and tagged writer path')
   return { latestReleasedVersion, evidenceTag }
 }
@@ -211,7 +223,7 @@ function releaseDocument(body: string, evidence: string): string {
 
 describe('Session format release authority', () => {
   it('keeps bilingual release metadata consistent with the writer and tagged evidence', () => {
-    const records = ['docs/session-format-status.md', 'docs/session-format-status.zh.md'].map(file =>
+    const records = ['docs/session-format-status.md', 'docs/session-format-status.zh.md'].map((file) =>
       validateSessionFormatRelease(readFileSync(resolve(root, file), 'utf8'), readCurrentSessionFormatVersion(root)),
     )
     expect(records[0]).toEqual(records[1])
@@ -221,7 +233,10 @@ describe('Session format release authority', () => {
     const { record, body, evidence, source } = sessionFormatReleaseFixture()
     expect(validateSessionFormatRelease(source, record.latestReleasedVersion)).toEqual(record)
     expect(validateSessionFormatRelease(source, record.latestReleasedVersion + 1)).toEqual(record)
-    const zero = releaseDocument(body.replace(`latestReleasedVersion: ${record.latestReleasedVersion}`, 'latestReleasedVersion: 0'), evidence)
+    const zero = releaseDocument(
+      body.replace(`latestReleasedVersion: ${record.latestReleasedVersion}`, 'latestReleasedVersion: 0'),
+      evidence,
+    )
     expect(validateSessionFormatRelease(zero, 0)).toEqual({ ...record, latestReleasedVersion: 0 })
   })
 
@@ -271,11 +286,24 @@ describe('Session format release authority', () => {
   it('rejects empty, malformed, and URL-injecting evidence tags', () => {
     const { record, evidence } = sessionFormatReleaseFixture()
     for (const tag of [
-      null, true, 1, '', ' ', 'dsh-v', record.evidenceTag.replace('dsh-v', 'v'),
-      `${record.evidenceTag}/other`, `${record.evidenceTag}?query`, `${record.evidenceTag}#fragment`,
-      `${record.evidenceTag}%2Fother`, `${record.evidenceTag})`, `${record.evidenceTag}\n`,
+      null,
+      true,
+      1,
+      '',
+      ' ',
+      'dsh-v',
+      record.evidenceTag.replace('dsh-v', 'v'),
+      `${record.evidenceTag}/other`,
+      `${record.evidenceTag}?query`,
+      `${record.evidenceTag}#fragment`,
+      `${record.evidenceTag}%2Fother`,
+      `${record.evidenceTag})`,
+      `${record.evidenceTag}\n`,
     ]) {
-      const source = releaseDocument(`latestReleasedVersion: ${record.latestReleasedVersion}\nevidenceTag: ${JSON.stringify(tag)}`, evidence)
+      const source = releaseDocument(
+        `latestReleasedVersion: ${record.latestReleasedVersion}\nevidenceTag: ${JSON.stringify(tag)}`,
+        evidence,
+      )
       expect(() => validateSessionFormatRelease(source, record.latestReleasedVersion), String(tag)).toThrow('dsh-v version tag')
     }
   })
@@ -291,8 +319,9 @@ describe('Session format release authority', () => {
       evidence.replace('types.ts', 'types.ts#fragment'),
       evidence.replace('; tagged writer:', ';\n tagged writer:'),
     ]) {
-      expect(() => validateSessionFormatRelease(releaseDocument(body, invalid), record.latestReleasedVersion), invalid)
-        .toThrow('Missing matching evidence tag and tagged writer path')
+      expect(() => validateSessionFormatRelease(releaseDocument(body, invalid), record.latestReleasedVersion), invalid).toThrow(
+        'Missing matching evidence tag and tagged writer path',
+      )
     }
   })
 })
@@ -305,18 +334,11 @@ describe('dsh-doc skill consolidation', () => {
       '.agents/skills/dsh-doc/references/structure-hierarchy.md',
       '.agents/skills/dsh-doc/references/style.md',
       '.agents/skills/dsh-doc/references/review.md',
-      '.agents/skills/dsh-doc/references/website-sync.md',
     ]
     for (const file of files) {
       const source = readFileSync(resolve(root, file), 'utf8')
       expect(source, file).not.toMatch(/\bprototype\b/i)
     }
-  })
-
-  it('copies no stale website sidebar or section-owner values', () => {
-    const source = readFileSync(resolve(root, '.agents/skills/dsh-doc/references/website-sync.md'), 'utf8')
-    expect(source).not.toContain('en-docs')
-    expect(source).not.toContain('sectionOrder')
   })
 
   it('keeps the reference example linked from the skill', () => {
@@ -335,7 +357,9 @@ describe('dsh-doc skill consolidation', () => {
   })
 
   it('maps every kind label to exactly one skill template that exists', () => {
-    const templateFiles = globSync('.agents/skills/dsh-doc/templates/*.md', { cwd: root }).map(path => path.split(sep).join('/')).sort()
+    const templateFiles = globSync('.agents/skills/dsh-doc/templates/*.md', { cwd: root })
+      .map((path) => path.split(sep).join('/'))
+      .sort()
     const registered = Object.values(KIND_TEMPLATES).sort()
     expect(templateFiles).toEqual(registered)
     for (const [kind, template] of Object.entries(KIND_TEMPLATES)) {
@@ -354,8 +378,9 @@ describe('dsh-doc skill consolidation', () => {
   })
 
   it('maps persistence transition records to their dedicated document kind', () => {
-    const files = globSync('docs/persistence-changes/*.md', { cwd: root })
-      .filter(file => !/\/README(?:\.zh)?\.md$/u.test(file.replaceAll('\\', '/')))
+    const files = globSync('docs/persistence-changes/*.md', { cwd: root }).filter(
+      (file) => !/\/README(?:\.zh)?\.md$/u.test(file.replaceAll('\\', '/')),
+    )
     expect(files.length).toBeGreaterThan(0)
     for (const file of files) {
       const metadata = readFrontmatter(file)
@@ -397,44 +422,48 @@ describe('dsh-doc skill consolidation', () => {
   })
 
   it('keeps every package README on the summary, contents, and Dev Note skeleton', () => {
-    for (const file of packageReadmes().filter(file => file.split('/').length === 4)) {
+    for (const file of packageReadmes().filter((file) => file.split('/').length === 4)) {
       const source = readFileSync(resolve(root, file), 'utf8')
       expect(packageReadmeStructureErrors(file, source), file).toEqual([])
     }
   })
 
   it('rejects redundant fields and a kind that does not match the README position', () => {
-    expect(packageReadmeMetadataErrors('packages/example/README.md', {
-      description: 'Example group.',
-      kind: 'package-reference',
-      name: 'example',
-      audience: ['developer'],
-      tags: ['example'],
-      i18n: { counterpart: 'README.zh.md' },
-    })).toEqual([
+    expect(
+      packageReadmeMetadataErrors('packages/example/README.md', {
+        description: 'Example group.',
+        kind: 'package-reference',
+        name: 'example',
+        audience: ['developer'],
+        tags: ['example'],
+        i18n: { counterpart: 'README.zh.md' },
+      }),
+    ).toEqual([
       'kind must be package-group',
       'name is redundant or has no governed consumer',
       'audience is redundant or has no governed consumer',
       'tags is redundant or has no governed consumer',
       'i18n is redundant or has no governed consumer',
     ])
-    expect(packageReadmeMetadataErrors('packages\\example\\package\\README.md', {
-      description: 'Example package.',
-      kind: 'package-reference',
-    })).toEqual([])
+    expect(
+      packageReadmeMetadataErrors('packages\\example\\package\\README.md', {
+        description: 'Example package.',
+        kind: 'package-reference',
+      }),
+    ).toEqual([])
   })
 
   it('rejects README-local i18n metadata', () => {
-    expect(packageReadmeMetadataErrors('packages\\example\\package\\README.md', {
-      description: 'Example package.',
-      kind: 'package-reference',
-      i18n: {
-        'counterpart': 'packages/example/package/README.zh.md',
-        'line-aligned': true,
-      },
-    })).toEqual([
-      'i18n is redundant or has no governed consumer',
-    ])
+    expect(
+      packageReadmeMetadataErrors('packages\\example\\package\\README.md', {
+        description: 'Example package.',
+        kind: 'package-reference',
+        i18n: {
+          counterpart: 'packages/example/package/README.zh.md',
+          'line-aligned': true,
+        },
+      }),
+    ).toEqual(['i18n is redundant or has no governed consumer'])
   })
 })
 

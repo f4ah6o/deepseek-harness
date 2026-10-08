@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { z } from 'zod'
 import { appendChunkedList, chunkedListSchema, iterateChunkedList } from '../src/index.ts'
 import type { ChunkedList } from '../src/index.ts'
@@ -24,8 +24,7 @@ describe('persistent chunked list', () => {
     }
     expect(prefixes[64]?.previous).toBe(prefixes[63])
     expect(prefixes[65]?.previous).toBe(prefixes[63])
-    expect([...iterateChunkedList(appendChunkedList(prefixes[64], -1))])
-      .toEqual([...Array.from({ length: 65 }, (_, i) => i), -1])
+    expect([...iterateChunkedList(appendChunkedList(prefixes[64], -1))]).toEqual([...Array.from({ length: 65 }, (_, i) => i), -1])
     expect([...iterateChunkedList(prefixes[65])]).toEqual(Array.from({ length: 66 }, (_, i) => i))
   })
 

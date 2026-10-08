@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { DEFAULT_TERMINAL_MAX_LINES, TerminalBlock as LocalizedTerminalBlock } from '../src/index.ts'
@@ -20,7 +20,7 @@ beforeEach(() => {
 })
 
 function outputLines(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class^="_line_"]')].map(row => row.textContent ?? '')
+  return [...container.querySelectorAll('[class^="_line_"]')].map((row) => row.textContent ?? '')
 }
 
 function runStateOf(container: HTMLElement): { state: string | null; label: string | undefined } {
@@ -32,7 +32,7 @@ function runStateOf(container: HTMLElement): { state: string | null; label: stri
 }
 
 function promptRows(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[class^="_promptLine_"]')].map(row => (row.textContent ?? '').trim())
+  return [...container.querySelectorAll('[class^="_promptLine_"]')].map((row) => (row.textContent ?? '').trim())
 }
 
 function body(count: number): string {
@@ -106,7 +106,9 @@ describe('TerminalBlock states', () => {
     const view = render(<TerminalBlock command="npm run build --verbose" running copyText="npm run build --verbose" />)
     // No output yet, but the command is already copyable.
     const button = view.getByRole('button', { name: '复制' })
-    await act(async () => { fireEvent.click(button) })
+    await act(async () => {
+      fireEvent.click(button)
+    })
     expect(writeText).toHaveBeenCalledWith('npm run build --verbose')
   })
 
@@ -265,7 +267,7 @@ describe('TerminalBlock run-state dot', () => {
   it('places the dot ahead of the prompt label and the command', () => {
     const view = render(<TerminalBlock command="ls" cwd="/srv/app" output="a" />)
     const row = view.container.querySelector('[class^="_promptLine_"]')
-    expect([...row!.children].map(node => node.textContent)).toEqual(['', 'app', 'ls'])
+    expect([...row!.children].map((node) => node.textContent)).toEqual(['', 'app', 'ls'])
   })
 
   // The cwd labels the call, not each line: a `cd` in the command moves later
@@ -434,7 +436,7 @@ describe('writeClipboard', () => {
     expect(document.querySelector('textarea')).toBeNull()
   })
 
-  it('reports execCommand\'s own refusal verbatim', async () => {
+  it("reports execCommand's own refusal verbatim", async () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
     Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
     await expect(writeClipboard('payload')).resolves.toBe(false)

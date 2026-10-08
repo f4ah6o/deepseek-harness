@@ -6,12 +6,17 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { connectDesktopWelcome } from '../../desktop/src/welcome-backend.ts'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
 import {
-  acknowledgeReloadConnectionLoss, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
+  acknowledgeReloadConnectionLoss,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
@@ -54,7 +59,10 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       response.setHeader('content-type', 'application/json')
       response.end(JSON.stringify({ code: 0, data: { biz_code: balance && balanceFailure ? 17 : 0, biz_data: value } }))
     })
-    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
     const address = server.address()
     if (address === null || typeof address === 'string') throw new Error('fixture server address unavailable')
     origin = `http://127.0.0.1:${address.port}`
@@ -63,18 +71,27 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     const locale = task.name === 'keeps funded credit actions stable and rechecks on reload in English dark mode' ? 'en' : 'zh'
     scaffold = await launchWebScaffold({ locale, deepSeekMissingCredential: true, extraOverlayPath: overlay })
     await scaffold.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), async () => ({
-      kind: 'grant', payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
+      kind: 'grant',
+      payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
     }))
     browser = await chromium.launch()
   })
 
   afterEach(async () => {
-    try { await browser?.close() } finally {
-      try { await scaffold?.close() } finally {
+    try {
+      await browser?.close()
+    } finally {
+      try {
+        await scaffold?.close()
+      } finally {
         try {
-          if (server?.listening) await new Promise<void>((resolve, reject) => {
-            server.close((error) => { if (error) reject(error); else resolve() })
-          })
+          if (server?.listening)
+            await new Promise<void>((resolve, reject) => {
+              server.close((error) => {
+                if (error) reject(error)
+                else resolve()
+              })
+            })
         } finally {
           if (root !== undefined) await rm(root, { recursive: true, force: true })
         }
@@ -87,14 +104,20 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     const welcome = await connectDesktopWelcome(scaffold.authenticatedUrl, (input, init) => scaffold.hostFetch(input, init))
     await opened.exposeFunction('__onboardingHasApiKey', async () => (await welcome.read()).hasApiKey)
     await opened.addInitScript(() => {
-      Object.defineProperty(globalThis, 'dshOnboarding', { value: {
-        hasApiKey: () => (globalThis as typeof globalThis & { __onboardingHasApiKey(): Promise<boolean> }).__onboardingHasApiKey(),
-        setActive: () => {},
-      } })
+      Object.defineProperty(globalThis, 'dshOnboarding', {
+        value: {
+          hasApiKey: () => (globalThis as typeof globalThis & { __onboardingHasApiKey(): Promise<boolean> }).__onboardingHasApiKey(),
+          setActive: () => {},
+        },
+      })
       Object.defineProperty(globalThis, 'dshDesktop', { value: { protocolVersion: 1 } })
-      Object.defineProperty(globalThis, 'dshPlatform', { value: {
-        open: async () => {}, setBounds: async () => {}, close: async () => {},
-      } })
+      Object.defineProperty(globalThis, 'dshPlatform', {
+        value: {
+          open: async () => {},
+          setBounds: async () => {},
+          close: async () => {},
+        },
+      })
     })
     return opened
   }
@@ -111,45 +134,62 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       console.log(`Onboarding screenshots: ${screenshots}`)
     }
     for (const viewport of [
-      { width: 880, height: 600 }, { width: 960, height: 600 }, { width: 1000, height: 780 }, { width: 1200, height: 920 },
-      { width: 1440, height: 920 }, { width: 2200, height: 1200 },
+      { width: 880, height: 600 },
+      { width: 960, height: 600 },
+      { width: 1000, height: 780 },
+      { width: 1200, height: 920 },
+      { width: 1440, height: 920 },
+      { width: 2200, height: 1200 },
     ]) {
       await page.setViewportSize(viewport)
-      await page.evaluate(async () => { await document.fonts.ready })
-      const geometry = await page.locator('[data-desktop-onboarding]').evaluate(region => ({
+      await page.evaluate(async () => {
+        await document.fonts.ready
+      })
+      const geometry = await page.locator('[data-desktop-onboarding]').evaluate((region) => ({
         scrollWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth,
-        clippedControls: [...region.querySelectorAll('h1, button, label')].filter((element) => {
-          const box = element.getBoundingClientRect()
-          const outside = box.left < 0 || box.top < 0 || box.right > window.innerWidth + 1 || box.bottom > window.innerHeight + 1
-          return box.width > 0 && box.height > 0 && outside
-        }).map(element => element.textContent?.trim() || element.getAttribute('aria-label')),
+        clippedControls: [...region.querySelectorAll('h1, button, label')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect()
+            const outside = box.left < 0 || box.top < 0 || box.right > window.innerWidth + 1 || box.bottom > window.innerHeight + 1
+            return box.width > 0 && box.height > 0 && outside
+          })
+          .map((element) => element.textContent?.trim() || element.getAttribute('aria-label')),
       }))
       expect(geometry.scrollWidth, `${name} at ${viewport.width}: document width`).toBeLessThanOrEqual(geometry.viewportWidth)
       expect(geometry.clippedControls, `${name} at ${viewport.width}: clipped controls`).toEqual([])
       const primary = page.locator('[class*="primaryAction"] > button')
       if (await primary.count()) {
-        expect(await primary.evaluate((button) => {
-          const box = button.getBoundingClientRect()
-          return [2, box.height / 2, box.height - 2]
-            .every(y => button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + y)))
-        }), `${name}: primary action receives clicks across its height`).toBe(true)
+        expect(
+          await primary.evaluate((button) => {
+            const box = button.getBoundingClientRect()
+            return [2, box.height / 2, box.height - 2].every((y) =>
+              button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + y)),
+            )
+          }),
+          `${name}: primary action receives clicks across its height`,
+        ).toBe(true)
       }
       if (name.includes('-en-')) {
-        const headingFont = await page.locator('h1').evaluate(element => ({
-          font: getComputedStyle(element).fontFamily, weight: getComputedStyle(element).fontWeight,
+        const headingFont = await page.locator('h1').evaluate((element) => ({
+          font: getComputedStyle(element).fontFamily,
+          weight: getComputedStyle(element).fontWeight,
         }))
         expect(headingFont.font).toContain('Montserrat')
         expect(headingFont.weight).toBe('300')
-        const brandWeights = await page.locator('h1 em').evaluateAll(elements => elements.map(element => getComputedStyle(element).fontWeight))
-        expect(brandWeights.every(weight => weight === '500')).toBe(true)
+        const brandWeights = await page
+          .locator('h1 em')
+          .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontWeight))
+        expect(brandWeights.every((weight) => weight === '500')).toBe(true)
         expect(await page.evaluate(async () => (await document.fonts.load('500 28px Montserrat')).length)).toBeGreaterThan(0)
-        const copyFonts = await page.locator('[class*="heroDescription"], [class*="subtitle"], [class*="cardTitle"], [class*="cardDescription"]')
-          .evaluateAll(elements => elements.map(element => getComputedStyle(element).fontFamily))
-        expect(copyFonts.every(font => font.includes('Montserrat'))).toBe(true)
-        const buttonFonts = await page.locator('[class*="navigation"] button').evaluateAll(elements =>
-          elements.map(element => getComputedStyle(element).fontFamily))
-        expect(buttonFonts.every(font => font.includes('Montserrat'))).toBe(true)
+        const copyFonts = await page
+          .locator('[class*="heroDescription"], [class*="subtitle"], [class*="cardTitle"], [class*="cardDescription"]')
+          .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontFamily))
+        expect(copyFonts.every((font) => font.includes('Montserrat'))).toBe(true)
+        const buttonFonts = await page
+          .locator('[class*="navigation"] button')
+          .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fontFamily))
+        expect(buttonFonts.every((font) => font.includes('Montserrat'))).toBe(true)
         expect(await page.evaluate(async () => (await document.fonts.load('300 28px Montserrat')).length)).toBeGreaterThan(0)
       }
       if ((name === 'purpose' || name === 'process') && viewport.height > 760) {
@@ -173,21 +213,24 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
         expect(action!.y - (card!.y + card!.height)).toBeCloseTo(40, 0)
       }
       if (name === 'welcome' || name === 'credit') {
-        const illustrations = await page.locator('[class*="illustration"] > img:visible').evaluateAll(elements => elements.map((element) => {
-          const image = element as HTMLImageElement
-          const box = image.getBoundingClientRect()
-          return {
-            width: box.width, ratio: box.width / box.height, exportedRatio: image.naturalWidth / image.naturalHeight,
-            loaded: image.complete && image.naturalWidth > 0,
-          }
-        }))
+        const illustrations = await page.locator('[class*="illustration"] > img:visible').evaluateAll((elements) =>
+          elements.map((element) => {
+            const image = element as HTMLImageElement
+            const box = image.getBoundingClientRect()
+            return {
+              width: box.width,
+              ratio: box.width / box.height,
+              exportedRatio: image.naturalWidth / image.naturalHeight,
+              loaded: image.complete && image.naturalWidth > 0,
+            }
+          }),
+        )
         expect(illustrations).toHaveLength(1)
         for (const illustration of illustrations) {
           expect(illustration.loaded).toBe(true)
           expect(illustration.width).toBeGreaterThan(0)
           expect(illustration.ratio).toBeCloseTo(illustration.exportedRatio, 2)
         }
-
       }
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, `${name}-${viewport.width}x${viewport.height}.png`) })
     }
@@ -200,8 +243,10 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       await web.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await web.getByText('选择一个工作区开始', { exact: true }).waitFor()
       expect(await web.locator('[data-desktop-onboarding]').count()).toBe(0)
-      expect((scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value as { step: string }).step).toBe('welcome')
-    } finally { await web.close() }
+      expect((scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value as { step: string }).step).toBe('welcome')
+    } finally {
+      await web.close()
+    }
 
     page = await desktopPage()
     tripwire = watchConsole(page)
@@ -212,40 +257,53 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     expect(await page.locator('[data-desktop-onboarding]').count()).toBe(1)
     await snapshot('welcome')
     for (const platform of ['darwin', 'win32']) {
-      await page.evaluate((value) => { document.documentElement.dataset.platform = value }, platform)
-      expect(await page.locator('[data-desktop-onboarding]').evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe('none')
-      expect(await page.getByRole('button', { name: '开始设置', exact: true }).evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe(platform === 'darwin' ? 'no-drag' : 'none')
+      await page.evaluate((value) => {
+        document.documentElement.dataset.platform = value
+      }, platform)
+      expect(
+        await page
+          .locator('[data-desktop-onboarding]')
+          .evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-app-region')),
+      ).toBe('none')
+      expect(
+        await page
+          .getByRole('button', { name: '开始设置', exact: true })
+          .evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-app-region')),
+      ).toBe(platform === 'darwin' ? 'no-drag' : 'none')
     }
-    await page.evaluate(() => { delete document.documentElement.dataset.platform })
+    await page.evaluate(() => {
+      delete document.documentElement.dataset.platform
+    })
     await page.getByRole('button', { name: '开始设置', exact: true }).click()
     await page.getByRole('heading', { name: '准备可用额度', exact: true }).waitFor()
-    expect(await page.getByRole('button', { name: '下一步', exact: true })
-      .evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(255, 255, 255)')
+    expect(
+      await page.getByRole('button', { name: '下一步', exact: true }).evaluate((element) => getComputedStyle(element).backgroundColor),
+    ).toBe('rgb(255, 255, 255)')
     await snapshot('credit')
     const laterButton = page.getByRole('button', { name: '下一步', exact: true })
     await laterButton.hover()
-    const laterHover = await laterButton.evaluate(element => ({
-      fill: getComputedStyle(element).backgroundColor, overlay: getComputedStyle(element).backgroundImage,
+    const laterHover = await laterButton.evaluate((element) => ({
+      fill: getComputedStyle(element).backgroundColor,
+      overlay: getComputedStyle(element).backgroundImage,
     }))
     expect(laterHover.fill).toBe('rgb(255, 255, 255)')
     expect(laterHover.overlay).toContain('rgba(38, 49, 72, 0.06)')
     if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'credit-later-hover.png') })
     const warningsBefore = tripwire.warnings.length
-    const [balanceResponse] = await Promise.all([
-      page.waitForResponse('**/api/account/getBalance'),
-      page.reload({ waitUntil: 'load' }),
-    ])
+    const [balanceResponse] = await Promise.all([page.waitForResponse('**/api/account/getBalance'), page.reload({ waitUntil: 'load' })])
     await balanceResponse.finished()
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)
     await page.getByRole('heading', { name: '准备可用额度', exact: true }).waitFor()
     expect(await page.getByRole('button', { name: '开始设置', exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: '下一步', exact: true }).click()
     await page.getByRole('heading', { name: '暂时跳过充值？', exact: true }).waitFor()
-    expect(await page.locator('[data-desktop-onboarding]').evaluate(element => getComputedStyle(element).filter)).toBe('none')
-    expect(await page.getByRole('dialog').evaluate(element => getComputedStyle(element.previousElementSibling!).backdropFilter)).toBe('none')
+    expect(await page.locator('[data-desktop-onboarding]').evaluate((element) => getComputedStyle(element).filter)).toBe('none')
+    expect(await page.getByRole('dialog').evaluate((element) => getComputedStyle(element.previousElementSibling!).backdropFilter)).toBe(
+      'none',
+    )
     await page.getByRole('button', { name: '前往充值', exact: true }).click()
     await page.getByRole('button', { name: '返回 DeepSeek Harness', exact: true }).waitFor()
-    expect((scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value as { step: string }).step).toBe('credit')
+    expect((scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value as { step: string }).step).toBe('credit')
     balanceFailure = true
     const readsBefore = balanceReads
     await page.getByRole('button', { name: '返回 DeepSeek Harness', exact: true }).click()
@@ -273,12 +331,15 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     await office.locator('..').click()
     await expect.poll(() => office.isChecked()).toBe(true)
     const icons = page.locator('[class*="purposeCards"] > div').first().locator('[class*="fileIcons"] > svg')
-    const iconMotion = await icons.evaluateAll(elements => elements.map(e => ({
-      name: getComputedStyle(e).animationName, delay: getComputedStyle(e).animationDelay,
-      origin: getComputedStyle(e).transformOrigin,
-    })))
-    expect(iconMotion.every(icon => icon.name.includes('iconEnter') && icon.origin.startsWith('0px'))).toBe(true)
-    expect(iconMotion.map(icon => icon.delay)).toEqual(['0s', '0.03s', '0.05s', '0.062s', '0.07s'])
+    const iconMotion = await icons.evaluateAll((elements) =>
+      elements.map((e) => ({
+        name: getComputedStyle(e).animationName,
+        delay: getComputedStyle(e).animationDelay,
+        origin: getComputedStyle(e).transformOrigin,
+      })),
+    )
+    expect(iconMotion.every((icon) => icon.name.includes('iconEnter') && icon.origin.startsWith('0px'))).toBe(true)
+    expect(iconMotion.map((icon) => icon.delay)).toEqual(['0s', '0.03s', '0.05s', '0.062s', '0.07s'])
     const officeCard = page.locator('[class*="purposeCards"] > div').first()
     await office.focus()
     await page.keyboard.press('Tab')
@@ -293,20 +354,22 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       }
     })
     expect(focusStyles).toEqual({ drag: 'no-drag', card: 'solid', checkbox: 'none', indicator: 'none' })
-    await expect.poll(() => officeCard.evaluate(card => getComputedStyle(card, '::after').opacity)).toBe('1')
+    await expect.poll(() => officeCard.evaluate((card) => getComputedStyle(card, '::after').opacity)).toBe('1')
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    const purposeBorders = await page.locator('[class*="purposeCards"] > div').evaluateAll(cards => cards.map(card => ({
-      gradient: getComputedStyle(card, '::after').backgroundImage,
-      opacity: getComputedStyle(card, '::after').opacity,
-    })))
+    const purposeBorders = await page.locator('[class*="purposeCards"] > div').evaluateAll((cards) =>
+      cards.map((card) => ({
+        gradient: getComputedStyle(card, '::after').backgroundImage,
+        opacity: getComputedStyle(card, '::after').opacity,
+      })),
+    )
     expect(purposeBorders[0]?.gradient).toContain('conic-gradient(')
     expect(purposeBorders[0]?.gradient).toContain('rgb(42, 47, 182)')
     expect(purposeBorders[1]?.gradient).toContain('rgb(57, 100, 254)')
-    expect(purposeBorders.map(border => border.opacity)).toEqual(['1', '1'])
+    expect(purposeBorders.map((border) => border.opacity)).toEqual(['1', '1'])
     const back = page.getByRole('button', { name: '上一步', exact: true })
-    const restingBackColor = await back.evaluate(element => getComputedStyle(element).color)
+    const restingBackColor = await back.evaluate((element) => getComputedStyle(element).color)
     await back.hover()
-    const hoverBack = await back.evaluate(element => ({
+    const hoverBack = await back.evaluate((element) => ({
       text: getComputedStyle(element).color,
       arrow: getComputedStyle(element.querySelector('span')!).backgroundColor,
     }))
@@ -318,20 +381,25 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     await page.getByRole('button', { name: '上一步', exact: true }).click()
     await office.waitFor()
     await page.emulateMedia({ reducedMotion: 'no-preference' })
-    expect(await icons.evaluateAll(elements => elements.map(e => getComputedStyle(e).animationName))).toEqual(Array(5).fill('none'))
+    expect(await icons.evaluateAll((elements) => elements.map((e) => getComputedStyle(e).animationName))).toEqual(Array(5).fill('none'))
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.getByRole('button', { name: '继续', exact: true }).click()
     await page.getByRole('radiogroup').waitFor()
     await page.getByRole('radio', { name: /聚焦结果/ }).focus()
-    for (const [name, process] of [['关键细节', 'standard'], ['完整过程', 'detailed']] as const) {
+    for (const [name, process] of [
+      ['关键细节', 'standard'],
+      ['完整过程', 'detailed'],
+    ] as const) {
       const [saved] = await Promise.all([
         page.waitForResponse((response) => {
           if (!response.url().endsWith('/api/settings/mutate')) return false
           const request = response.request().postDataJSON() as {
             payload: { args: { ns: string; ops: { op: string; path: string[]; value?: unknown }[] } }
           }
-          return request.payload.args.ns === NS && request.payload.args.ops.some(op =>
-            op.op === 'set' && op.path[0] === 'process' && op.value === process)
+          return (
+            request.payload.args.ns === NS &&
+            request.payload.args.ops.some((op) => op.op === 'set' && op.path[0] === 'process' && op.value === process)
+          )
         }),
         page.keyboard.press('ArrowRight'),
       ])
@@ -339,19 +407,29 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       const selected = page.getByRole('radio', { name: new RegExp(name) })
       await expect.poll(() => selected.getAttribute('aria-checked')).toBe('true')
       await expect.poll(() => page.getByRole('button', { name: '进入应用', exact: true }).isEnabled()).toBe(true)
-      expect(scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value).toMatchObject({ process })
-      expect(await selected.evaluate(element => document.activeElement === element)).toBe(true)
+      expect(scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value).toMatchObject({ process })
+      expect(await selected.evaluate((element) => document.activeElement === element)).toBe(true)
     }
     await page.getByRole('button', { name: '进入应用', exact: true }).waitFor()
-    const processBorders = await page.getByRole('radio').evaluateAll(cards => cards.map(card => getComputedStyle(card, '::after').backgroundImage))
-    expect(processBorders.every(border => border.startsWith('conic-gradient('))).toBe(true)
+    const processBorders = await page
+      .getByRole('radio')
+      .evaluateAll((cards) => cards.map((card) => getComputedStyle(card, '::after').backgroundImage))
+    expect(processBorders.every((border) => border.startsWith('conic-gradient('))).toBe(true)
     expect(new Set(processBorders).size).toBe(3)
     await snapshot('process')
     await page.getByRole('button', { name: '进入应用', exact: true }).click()
     await page.locator('[data-desktop-onboarding]').waitFor({ state: 'detached' })
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value).toMatchObject({ step: 'done', process: 'detailed', usage: 'detailed', developerTools: true })
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value).toMatchObject({ transcriptView: 'detailed', performanceUsage: 'detailed' })
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: true })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value).toMatchObject({
+      step: 'done',
+      process: 'detailed',
+      usage: 'detailed',
+      developerTools: true,
+    })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-chat')?.value).toMatchObject({
+      transcriptView: 'detailed',
+      performanceUsage: 'detailed',
+    })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: true })
     const persisted = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(persisted).toContain('id: ui-settings-account')
     expect(persisted).toContain('process: detailed')
@@ -382,17 +460,20 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await page.getByRole('button', { name: 'Get started', exact: true }).waitFor()
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value).not.toHaveProperty('creditFunded')
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value).not.toHaveProperty('creditFunded')
     bonusBalance = '0'
     const recheck = page.waitForResponse('**/api/account/getBalance')
     await page.reload({ waitUntil: 'load' })
     await (await recheck).finished()
     await page.getByRole('button', { name: 'Get started', exact: true }).click()
     await page.getByRole('heading', { name: 'Add credits', exact: true }).waitFor()
-    expect(await page.getByRole('button', { name: 'Next', exact: true })
-      .evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(72, 73, 76)')
+    expect(
+      await page.getByRole('button', { name: 'Next', exact: true }).evaluate((element) => getComputedStyle(element).backgroundColor),
+    ).toBe('rgb(72, 73, 76)')
     await snapshot('credit-en-dark')
-    expect(await page.locator('[class*="backIcon"]').evaluate(element => getComputedStyle(element).maskImage)).toContain('data:image/svg+xml')
+    expect(await page.locator('[class*="backIcon"]').evaluate((element) => getComputedStyle(element).maskImage)).toContain(
+      'data:image/svg+xml',
+    )
     await page.getByRole('button', { name: 'Next', exact: true }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
     await page.getByRole('checkbox', { name: 'Coding & development', exact: true }).locator('..').click()
@@ -405,7 +486,10 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
   it('applies API-key defaults without opening App onboarding or repeating after account login', async () => {
     await scaffold.ctx.credentials.deleteRecord(credentialKey('deepseek-account-platform', 'default'))
     await scaffold.ctx.credentials.set(credentialRef('DEEPSEEK_API_KEY'), 'fixture-api-key')
-    await scaffold.ctx.settings.mutate(NS, Object.entries(INITIAL).map(([field, value]) => ({ op: 'set', path: [field], value })))
+    await scaffold.ctx.settings.mutate(
+      NS,
+      Object.entries(INITIAL).map(([field, value]) => ({ op: 'set', path: [field], value })),
+    )
     page = await desktopPage()
     // Completion follows client activation, credential metadata, and three ordered Host writes.
     const completed = page.waitForResponse((response) => {
@@ -416,13 +500,22 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     const [response] = await Promise.all([completed, page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })])
     await response.finished()
     expect(await response.json()).toMatchObject({ result: { ok: true } })
-    expect((scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value as { step: string }).step).toBe('done')
+    expect((scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value as { step: string }).step).toBe('done')
     expect(await page.locator('[data-desktop-onboarding]').count()).toBe(0)
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === NS)?.value).toMatchObject({ completion: 'api-key', process: 'standard', usage: 'detailed', developerTools: true })
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value).toMatchObject({ transcriptView: 'standard', performanceUsage: 'detailed' })
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: true })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === NS)?.value).toMatchObject({
+      completion: 'api-key',
+      process: 'standard',
+      usage: 'detailed',
+      developerTools: true,
+    })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-chat')?.value).toMatchObject({
+      transcriptView: 'standard',
+      performanceUsage: 'detailed',
+    })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: true })
     await scaffold.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), async () => ({
-      kind: 'grant', payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
+      kind: 'grant',
+      payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
     }))
     await page.reload({ waitUntil: 'load' })
     await page.getByText('选择一个工作区开始', { exact: true }).waitFor()

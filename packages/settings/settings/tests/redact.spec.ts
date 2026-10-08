@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import z from '@deepseek-ai/schemastery'
 import { redactSecrets } from '../src/index.ts'
 
@@ -103,16 +103,16 @@ describe('redactSecrets', () => {
     const schema = z.object({
       union: z.union([z.object({ token: z.string().role('secret') }), z.object({ token: z.string() })]),
       intersection: z.intersect([z.object({ token: z.string().role('secret') }), z.object({ name: z.string() })]),
-      transformed: z.transform(z.object({ token: z.string().role('secret') }), value => value),
+      transformed: z.transform(z.object({ token: z.string().role('secret') }), (value) => value),
     })
     const { value, secrets } = redactSecrets(schema as z<never>, {
-      union: { token: 'union-secret' }, intersection: { token: 'intersection-secret', name: 'visible' },
+      union: { token: 'union-secret' },
+      intersection: { token: 'intersection-secret', name: 'visible' },
       transformed: { token: 'transformed-secret' },
     })
     expect(value).toEqual({ union: {}, intersection: { name: 'visible' }, transformed: {} })
-    expect(secrets).toEqual(['union', 'intersection', 'transformed'].map(key => ({ path: [key, 'token'], set: true })))
+    expect(secrets).toEqual(['union', 'intersection', 'transformed'].map((key) => ({ path: [key, 'token'], set: true })))
   })
-
 })
 
 it('preserves values when an unspecified union declares no secret alternatives', () => {

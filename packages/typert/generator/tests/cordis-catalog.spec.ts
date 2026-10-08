@@ -1,12 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import {
-  projectCordisCatalog,
-  renderInheritedPage,
-  renderPageRegion,
-  type CordisCatalogPolicy,
-} from '../src/cordis-catalog.ts'
+import { describe, expect, it } from 'vite-plus/test'
+import { projectCordisCatalog, renderInheritedPage, renderPageRegion, type CordisCatalogPolicy } from '../src/cordis-catalog.ts'
 import {
   CORDIS_CATALOG_POLICY,
   EVENT_SCOPE_PAGE,
@@ -20,14 +15,17 @@ const workspaceRoot = resolve(import.meta.dirname, '../../../..')
 
 /** One workspace projection shared by both cases: analyzing it twice doubles a multi-minute run. */
 let cached: ReturnType<typeof projectCordisCatalog> | undefined
-const projection = (): ReturnType<typeof projectCordisCatalog> =>
-  (cached ??= projectCordisCatalog(workspaceRoot, CORDIS_CATALOG_POLICY))
+const projection = (): ReturnType<typeof projectCordisCatalog> => (cached ??= projectCordisCatalog(workspaceRoot, CORDIS_CATALOG_POLICY))
 let cachedClient: ReturnType<typeof projectCordisCatalog> | undefined
 const clientProjection = (): ReturnType<typeof projectCordisCatalog> =>
-  (cachedClient ??= projectCordisCatalog(workspaceRoot, {
-    ...CORDIS_CATALOG_POLICY,
-    runtimeDeclarationMaxChars: 4_096,
-  }, 'client'))
+  (cachedClient ??= projectCordisCatalog(
+    workspaceRoot,
+    {
+      ...CORDIS_CATALOG_POLICY,
+      runtimeDeclarationMaxChars: 4_096,
+    },
+    'client',
+  ))
 
 const SOURCE_LINK_POLICY: CordisCatalogPolicy = {
   linkedTypePages: {},
@@ -39,22 +37,31 @@ const SOURCE_LINK_POLICY: CordisCatalogPolicy = {
 
 describe('Typert-backed Cordis catalog', () => {
   it('omits subsystem source lines while preserving inherited Cordis source lines', () => {
-    const page = renderPageRegion('fixture.md', [{
-      key: 'fixture',
-      type: 'Fixture',
-      abstract: false,
-      doc: 'Fixture.',
-      methods: [],
-      source: 'packages/fixture/service.ts:24',
-    }], [{
-      name: 'fixture/ready',
-      scope: 'fixture',
-      signature: "'fixture/ready'(): void",
-      jsDoc: '/** Ready. */',
-      mode: 'emit',
-      doc: 'Ready.',
-      source: 'packages/fixture/events.ts:42',
-    }], SOURCE_LINK_POLICY)
+    const page = renderPageRegion(
+      'fixture.md',
+      [
+        {
+          key: 'fixture',
+          type: 'Fixture',
+          abstract: false,
+          doc: 'Fixture.',
+          methods: [],
+          source: 'packages/fixture/service.ts:24',
+        },
+      ],
+      [
+        {
+          name: 'fixture/ready',
+          scope: 'fixture',
+          signature: "'fixture/ready'(): void",
+          jsDoc: '/** Ready. */',
+          mode: 'emit',
+          doc: 'Ready.',
+          source: 'packages/fixture/events.ts:42',
+        },
+      ],
+      SOURCE_LINK_POLICY,
+    )
     const inherited = renderInheritedPage(SOURCE_LINK_POLICY)
 
     expect(page).toContain('Source: [`packages/fixture/events.ts`](../../packages/fixture/events.ts)')
@@ -71,8 +78,8 @@ describe('Typert-backed Cordis catalog', () => {
     for (const page of [...new Set([...Object.values(SERVICE_PAGE), ...Object.values(EVENT_SCOPE_PAGE)])].sort()) {
       const region = renderPageRegion(
         page,
-        [...model.services].filter(s => SERVICE_PAGE[s.key] === page),
-        [...model.events].filter(e => EVENT_SCOPE_PAGE[e.scope] === page),
+        [...model.services].filter((s) => SERVICE_PAGE[s.key] === page),
+        [...model.events].filter((e) => EVENT_SCOPE_PAGE[e.scope] === page),
         CORDIS_CATALOG_POLICY,
       )
       for (const side of [page, page.replace(/\.md$/, '.zh.md')]) {
@@ -81,14 +88,10 @@ describe('Typert-backed Cordis catalog', () => {
         const begin = committed.indexOf(REGION_BEGIN)
         const end = committed.indexOf(REGION_END)
         expect(begin, `${rel} carries the region`).toBeGreaterThanOrEqual(0)
-        expect(committed.slice(begin, end + REGION_END.length)).toBe(
-          localizePageRegion(region, rel, workspaceRoot),
-        )
+        expect(committed.slice(begin, end + REGION_END.length)).toBe(localizePageRegion(region, rel, workspaceRoot))
       }
     }
-    expect(projector.renderRuntimeApi(model)).toBe(
-      expected('packages/extensions/tool-cordis/src/api-catalog.ts'),
-    )
+    expect(projector.renderRuntimeApi(model)).toBe(expected('packages/extensions/tool-cordis/src/api-catalog.ts'))
   })
 
   it('includes referenced framework enums in the runtime declaration closure', () => {
@@ -101,13 +104,15 @@ describe('Typert-backed Cordis catalog', () => {
 
   it('keeps the Slots service declaration and its referenced types within the display budget', { timeout: 480_000 }, () => {
     const { projector, model } = clientProjection()
-    const slots = model.services.find(service => service.key === 'slots')
+    const slots = model.services.find((service) => service.key === 'slots')
     if (slots === undefined) throw new Error('Client slots service is missing')
     const rendered = projector.renderRuntimeApi({
-      services: [{
-        ...slots,
-        methods: slots.methods.filter(method => /\b(?:inject|register|registerFactory)\b/u.test(method.signature)),
-      }],
+      services: [
+        {
+          ...slots,
+          methods: slots.methods.filter((method) => /\b(?:inject|register|registerFactory)\b/u.test(method.signature)),
+        },
+      ],
       events: [],
     })
     const slotCoreStart = rendered.indexOf("name: 'SlotCore'")
@@ -118,7 +123,7 @@ describe('Typert-backed Cordis catalog', () => {
   })
 
   it('resolves each key to the declaration a caller meets, and drops keys no plugin provides', { timeout: 480_000 }, () => {
-    const byKey = new Map(projection().model.services.map(service => [service.key, service]))
+    const byKey = new Map(projection().model.services.map((service) => [service.key, service]))
     // An interface-typed key is described by its Service Definition: that is where
     // the contract and, by repository convention, the member JSDoc live.
     expect(byKey.get('lsp')?.type).toBe('LspService')

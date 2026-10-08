@@ -3,7 +3,7 @@ import type { Stats } from 'node:fs'
 import { mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 
@@ -41,7 +41,7 @@ vi.mock('node:fs', async (importOriginal) => {
       watcherHarness.watchFiles.push({ path, listener })
     },
     unwatchFile(path: string, listener: FakeWatchFileControl['listener']) {
-      const index = watcherHarness.watchFiles.findIndex(control => control.path === path && control.listener === listener)
+      const index = watcherHarness.watchFiles.findIndex((control) => control.path === path && control.listener === listener)
       if (index !== -1) watcherHarness.watchFiles.splice(index, 1)
     },
   }
@@ -98,7 +98,7 @@ afterEach(async () => {
 })
 
 async function tempDir(name: string): Promise<string> {
-  const dir = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
+  const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
   tempDirs.push(dir)
   return dir
 }
@@ -110,7 +110,7 @@ async function writeSkill(root: string, name: string): Promise<void> {
 }
 
 async function settle(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 beforeEach(() => {
@@ -138,7 +138,7 @@ describe('skill-filesystem watcher failures', () => {
       watch: true,
     })
 
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['canonical-skill'])
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['canonical-skill'])
     expect(watcherHarness.watchers[0]?.path).toBe(await realpath(root))
     expect(watcherHarness.watchers[0]?.options.persistent).toBe(true)
     await fiber.dispose()
@@ -160,7 +160,7 @@ describe('skill-filesystem watcher failures', () => {
     })
 
     try {
-      expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['linked-skill'])
+      expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['linked-skill'])
       expect(watcherHarness.watchers[0]?.path).toBe(alias)
       expect(watcherHarness.watchers[0]?.options.followSymlinks).toBe(false)
     } finally {
@@ -183,7 +183,9 @@ describe('skill-filesystem watcher failures', () => {
     expect(await ctx.skills.snapshot()).toEqual({ skills: [], complete: true })
     expect(watcherHarness.watchFiles).toHaveLength(2)
     let invalidations = 0
-    ctx.on('skills/change', () => { invalidations += 1 })
+    ctx.on('skills/change', () => {
+      invalidations += 1
+    })
 
     for (const control of watcherHarness.watchFiles) {
       control.listener({} as Stats, {} as Stats)
@@ -255,9 +257,11 @@ describe('skill-filesystem watcher failures', () => {
       watchPollIntervalMs: 10,
       watchStabilityThresholdMs: 20,
     })
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['watched-skill'])
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['watched-skill'])
     let invalidations = 0
-    ctx.on('skills/change', () => { invalidations += 1 })
+    ctx.on('skills/change', () => {
+      invalidations += 1
+    })
     const first = watcherHarness.watchers[0]
     if (first === undefined) throw new Error('expected a root watcher')
 
@@ -276,7 +280,9 @@ describe('skill-filesystem watcher failures', () => {
     watcherHarness.closeErrors = 1
     watcherHarness.startupErrors.push(new Error('runtime rewatch failed'))
     first.emitter.emit('error', new Error('runtime watch failed'))
-    await vi.waitFor(() => { expect(watcherHarness.watchers.length).toBeGreaterThanOrEqual(2) })
+    await vi.waitFor(() => {
+      expect(watcherHarness.watchers.length).toBeGreaterThanOrEqual(2)
+    })
     expect(invalidations).toBeGreaterThanOrEqual(2)
     expect(await ctx.skills.snapshot()).toMatchObject({
       skills: [{ name: 'watched-skill' }],
@@ -303,15 +309,17 @@ describe('skill-filesystem watcher failures', () => {
       watchStabilityThresholdMs: 20,
     })
 
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['removed-skill'])
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['removed-skill'])
     const original = watcherHarness.watchers[0]
     if (original === undefined) throw new Error('expected a root watcher')
 
     await rm(root, { recursive: true })
     original.emitter.emit('unlinkDir', original.path)
-    await vi.waitFor(() => { expect(original.closeCalls).toBeGreaterThan(0) })
     await vi.waitFor(() => {
-      expect(watcherHarness.watchFiles.some(control => control.path === original.path)).toBe(true)
+      expect(original.closeCalls).toBeGreaterThan(0)
+    })
+    await vi.waitFor(() => {
+      expect(watcherHarness.watchFiles.some((control) => control.path === original.path)).toBe(true)
     })
 
     await fiber.dispose()
@@ -331,7 +339,7 @@ describe('skill-filesystem watcher failures', () => {
       watchStabilityThresholdMs: 20,
     })
 
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['old-skill'])
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['old-skill'])
     const original = watcherHarness.watchers[0]
     if (original === undefined) throw new Error('expected a root watcher')
 
@@ -340,14 +348,16 @@ describe('skill-filesystem watcher failures', () => {
     await settle()
     expect(await ctx.skills.snapshot()).toEqual({ skills: [], complete: true })
 
-    const missingRoot = watcherHarness.watchFiles.find(control => control.path === original.path)
+    const missingRoot = watcherHarness.watchFiles.find((control) => control.path === original.path)
     expect(missingRoot).toBeDefined()
     await writeSkill(root, 'recreated-skill')
     missingRoot!.listener({} as Stats, {} as Stats)
-    await vi.waitFor(() => { expect(watcherHarness.watchers).toHaveLength(2) })
+    await vi.waitFor(() => {
+      expect(watcherHarness.watchers).toHaveLength(2)
+    })
     await settle()
 
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['recreated-skill'])
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toEqual(['recreated-skill'])
     await fiber.dispose()
   })
 
@@ -371,7 +381,9 @@ describe('skill-filesystem watcher failures', () => {
     })
 
     const discovery = provider.list({})
-    await vi.waitFor(() => { expect(watcherHarness.watchers).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(watcherHarness.watchers).toHaveLength(1)
+    })
     const first = watcherHarness.watchers[0]
     if (first === undefined) throw new Error('expected an opening root watcher')
     const disposal = provider.dispose()
@@ -439,7 +451,9 @@ describe('skill-filesystem watcher failures', () => {
     })
 
     const discovery = provider.list({})
-    await vi.waitFor(() => { expect(watcherHarness.watchers).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(watcherHarness.watchers).toHaveLength(1)
+    })
     const first = watcherHarness.watchers[0]
     if (first === undefined) throw new Error('expected an opening root watcher')
     first.emitter.emit('error', new Error('opening failed during disposal'))

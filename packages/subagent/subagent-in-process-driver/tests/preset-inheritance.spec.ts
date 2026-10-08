@@ -7,7 +7,7 @@
  * child's own request — rather than the join that produces it.
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
@@ -40,15 +40,21 @@ async function setupPresetHost(): Promise<{ ctx: Context; adapter: MockAdapter; 
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(AgentPresets, { default: 'coding' })
-  for (const [id, tool] of [['coding', 'preset_only'], ['reviewing', 'reviewing_only']] as const) {
-    await ctx.agentPresets.register({ id, plugins: [{ name: pathToFileURL(join(FIXTURES, 'plugins/preset-tool.js')).href, config: { tool } }] })
+  for (const [id, tool] of [
+    ['coding', 'preset_only'],
+    ['reviewing', 'reviewing_only'],
+  ] as const) {
+    await ctx.agentPresets.register({
+      id,
+      plugins: [{ name: pathToFileURL(join(FIXTURES, 'plugins/preset-tool.js')).href, config: { tool } }],
+    })
   }
   const adapter = new MockAdapter([textResponse('parent idle'), textResponse('child done')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({
     sessionId: SessionId('parent'),
     agentOptions: { provider: 'mock', model: 'mock' },
-    setup: async (agentCtx: Context) => void await ctx.agentPresets.mount(agentCtx, 'coding'),
+    setup: async (agentCtx: Context) => void (await ctx.agentPresets.mount(agentCtx, 'coding')),
   })
   return { ctx, adapter, parent: handle.agent }
 }
@@ -69,27 +75,29 @@ function spawnRequest(parent: Agent) {
 }
 
 describe('a child agent composed in-process', () => {
-  it('reaches the model with its parent\'s preset tools', async () => {
+  it("reaches the model with its parent's preset tools", async () => {
     const { ctx, adapter, parent } = await setupPresetHost()
 
     const run = await startInProcessRun(spawnRequest(parent), {})
     await run.result
 
     const childRequest = adapter.requests.at(-1)
-    expect(childRequest?.tools?.map(tool => tool.name)).toEqual(['preset_only'])
-    expect(ctx.tools.schemas(run.localAgent).map(schema => schema.name)).toEqual(['preset_only'])
+    expect(childRequest?.tools?.map((tool) => tool.name)).toEqual(['preset_only'])
+    expect(ctx.tools.schemas(run.localAgent).map((schema) => schema.name)).toEqual(['preset_only'])
     await run.dispose()
   })
 
-  it('carries its parent\'s prompt sections', async () => {
+  it("carries its parent's prompt sections", async () => {
     const { parent } = await setupPresetHost()
 
     const run = await startInProcessRun(spawnRequest(parent), {})
     await run.result
 
-    expect(run.localAgent?.session.snapshotEvents().some(event =>
-      event.type === 'system/message'
-      && JSON.stringify(event.data.message.content).includes('section for preset_only'))).toBe(true)
+    expect(
+      run.localAgent?.session
+        .snapshotEvents()
+        .some((event) => event.type === 'system/message' && JSON.stringify(event.data.message.content).includes('section for preset_only')),
+    ).toBe(true)
     await run.dispose()
   })
 
@@ -108,15 +116,12 @@ describe('a child agent composed in-process', () => {
   it('honours a tool filter over the preset tools it inherited', async () => {
     const { ctx, parent } = await setupPresetHost()
 
-    const run = await startInProcessRun(
-      { ...spawnRequest(parent), toolFilter: { deny: ['preset_only'] } },
-      {},
-    )
+    const run = await startInProcessRun({ ...spawnRequest(parent), toolFilter: { deny: ['preset_only'] } }, {})
     await run.result
 
     // The capability filter is the only thing bounding a delegated child, and
     // every tool it can name now arrives from the preset rather than the host.
-    expect(ctx.tools.schemas(run.localAgent).map(schema => schema.name)).toEqual([])
+    expect(ctx.tools.schemas(run.localAgent).map((schema) => schema.name)).toEqual([])
     await run.dispose()
   })
 
@@ -130,7 +135,7 @@ describe('a child agent composed in-process', () => {
     const run = await startInProcessRun(spawnRequest(parent), {})
     await run.result
 
-    expect(ctx.tools.schemas(run.localAgent).map(schema => schema.name)).toEqual(['reviewing_only'])
+    expect(ctx.tools.schemas(run.localAgent).map((schema) => schema.name)).toEqual(['reviewing_only'])
     expect(run.localAgent?.session.header.agentPreset).toBe('reviewing')
     await run.dispose()
   })
