@@ -359,6 +359,7 @@ describe('dsh web keyless CLI smoke', () => {
       expect(readyUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+$/u)
       expect((await fetch(readyUrl, { redirect: 'manual' })).status).toBe(303)
       browser = await chromium.launch({ headless: true })
+      // The browser is English, but this fresh CLI home has no saved locale.
       const page = await newEnglishPage(browser)
       const pluginScripts: string[] = []
       const cacheHeaders = new Map<string, string | undefined>()
@@ -379,7 +380,8 @@ describe('dsh web keyless CLI smoke', () => {
         }
       })
       await page.goto(readyUrl)
-      await page.getByRole('button', { name: 'New session', exact: true }).first().waitFor({ timeout: 30_000 })
+      await expect.poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 30_000 }).toBe('ja')
+      await page.getByRole('button', { name: '新規セッション', exact: true }).first().waitFor({ timeout: 30_000 })
       const batchPaths = [...new Set(pluginScripts)].sort()
       // The bootstrap phase is the modules package alone; the application phase
       // spans two combos because its map-form URL is over the 3 KiB combo limit
@@ -758,6 +760,11 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
   beforeAll(async () => {
     requireDist()
     sessionsDir = mkdtempSync(join(tmpdir(), 'dsh-web-w5-'))
+    const harnessHome = join(sessionsDir, '.dsh')
+    mkdirSync(harnessHome, { recursive: true })
+    // The real-API flows below use English selectors; seed an explicit saved
+    // Host preference rather than relying on the browser locale.
+    writeFileSync(join(harnessHome, 'cordis.patch.yml'), '- id: locale\n  config:\n    preference: en\n')
     const port = await probeFreePort()
     // tsx boot mirrors the runtime half of the root dsh script. Isolate
     // the host-level Harness and shared-agent homes inside the temp world; tsx
@@ -784,7 +791,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
         cwd: sessionsDir,
         env: {
           ...process.env,
-          DSH_HOME: join(sessionsDir, '.dsh'),
+          DSH_HOME: harnessHome,
           DSH_AGENTS_HOME: join(sessionsDir, '.agents'),
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
         },
@@ -816,6 +823,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
   it('cold start: loading page settles into the three-column frame', async () => {
     onTestFailed(() => saveFailureShot(page, 'w5-cold-start'))
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 30_000 }).toBe('en')
     expect(await page.locator('text=Failed to load plugins').count()).toBe(0)
     const template = await page.locator('[class*="frame"]').evaluate((el) => getComputedStyle(el).gridTemplateColumns)
     expect(template.split(' ').length).toBe(3)
