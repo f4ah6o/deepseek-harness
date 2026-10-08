@@ -499,6 +499,9 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
       writeFile(join(dir, 'task.txt'), 'delimiter path snapshot task\n'),
     ])
   },
+  async 'git-project-root'(cwd) {
+    await mkdir(join(cwd, '.git'), { recursive: true })
+  },
   async 'fixed-search-mtimes'(cwd) {
     const tree = join(cwd, 'tree')
     const files = [
