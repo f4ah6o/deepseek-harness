@@ -1,6 +1,6 @@
 import { availableParallelism } from 'node:os'
 import tsconfigPaths from 'vite-tsconfig-paths'
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite-plus'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 
 const DEFAULT_SNAPSHOT_MAX_CONCURRENCY = 5
@@ -65,9 +65,8 @@ export default defineConfig({
     // disk, so concurrent writers would corrupt expected outputs.
     testTimeout: 120_000,
     hookTimeout: 30_000,
-    fileParallelism: (process.env.DSH_SNAPSHOT || 'replay') === 'replay'
-      && (snapshotMaxWorkers ?? snapshotMaxConcurrency) > 1,
+    fileParallelism: (process.env.DSH_SNAPSHOT || 'replay') === 'replay' && (snapshotMaxWorkers ?? snapshotMaxConcurrency) > 1,
     maxConcurrency: snapshotMaxConcurrency,
-    ...snapshotMaxWorkers === undefined ? {} : { maxWorkers: snapshotMaxWorkers },
+    ...(snapshotMaxWorkers === undefined ? {} : { maxWorkers: snapshotMaxWorkers }),
   },
 })

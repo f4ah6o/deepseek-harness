@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { IframeImpl } from '../src/client/browser/IframeImpl.ts'
 import { IframePresentation } from '../src/client/view/IframePresentation.ts'
 
 const frames: IframeImpl[] = []
 
 afterEach(async () => {
-  await Promise.all(frames.splice(0).map(frame => frame.dispose()))
+  await Promise.all(frames.splice(0).map((frame) => frame.dispose()))
 })
 
 describe('IframeImpl', () => {

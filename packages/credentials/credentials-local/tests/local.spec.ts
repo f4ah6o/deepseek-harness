@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -108,14 +108,13 @@ describe('layering and reads', () => {
 describe('layer ladder', () => {
   // inherited process env > .credentials.yaml > $DSH_HOME/.env, and the
   // invoking directory's .env supplies no credential at all.
-  async function bootLayered(
-    path: string,
-    layers: Parameters<typeof createLaunchEnvironmentSnapshot>[0],
-  ): Promise<Context> {
+  async function bootLayered(path: string, layers: Parameters<typeof createLaunchEnvironmentSnapshot>[0]): Promise<Context> {
     const ctx = new Context()
     ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot(layers))
     const fiber = ctx.plugin(LocalCredentialProvider, { path, watch: false })
-    cleanups.push(async () => { await fiber.dispose() })
+    cleanups.push(async () => {
+      await fiber.dispose()
+    })
     await fiber
     return ctx
   }
@@ -174,8 +173,7 @@ describe('layer ladder', () => {
     const ctx = new Context()
     // Before the contents are read at all: serving secrets out of a
     // world-readable file would make the 0600 the provider writes meaningless.
-    await expect(ctx.plugin(LocalCredentialProvider, { path, watch: false }))
-      .rejects.toThrow(/readable beyond its owner \(mode 644\)/)
+    await expect(ctx.plugin(LocalCredentialProvider, { path, watch: false })).rejects.toThrow(/readable beyond its owner \(mode 644\)/)
   })
 
   it('propagates a permission check that fails for a reason other than absence', async () => {
@@ -186,15 +184,17 @@ describe('layer ladder', () => {
     // reached at all is a misconfiguration: the parent is a file, so the
     // check fails with ENOTDIR rather than concluding "no credentials yet".
     const ctx = new Context()
-    await expect(ctx.plugin(LocalCredentialProvider, { path: join(notADirectory, '.credentials.yaml'), watch: false }))
-      .rejects.toThrow(/ENOTDIR/)
+    await expect(ctx.plugin(LocalCredentialProvider, { path: join(notADirectory, '.credentials.yaml'), watch: false })).rejects.toThrow(
+      /ENOTDIR/,
+    )
   })
 
   it('propagates a permission check rejected before the OS lookup', async () => {
     const dir = await tempDir()
     const ctx = new Context()
-    await expect(ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials\0.yaml'), watch: false }))
-      .rejects.toMatchObject({ code: 'ERR_INVALID_ARG_VALUE' })
+    await expect(ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials\0.yaml'), watch: false })).rejects.toMatchObject({
+      code: 'ERR_INVALID_ARG_VALUE',
+    })
   })
 
   it('propagates a read that fails for a reason other than absence', async () => {
@@ -235,41 +235,62 @@ describe('document validation', () => {
     // the first request instead of at load. (The recognized all-string flat
     // layout upgrades in place instead — migration.spec owns that path.)
     ['the flat layout with a non-string value', 'DSH_CRED_TEST: [nope]\n', /nest the existing 1 entry under/],
-    ['the flat layout with several entries and a non-string value', 'DSH_CRED_TEST: a\nDSH_CRED_OTHER: [b]\n',
-      /nest the existing 2 entries under/],
+    [
+      'the flat layout with several entries and a non-string value',
+      'DSH_CRED_TEST: a\nDSH_CRED_OTHER: [b]\n',
+      /nest the existing 2 entries under/,
+    ],
     ['the flat layout with an empty value', 'DSH_CRED_TEST: ""\n', /pre-release flat layout/],
     ['the flat layout with an unaddressable key', 'not-a-ref: value\n', /pre-release flat layout/],
     ['the flat layout with a non-string key', '1: a\n', /pre-release flat layout/],
-    ['the flat layout under document directives', '%YAML 1.2\n---\nDSH_CRED_TEST: a\n',
-      /pre-release flat layout/],
+    ['the flat layout under document directives', '%YAML 1.2\n---\nDSH_CRED_TEST: a\n', /pre-release flat layout/],
     ['a future version', 'version: 2\nrefs: {}\n', /this build reads version 1/],
     ['an unknown top-level key', 'version: 1\nsecrets: {}\n', /unknown top-level key "secrets"/],
     ['a non-mapping refs section', 'version: 1\nrefs: nope\n', /"refs" .* must be a mapping/],
     ['a key that is not a POSIX identifier', 'version: 1\nrefs:\n  not-a-ref: value\n', /credential ref/],
     ['a non-string value', 'version: 1\nrefs:\n  DSH_CRED_TEST: 123\n', /must be a string/],
     ['an empty value', 'version: 1\nrefs:\n  DSH_CRED_TEST: ""\n', /is empty/],
-    ['a record key that is not scoped', 'version: 1\nrecords:\n  codex:\n    kind: grant\n    payload: 1\n',
-      /must be "<scope>\/<id>"/],
-    ['a record that is not a mapping', 'version: 1\nrecords:\n  llm-pi-ai/codex: token\n',
-      /record "llm-pi-ai\/codex" .* must be a mapping/],
+    ['a record key that is not scoped', 'version: 1\nrecords:\n  codex:\n    kind: grant\n    payload: 1\n', /must be "<scope>\/<id>"/],
+    [
+      'a record that is not a mapping',
+      'version: 1\nrecords:\n  llm-pi-ai/codex: token\n',
+      /record "llm-pi-ai\/codex" .* must be a mapping/,
+    ],
     ['a record with no kind', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    payload: 1\n', /has no kind/],
-    ['a record with an unknown kind', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: token\n',
-      /unknown kind "token"/],
-    ['a record with an unknown field', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n'
-      + '    payload: 1\n    extra: 2\n', /unknown field "extra"/],
+    ['a record with an unknown kind', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: token\n', /unknown kind "token"/],
+    [
+      'a record with an unknown field',
+      'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n' + '    payload: 1\n    extra: 2\n',
+      /unknown field "extra"/,
+    ],
     ['a grant with no payload', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n', /has no payload/],
     // YAML spells values JSON has none for. The seam promises an owner its
     // payload comes back exactly as written, which a lossy round trip breaks.
-    ['a non-finite payload number', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n'
-      + '    payload:\n      ratio: .inf\n', /non-finite number/],
-    ['a cyclic payload', 'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n'
-      + '    payload: &loop\n      self: *loop\n', /is cyclic/],
-    ['an api-key record with an empty key', 'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n'
-      + '    key: ""\n', /non-string or empty key/],
-    ['an api-key record env that is not a mapping', 'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n'
-      + '    env: nope\n', /non-mapping env/],
-    ['an api-key record env value that is empty', 'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n'
-      + '    env:\n      AWS_PROFILE: ""\n', /env "AWS_PROFILE" .* must be a non-empty string/],
+    [
+      'a non-finite payload number',
+      'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n' + '    payload:\n      ratio: .inf\n',
+      /non-finite number/,
+    ],
+    [
+      'a cyclic payload',
+      'version: 1\nrecords:\n  llm-pi-ai/codex:\n    kind: grant\n' + '    payload: &loop\n      self: *loop\n',
+      /is cyclic/,
+    ],
+    [
+      'an api-key record with an empty key',
+      'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n' + '    key: ""\n',
+      /non-string or empty key/,
+    ],
+    [
+      'an api-key record env that is not a mapping',
+      'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n' + '    env: nope\n',
+      /non-mapping env/,
+    ],
+    [
+      'an api-key record env value that is empty',
+      'version: 1\nrecords:\n  llm-pi-ai/acme:\n    kind: api-key\n' + '    env:\n      AWS_PROFILE: ""\n',
+      /env "AWS_PROFILE" .* must be a non-empty string/,
+    ],
     ['duplicate keys', 'version: 1\nrefs:\n  DSH_CRED_TEST: one\n  DSH_CRED_TEST: two\n', /invalid document/],
     ['malformed yaml', 'DSH_CRED_TEST: "unterminated\n', /invalid document/],
   ])('fails boot on %s', async (_case, text, message) => {
@@ -326,12 +347,14 @@ describe('document writes', () => {
   it('patches one entry, preserving comments and every untouched entry', async () => {
     const dir = await tempDir()
     const path = join(dir, '.credentials.yaml')
-    await writeCredentials(path, 'version: 1\nrefs:\n  # deployment notes\n  DSH_CRED_OTHER: keep\n\n  # the one under edit\n  DSH_CRED_TEST: old\n')
+    await writeCredentials(
+      path,
+      'version: 1\nrefs:\n  # deployment notes\n  DSH_CRED_OTHER: keep\n\n  # the one under edit\n  DSH_CRED_TEST: old\n',
+    )
     const ctx = await boot({ path, watch: false })
     await ctx.credentials.set(KEY, 'new value!')
     expect(await readFile(path, 'utf8')).toBe(
-      'version: 1\nrefs:\n  # deployment notes\n  DSH_CRED_OTHER: keep\n\n'
-      + '  # the one under edit\n  DSH_CRED_TEST: new value!\n',
+      'version: 1\nrefs:\n  # deployment notes\n  DSH_CRED_OTHER: keep\n\n' + '  # the one under edit\n  DSH_CRED_TEST: new value!\n',
     )
   })
 
@@ -355,7 +378,10 @@ describe('document writes', () => {
     // Comments above an entry are that entry's annotation and go with it when
     // it is removed — including anything above the document's first entry.
     // Every other entry keeps its own comments.
-    await writeCredentials(path, 'version: 1\nrefs:\n  # about the doomed one\n  DSH_CRED_TEST: gone\n  # about the survivor\n  DSH_CRED_OTHER: stays\n')
+    await writeCredentials(
+      path,
+      'version: 1\nrefs:\n  # about the doomed one\n  DSH_CRED_TEST: gone\n  # about the survivor\n  DSH_CRED_OTHER: stays\n',
+    )
     const ctx = await boot({ path, watch: false })
     const seen = updates(ctx)
     await ctx.credentials.unset(KEY)
@@ -414,10 +440,7 @@ describe('document writes', () => {
     const dir = await tempDir()
     const path = join(dir, '.credentials.yaml')
     const ctx = await boot({ path, watch: false })
-    await Promise.all([
-      ctx.credentials.set(KEY, 'one'),
-      ctx.credentials.set(OTHER, 'two'),
-    ])
+    await Promise.all([ctx.credentials.set(KEY, 'one'), ctx.credentials.set(OTHER, 'two')])
     expect(await readFile(path, 'utf8')).toBe('version: 1\nrefs:\n  DSH_CRED_TEST: one\n  DSH_CRED_OTHER: two\n')
   })
 
@@ -456,7 +479,7 @@ describe('real hot reload', () => {
 
     const before = seen.length
     await ctx.credentials.set(KEY, 'self-written')
-    await new Promise(resolvePause => setTimeout(resolvePause, 200))
+    await new Promise((resolvePause) => setTimeout(resolvePause, 200))
     // Exactly the committed write's own event: the watcher echo of our own
     // content is recognized by the text cache and publishes nothing extra.
     expect(seen.length).toBe(before + 1)

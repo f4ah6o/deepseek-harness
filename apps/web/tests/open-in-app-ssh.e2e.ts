@@ -4,11 +4,17 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -48,12 +54,12 @@ describe.skipIf(MODE === 'record')('web e2e: Open In under SSH', () => {
   it('hides a remembered app after the real host returns an empty catalog', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-open-in-app-ssh'))
     const [response] = await Promise.all([
-      page.waitForResponse(response => new URL(response.url()).pathname === '/open-in-app/apps'),
+      page.waitForResponse((response) => new URL(response.url()).pathname === '/open-in-app/apps'),
       (async () => {
         await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
         const group = page.getByRole('treeitem').first()
         await group.waitFor()
-        if (await group.getAttribute('aria-expanded') !== 'true') await group.click()
+        if ((await group.getAttribute('aria-expanded')) !== 'true') await group.click()
         await page.getByRole('treeitem').nth(1).click()
         await page.getByText('DONE', { exact: true }).waitFor()
       })(),
@@ -62,8 +68,7 @@ describe.skipIf(MODE === 'record')('web e2e: Open In under SSH', () => {
     expect(await response.json()).toEqual({ apps: [] })
     expect(await page.locator('[data-open-target="directory"]').count()).toBe(0)
     expect(await page.evaluate(() => localStorage.getItem('dsh.open-in-app.choice'))).toBe('"vscode"')
-    const snapshot = (await captureStableAria(page, 'role=banner', scaffold.workspaceCwd))
-      .split(SEED_ID).join('{{seededId}}')
+    const snapshot = (await captureStableAria(page, 'role=banner', scaffold.workspaceCwd)).split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'header.expected.md'), snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

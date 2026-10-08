@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import WebSocket, { type RawData } from 'ws'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { isPlainObject } from '../src/shared/json.ts'
 
 interface CdpMessage {
@@ -32,7 +32,9 @@ class CdpClient {
   static async connect(url: string): Promise<CdpClient> {
     const socket = new WebSocket(url)
     await new Promise<void>((resolve, reject) => {
-      socket.once('open', () => { resolve() })
+      socket.once('open', () => {
+        resolve()
+      })
       socket.once('error', reject)
     })
     return new CdpClient(socket)
@@ -41,7 +43,9 @@ class CdpClient {
   call(method: string, params: Record<string, unknown> = {}): Promise<CdpMessage> {
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { reject(new Error(`CDP call timed out: ${method}`)) }, 5_000)
+      const timer = setTimeout(() => {
+        reject(new Error(`CDP call timed out: ${method}`))
+      }, 5_000)
       this.pending.set(id, (message) => {
         clearTimeout(timer)
         this.pending.delete(id)
@@ -52,7 +56,7 @@ class CdpClient {
   }
 
   waitForEvent(method: string, predicate: (event: CdpMessage) => boolean = () => true): Promise<CdpMessage> {
-    const found = this.events.find(event => event.method === method && predicate(event))
+    const found = this.events.find((event) => event.method === method && predicate(event))
     if (found !== undefined) return Promise.resolve(found)
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -60,7 +64,7 @@ class CdpClient {
         reject(new Error(`CDP event timed out: ${method}`))
       }, 5_000)
       const check = (): void => {
-        const event = this.events.find(candidate => candidate.method === method && predicate(candidate))
+        const event = this.events.find((candidate) => candidate.method === method && predicate(candidate))
         if (event === undefined) return
         clearTimeout(timer)
         this.eventWaiters.delete(check)
@@ -72,7 +76,11 @@ class CdpClient {
 
   async close(): Promise<void> {
     if (this.socket.readyState === WebSocket.CLOSED) return
-    const closed = new Promise<void>((resolve) => { this.socket.once('close', () => { resolve() }) })
+    const closed = new Promise<void>((resolve) => {
+      this.socket.once('close', () => {
+        resolve()
+      })
+    })
     this.socket.close()
     await closed
   }
@@ -107,8 +115,7 @@ describe('Host debugger through the Inspector Worker', () => {
     cdp = await CdpClient.connect(endpoint.webSocketDebuggerUrl)
     expect((await cdp.call('Runtime.enable')).error).toBeUndefined()
     expect((await cdp.call('Debugger.enable')).error).toBeUndefined()
-    const parsed = await cdp.waitForEvent('Debugger.scriptParsed', event =>
-      String(event.params?.url).endsWith('/debug-host.ts'))
+    const parsed = await cdp.waitForEvent('Debugger.scriptParsed', (event) => String(event.params?.url).endsWith('/debug-host.ts'))
     const scriptId = parsed.params?.scriptId
     expect(typeof scriptId).toBe('string')
     const source = await cdp.call('Debugger.getScriptSource', { scriptId })
@@ -116,7 +123,7 @@ describe('Host debugger through the Inspector Worker', () => {
     await cdp.call('Runtime.evaluate', { expression: 'console.log("host-console-probe")' })
     const consoleEvent = await cdp.waitForEvent('Runtime.consoleAPICalled', (event) => {
       const args = event.params?.args
-      return Array.isArray(args) && args.some(arg => isPlainObject(arg) && arg.value === 'host-console-probe')
+      return Array.isArray(args) && args.some((arg) => isPlainObject(arg) && arg.value === 'host-console-probe')
     })
     expect(consoleEvent.params?.type).toBe('log')
     const evaluated = await cdp.call('Runtime.evaluate', {
@@ -159,7 +166,9 @@ describe('Host debugger through the Inspector Worker', () => {
     })
     expect(completed.result?.result).toMatchObject({ type: 'number', value: 42 })
 
-    const exited = new Promise<number | null>((resolve) => { child!.once('exit', resolve) })
+    const exited = new Promise<number | null>((resolve) => {
+      child!.once('exit', resolve)
+    })
     child.stdin.write('stop\n')
     expect(await exited).toBe(0)
     child = undefined
@@ -178,12 +187,17 @@ function readLine(child: ChildProcessWithoutNullStreams): Promise<string> {
       cleanup()
       resolve(stdout.slice(0, newline))
     }
-    const onError = (error: Error): void => { cleanup(); reject(error) }
+    const onError = (error: Error): void => {
+      cleanup()
+      reject(error)
+    }
     const onExit = (): void => {
       cleanup()
       reject(new Error(`debug Host exited before output; stderr:\n${stderr}`))
     }
-    const onStderr = (chunk: Buffer): void => { stderr += chunk.toString('utf8') }
+    const onStderr = (chunk: Buffer): void => {
+      stderr += chunk.toString('utf8')
+    }
     const cleanup = (): void => {
       child.stdout.off('data', onData)
       child.stderr.off('data', onStderr)

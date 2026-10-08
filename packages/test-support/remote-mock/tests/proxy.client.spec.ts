@@ -1,5 +1,5 @@
 /** Native namespace mocks shared by local callers and the Connection carrier. */
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { RemoteMock, frames, ok, openStream, streamHandle, type StreamHandle } from '../src/index.ts'
 
 const describeValue = (hasDocument: boolean) => ok({ writable: true, hasDocument, namespaces: [] })
@@ -50,24 +50,36 @@ describe('RemoteMock.remote unary proxies', () => {
 
     expect(handler).toHaveBeenCalledOnce()
     expect(describe.mock.calls).toEqual([[], [], [], []])
-    expect(mock.log.calls('settings/describe').map(call => [call.args, call.state, call.result]))
-      .toEqual([[[], 'answered', dispatched], [[], 'answered', carrier]])
+    expect(mock.log.calls('settings/describe').map((call) => [call.args, call.state, call.result])).toEqual([
+      [[], 'answered', dispatched],
+      [[], 'answered', carrier],
+    ])
     mock.assertNoUnmatched()
   })
 
   it('records every business argument while the carrier keeps its signal out of positional args', async () => {
     const mock = RemoteMock.create()
     const mutate = mock.remote.settings.mutate
-    const result = ok({ ns: 'locale', schema: {}, value: { preference: 'en' }, autoGenerate: true, applies: 'live' as const, secrets: [], revision: 8 })
+    const result = ok({
+      ns: 'locale',
+      schema: {},
+      value: { preference: 'en' },
+      autoGenerate: true,
+      applies: 'live' as const,
+      secrets: [],
+      revision: 8,
+    })
     const ops = [{ op: 'set' as const, path: ['preference'], value: 'en' }]
     mutate.mockResolvedValue(result)
 
     await expect(mutate('locale', ops, 7)).resolves.toBe(result)
-    await expect(mock.rpc.call('/api', 'settings/mutate', { args: ['locale', ops, 7] }, new AbortController().signal))
-      .resolves.toBe(result)
-    expect(mutate.mock.calls).toEqual([['locale', ops, 7], ['locale', ops, 7]])
+    await expect(mock.rpc.call('/api', 'settings/mutate', { args: ['locale', ops, 7] }, new AbortController().signal)).resolves.toBe(result)
+    expect(mutate.mock.calls).toEqual([
+      ['locale', ops, 7],
+      ['locale', ops, 7],
+    ])
     expect(mutate.mock.calls[1]?.[1]).toBe(ops)
-    expect(mock.log.calls('settings/mutate').map(call => call.args)).toEqual([['locale', ops, 7]])
+    expect(mock.log.calls('settings/mutate').map((call) => call.args)).toEqual([['locale', ops, 7]])
   })
 
   it('keeps native one-shot answers local to each mock when they load the same default table', async () => {
@@ -106,7 +118,7 @@ describe('RemoteMock.remote unary proxies', () => {
     await expect(mock.dispatch('settings/describe', [])).resolves.toBe(updated)
     expect(mock.remote.settings.describe).toBe(describe)
     expect(describe.mock.calls).toEqual([[]])
-    expect(mock.log.calls('settings/describe').map(call => call.result)).toEqual([override, override, updated])
+    expect(mock.log.calls('settings/describe').map((call) => call.result)).toEqual([override, override, updated])
   })
 
   it('reports missing defaults after native one-shot answers are exhausted', async () => {
@@ -120,9 +132,11 @@ describe('RemoteMock.remote unary proxies', () => {
     await expect(mock.dispatch('settings/describe', [])).rejects.toThrow('no rule for settings/describe')
     await expect(mock.rpc.call('/api', 'settings/describe', { args: [] })).rejects.toThrow('no rule for settings/describe')
     expect(describe).toHaveBeenCalledTimes(4)
-    expect(mock.log.calls('settings/describe').map(call => [call.state, call.result])).toEqual([['answered', answer]])
+    expect(mock.log.calls('settings/describe').map((call) => [call.state, call.result])).toEqual([['answered', answer]])
     expect(mock.log.unmatched()).toEqual(Array.from({ length: 3 }, () => ({ endpoint: 'settings/describe', mode: 'unary' })))
-    expect(() => { mock.assertNoUnmatched() }).toThrow('3 unmatched request(s)')
+    expect(() => {
+      mock.assertNoUnmatched()
+    }).toThrow('3 unmatched request(s)')
   })
 
   it('records native rejected answers as failed carrier calls without unmatched entries', async () => {
@@ -131,17 +145,19 @@ describe('RemoteMock.remote unary proxies', () => {
     const describe = mock.remote.settings.describe.mockRejectedValueOnce(failure)
     await expect(mock.rpc.call('/api', 'settings/describe', { args: [] })).rejects.toBe(failure)
     expect(describe.mock.calls).toEqual([[]])
-    expect(mock.log.calls('settings/describe').map(call => [call.state, call.result])).toEqual([['failed', failure]])
+    expect(mock.log.calls('settings/describe').map((call) => [call.state, call.result])).toEqual([['failed', failure]])
     mock.assertNoUnmatched()
   })
 
   it('preserves synchronous native override failures in the async carrier log', async () => {
     const mock = RemoteMock.create()
     const failure = new Error('handler threw')
-    const describe = mock.remote.settings.describe.mockImplementation(() => { throw failure })
+    const describe = mock.remote.settings.describe.mockImplementation(() => {
+      throw failure
+    })
     await expect(mock.dispatch('settings/describe', [])).rejects.toBe(failure)
     expect(describe).toHaveBeenCalledOnce()
-    expect(mock.log.calls('settings/describe').map(call => [call.state, call.result])).toEqual([['failed', failure]])
+    expect(mock.log.calls('settings/describe').map((call) => [call.state, call.result])).toEqual([['failed', failure]])
     mock.assertNoUnmatched()
   })
 })
@@ -167,7 +183,7 @@ describe('RemoteMock.remote stream proxies', () => {
     await expect(drain(stream())).resolves.toEqual([])
     expect(unary).toHaveBeenCalledOnce()
     expect(stream).toHaveBeenCalledTimes(2)
-    expect(mock.log.streams('session/control').map(entry => entry.state)).toEqual(['ended', 'ended'])
+    expect(mock.log.streams('session/control').map((entry) => entry.state)).toEqual(['ended', 'ended'])
   })
 
   it('shares stream spies with the carrier, preserves its args, and reflects each caller cancellation', async () => {
@@ -193,25 +209,29 @@ describe('RemoteMock.remote stream proxies', () => {
     expect(control.mock.calls).toEqual([[localController.signal], [request, wireController.signal]])
     expect(script.mock.calls.map(([args]) => args)).toEqual([[], [request]])
     expect(signals).toHaveLength(2)
-    expect(signals.map(signal => signal.aborted)).toEqual([false, false])
-    expect(mock.log.streams('session/control').map(entry => entry.args)).toEqual([[], [request]])
+    expect(signals.map((signal) => signal.aborted)).toEqual([false, false])
+    expect(mock.log.streams('session/control').map((entry) => entry.args)).toEqual([[], [request]])
 
     const waiting = local.next()
     localController.abort()
     await expect(waiting).resolves.toEqual({ value: undefined, done: true })
     await wire.return!()
     await mock.streams.drained('session/control')
-    expect(signals.map(signal => signal.aborted)).toEqual([true, true])
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, true])
     expect(mock.streams.push('session/control', baseline)).toBe(0)
-    expect(mock.log.streams('session/control').map(entry => entry.state)).toEqual(['cancelled', 'cancelled'])
+    expect(mock.log.streams('session/control').map((entry) => entry.state)).toEqual(['cancelled', 'cancelled'])
   })
 
   it('provides a cancellable default signal when a local stream call omits one', async () => {
     let openedSignal: AbortSignal | undefined
-    const mock = RemoteMock.create().stream('session/control', (_args, stream) => { openedSignal = stream.signal })
+    const mock = RemoteMock.create().stream('session/control', (_args, stream) => {
+      openedSignal = stream.signal
+    })
     const control = mock.remote.session.control
     const reader = control()[Symbol.asyncIterator]()
-    onTestFinished(async () => { await reader.return!() })
+    onTestFinished(async () => {
+      await reader.return!()
+    })
     expect(openedSignal).toBeInstanceOf(AbortSignal)
     expect(openedSignal?.aborted).toBe(false)
     const waiting = reader.next()
@@ -232,7 +252,9 @@ describe('RemoteMock.remote stream proxies', () => {
     }
     const generator = response()
     const native = streamHandle(generator)
-    onTestFinished(async () => { await generator.return(undefined) })
+    onTestFinished(async () => {
+      await generator.return(undefined)
+    })
     control.mockReturnValueOnce(native)
     const overridden = mock.open('session/control', [], signal)
     expect(overridden).toBe(native)
@@ -249,7 +271,7 @@ describe('RemoteMock.remote stream proxies', () => {
     await expect(mock.streams.drained('session/control')).resolves.toBeUndefined()
     expect(mock.remote.session.control).toBe(control)
     expect(control.mock.calls).toEqual([[signal]])
-    expect(mock.log.streams('session/control').map(entry => [entry.state, entry.pushed])).toEqual([['ended', 1]])
+    expect(mock.log.streams('session/control').map((entry) => [entry.state, entry.pushed])).toEqual([['ended', 1]])
     mock.assertNoUnmatched()
   })
 
@@ -259,7 +281,9 @@ describe('RemoteMock.remote stream proxies', () => {
     expect(mock.log.unmatched()).toEqual([{ endpoint: 'session/control', mode: 'stream' }])
     mock.stream('session/control', openStream())
     const controller = new AbortController()
-    onTestFinished(() => { controller.abort() })
+    onTestFinished(() => {
+      controller.abort()
+    })
     const reader = mock.remote.session.control(controller.signal)[Symbol.asyncIterator]()
     const failure = new Error('stream disconnected')
     const pending = expect(reader.next()).rejects.toBe(failure)

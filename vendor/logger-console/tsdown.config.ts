@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * logger-console ships two entries: the node exporter (index) and the

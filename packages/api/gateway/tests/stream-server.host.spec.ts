@@ -2,13 +2,9 @@ import { once } from 'node:events'
 import { createServer, type Server } from 'node:http'
 import { Context } from '@deepseek-ai/cordis'
 import { remoteErrorOf, type PeerId, type PeerScope } from '@deepseek-ai/dsh-typert-protocol'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import WebSocket from 'ws'
-import {
-  RemoteStreamMuxServer,
-  type RemoteStreamFailureMapper,
-  type RemoteStreamOpener,
-} from '../src/stream-server.ts'
+import { RemoteStreamMuxServer, type RemoteStreamFailureMapper, type RemoteStreamOpener } from '../src/stream-server.ts'
 
 interface RunningMux {
   readonly http: Server
@@ -19,11 +15,13 @@ interface RunningMux {
 const running = new Set<RunningMux>()
 
 afterEach(async () => {
-  await Promise.all([...running].map(async (entry) => {
-    running.delete(entry)
-    await entry.mux.close().catch(() => undefined)
-    await closeHttp(entry.http)
-  }))
+  await Promise.all(
+    [...running].map(async (entry) => {
+      running.delete(entry)
+      await entry.mux.close().catch(() => undefined)
+      await closeHttp(entry.http)
+    }),
+  )
 })
 
 describe('Remote stream mux server carrier lifecycle', () => {
@@ -44,7 +42,9 @@ describe('Remote stream mux server carrier lifecycle', () => {
     client.pause()
     serverSocket.close()
     expect(serverSocket.readyState).toBe(WebSocket.CLOSING)
-    await new Promise<void>((resolve) => { setTimeout(resolve, 25) })
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 25)
+    })
     expect(closingPing).not.toHaveBeenCalled()
 
     const closed = once(client, 'close')
@@ -63,7 +63,9 @@ describe('Remote stream mux server carrier lifecycle', () => {
     await once(client, 'ping')
     await once(client, 'ping')
     expect(terminated).not.toHaveBeenCalled()
-    await vi.waitFor(() => { expect(terminated).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(terminated).toHaveBeenCalledOnce()
+    })
     await closed
   })
 
@@ -81,7 +83,9 @@ describe('Remote stream mux server carrier lifecycle', () => {
     try {
       await once(client, 'ping')
       await once(client, 'ping')
-      await vi.waitFor(() => { expect(finalCheck).toBeDefined() })
+      await vi.waitFor(() => {
+        expect(finalCheck).toBeDefined()
+      })
       serverSocket.emit('pong', Buffer.alloc(0))
       finalCheck?.()
       expect(terminated).not.toHaveBeenCalled()
@@ -141,9 +145,13 @@ describe('Remote stream mux server carrier lifecycle', () => {
 
   it('does not send an end frame after clean source cancellation', async () => {
     let opened!: () => void
-    const didOpen = new Promise<void>((resolve) => { opened = resolve })
+    const didOpen = new Promise<void>((resolve) => {
+      opened = resolve
+    })
     let returned!: () => void
-    const didReturn = new Promise<void>((resolve) => { returned = resolve })
+    const didReturn = new Promise<void>((resolve) => {
+      returned = resolve
+    })
     const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => {
       opened()
       return cleanlyCancelled(control.signal, returned)
@@ -154,7 +162,9 @@ describe('Remote stream mux server carrier lifecycle', () => {
     await didOpen
     client.send(JSON.stringify({ type: 'cancel', streamId: 'cancelled' }))
     await didReturn
-    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
     expect(frames).toEqual([])
     client.close()
     await once(client, 'close')
@@ -162,9 +172,13 @@ describe('Remote stream mux server carrier lifecycle', () => {
 
   it('closes the carrier when ws reports an item write failure', async () => {
     let release!: () => void
-    const released = new Promise<void>((resolve) => { release = resolve })
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
     let opened!: () => void
-    const didOpen = new Promise<void>((resolve) => { opened = resolve })
+    const didOpen = new Promise<void>((resolve) => {
+      opened = resolve
+    })
     const entry = await startMux(async () => delayedItem(released, opened))
     const client = await connect(entry.url)
     client.send(openFrame('write-failure'))
@@ -179,7 +193,7 @@ describe('Remote stream mux server carrier lifecycle', () => {
   })
 
   it('closes the carrier when the end frame cannot be written', async () => {
-    const entry = await startMux(async () => (async function *(): AsyncIterable<never> {})())
+    const entry = await startMux(async () => (async function* (): AsyncIterable<never> {})())
     const client = await connect(entry.url)
     failWrites(acceptedSocket(entry.mux))
 
@@ -205,7 +219,9 @@ describe('Remote stream mux server carrier lifecycle', () => {
       await opened.promise
       // The failure path awaits nothing before it inspects the socket, so one
       // macrotask hop drains every microtask it can schedule.
-      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve)
+      })
       expect(frames).toEqual([])
     } finally {
       Reflect.deleteProperty(serverSocket, 'readyState')
@@ -217,11 +233,17 @@ describe('Remote stream mux server carrier lifecycle', () => {
 
   it('contains an item produced after its socket closes', async () => {
     let release!: () => void
-    const released = new Promise<void>((resolve) => { release = resolve })
+    const released = new Promise<void>((resolve) => {
+      release = resolve
+    })
     let opened!: () => void
-    const didOpen = new Promise<void>((resolve) => { opened = resolve })
+    const didOpen = new Promise<void>((resolve) => {
+      opened = resolve
+    })
     let returned!: () => void
-    const didReturn = new Promise<void>((resolve) => { returned = resolve })
+    const didReturn = new Promise<void>((resolve) => {
+      returned = resolve
+    })
     const entry = await startMux(async () => delayedItem(released, opened, returned))
     const client = await connect(entry.url)
     client.send(openFrame('late-item'))
@@ -229,16 +251,22 @@ describe('Remote stream mux server carrier lifecycle', () => {
     const serverSocket = acceptedSocket(entry.mux)
     client.close()
     await once(client, 'close')
-    await vi.waitFor(() => { expect(serverSocket.readyState).toBe(WebSocket.CLOSED) })
+    await vi.waitFor(() => {
+      expect(serverSocket.readyState).toBe(WebSocket.CLOSED)
+    })
     release()
     await didReturn
   })
 
   it('terminates active sockets on close and reports a repeated close', async () => {
     let opened!: () => void
-    const didOpen = new Promise<void>((resolve) => { opened = resolve })
+    const didOpen = new Promise<void>((resolve) => {
+      opened = resolve
+    })
     let returned!: () => void
-    const didReturn = new Promise<void>((resolve) => { returned = resolve })
+    const didReturn = new Promise<void>((resolve) => {
+      returned = resolve
+    })
     const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => {
       opened()
       return cleanlyCancelled(control.signal, returned)
@@ -262,10 +290,15 @@ describe('Remote stream mux server Peer binding', () => {
     const peer = await fixturePeer()
     await peer.dispose()
     const opened = vi.fn()
-    const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => {
-      opened()
-      return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    const entry = await startMux(
+      async (_endpoint, _payload, _uplink, _peer, control) => {
+        opened()
+        return waitForAbort(control.signal)
+      },
+      2_000,
+      262_144,
+      peer,
+    )
     const client = new WebSocket(entry.url)
     const closeEvent = await once(client, 'close')
     expect(closeEvent[0]).toBe(1001)
@@ -276,13 +309,20 @@ describe('Remote stream mux server Peer binding', () => {
   it('hands the admitted Peer to every opener and closes the socket when its scope is disposed', async () => {
     const peer = await fixturePeer()
     const seen: PeerScope[] = []
-    const entry = await startMux(async (_endpoint, _payload, _uplink, opened, control) => {
-      seen.push(opened)
-      return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    const entry = await startMux(
+      async (_endpoint, _payload, _uplink, opened, control) => {
+        seen.push(opened)
+        return waitForAbort(control.signal)
+      },
+      2_000,
+      262_144,
+      peer,
+    )
     const client = await connect(entry.url)
     client.send(openFrame('bound'))
-    await vi.waitFor(() => { expect(seen).toHaveLength(1) })
+    await vi.waitFor(() => {
+      expect(seen).toHaveLength(1)
+    })
     expect(seen[0]).toBe(peer)
 
     const closed = once(client, 'close')
@@ -306,7 +346,9 @@ describe('Remote stream mux server uplink', () => {
     client.send(openFrame('echo'))
     client.send(itemFrame('echo', 'one'))
     client.send(itemFrame('echo'))
-    await vi.waitFor(() => { expect(received.count).toBe(3) })
+    await vi.waitFor(() => {
+      expect(received.count).toBe(3)
+    })
     expect(frames).toEqual([])
 
     release.resolve(undefined)
@@ -317,7 +359,9 @@ describe('Remote stream mux server uplink', () => {
       ])
     })
     client.send(endFrame('echo'))
-    await vi.waitFor(() => { expect(frames.at(-1)).toEqual({ type: 'end', streamId: 'echo' }) })
+    await vi.waitFor(() => {
+      expect(frames.at(-1)).toEqual({ type: 'end', streamId: 'echo' })
+    })
     expect(frames).toHaveLength(3)
     client.close()
     await once(client, 'close')
@@ -325,7 +369,8 @@ describe('Remote stream mux server uplink', () => {
 
   it('fails a stream on an item after end and keeps the socket open', async () => {
     const entry = await startMux(async (endpoint, _payload, uplink, _peer, control) =>
-      endpoint === 'fixture/echo' ? echoUplink(uplink) : waitForAbort(control.signal))
+      endpoint === 'fixture/echo' ? echoUplink(uplink) : waitForAbort(control.signal),
+    )
     const client = await connect(entry.url)
     const frames = collectFrames(client)
     client.send(openFrame('held'))
@@ -333,15 +378,17 @@ describe('Remote stream mux server uplink', () => {
     client.send(endFrame('held'))
     client.send(itemFrame('held', 'late'))
     await vi.waitFor(() => {
-      expect(frames).toEqual([{
-        type: 'error',
-        streamId: 'held',
-        error: {
-          code: 'gateway/protocol',
-          message: 'api gateway: Remote stream uplink item after end',
-          details: { endpoint: 'fixture/follow' },
+      expect(frames).toEqual([
+        {
+          type: 'error',
+          streamId: 'held',
+          error: {
+            code: 'gateway/protocol',
+            message: 'api gateway: Remote stream uplink item after end',
+            details: { endpoint: 'fixture/follow' },
+          },
         },
-      }])
+      ])
     })
 
     expect(client.readyState).toBe(WebSocket.OPEN)
@@ -356,9 +403,14 @@ describe('Remote stream mux server uplink', () => {
 
   it('fails a stream whose buffered uplink exceeds the configured bytes and drops later items', async () => {
     const release = Promise.withResolvers<undefined>()
-    const entry = await startMux(async () => (async function *(): AsyncIterable<never> {
-      await release.promise
-    })(), 2_000, 48)
+    const entry = await startMux(
+      async () =>
+        (async function* (): AsyncIterable<never> {
+          await release.promise
+        })(),
+      2_000,
+      48,
+    )
     const client = await connect(entry.url)
     const frames = collectFrames(client)
     const received = countMessages(acceptedSocket(entry.mux))
@@ -366,20 +418,24 @@ describe('Remote stream mux server uplink', () => {
     client.send(itemFrame('big', 'x'.repeat(64)))
     client.send(itemFrame('big', 'dropped'))
     client.send(endFrame('big'))
-    await vi.waitFor(() => { expect(received.count).toBe(4) })
+    await vi.waitFor(() => {
+      expect(received.count).toBe(4)
+    })
     expect(frames).toEqual([])
 
     release.resolve(undefined)
     await vi.waitFor(() => {
-      expect(frames).toEqual([{
-        type: 'error',
-        streamId: 'big',
-        error: {
-          code: 'gateway/uplink-overflow',
-          message: 'api gateway: Remote stream uplink exceeded 48 buffered bytes',
-          details: { endpoint: 'fixture/follow' },
+      expect(frames).toEqual([
+        {
+          type: 'error',
+          streamId: 'big',
+          error: {
+            code: 'gateway/uplink-overflow',
+            message: 'api gateway: Remote stream uplink exceeded 48 buffered bytes',
+            details: { endpoint: 'fixture/follow' },
+          },
         },
-      }])
+      ])
     })
     client.close()
     await once(client, 'close')
@@ -387,7 +443,8 @@ describe('Remote stream mux server uplink', () => {
 
   it('drops uplink frames for a stream it no longer owns and keeps the socket open', async () => {
     const entry = await startMux(async (endpoint, _payload, uplink, _peer, control) =>
-      endpoint === 'fixture/echo' ? echoUplink(uplink) : waitForAbort(control.signal))
+      endpoint === 'fixture/echo' ? echoUplink(uplink) : waitForAbort(control.signal),
+    )
     const client = await connect(entry.url)
     const frames = collectFrames(client)
     const received = countMessages(acceptedSocket(entry.mux))
@@ -395,8 +452,12 @@ describe('Remote stream mux server uplink', () => {
     client.send(endFrame('absent'))
     client.send(openFrame('live', 'fixture/echo'))
     client.send(itemFrame('live', 'served'))
-    await vi.waitFor(() => { expect(received.count).toBe(4) })
-    await vi.waitFor(() => { expect(frames).toEqual([{ type: 'item', streamId: 'live', value: 'served' }]) })
+    await vi.waitFor(() => {
+      expect(received.count).toBe(4)
+    })
+    await vi.waitFor(() => {
+      expect(frames).toEqual([{ type: 'item', streamId: 'live', value: 'served' }])
+    })
     expect(client.readyState).toBe(WebSocket.OPEN)
     client.close()
     await once(client, 'close')
@@ -426,7 +487,7 @@ describe('Remote stream mux server uplink', () => {
       const first: IteratorResult<unknown, undefined> = await iterator.next()
       await iterator.return?.()
       returned.resolve(undefined)
-      return (async function *(): AsyncIterable<unknown> {
+      return (async function* (): AsyncIterable<unknown> {
         await release.promise
         yield { first: first.value, afterReturn: (await iterator.next()).done }
       })()
@@ -440,7 +501,9 @@ describe('Remote stream mux server uplink', () => {
     client.send(itemFrame('closed', 'two'))
     client.send(endFrame('closed'))
     client.send(itemFrame('closed', 'three'))
-    await vi.waitFor(() => { expect(received.count).toBe(5) })
+    await vi.waitFor(() => {
+      expect(received.count).toBe(5)
+    })
 
     release.resolve(undefined)
     await vi.waitFor(() => {
@@ -466,18 +529,20 @@ describe('Remote stream mux server uplink', () => {
     client.send(openFrame('twice', 'fixture/twice'))
     client.send(openFrame('pending', 'fixture/pending'))
     await vi.waitFor(() => {
-      expect(frames).toEqual(expect.arrayContaining([
-        {
-          type: 'error',
-          streamId: 'twice',
-          error: { code: 'internal', message: 'api gateway: Remote stream uplink inbox already has a consumer', details: {} },
-        },
-        {
-          type: 'error',
-          streamId: 'pending',
-          error: { code: 'internal', message: 'api gateway: Remote stream uplink inbox has one pending read', details: {} },
-        },
-      ]))
+      expect(frames).toEqual(
+        expect.arrayContaining([
+          {
+            type: 'error',
+            streamId: 'twice',
+            error: { code: 'internal', message: 'api gateway: Remote stream uplink inbox already has a consumer', details: {} },
+          },
+          {
+            type: 'error',
+            streamId: 'pending',
+            error: { code: 'internal', message: 'api gateway: Remote stream uplink inbox has one pending read', details: {} },
+          },
+        ]),
+      )
     })
     expect(frames).toHaveLength(2)
     client.close()
@@ -501,10 +566,12 @@ async function startMux(
   streamInboxBytes = 262_144,
   peer?: PeerScope,
 ): Promise<RunningMux> {
-  const admitted = peer ?? await fixturePeer()
+  const admitted = peer ?? (await fixturePeer())
   const mux = new RemoteStreamMuxServer(open, mapFailure, heartbeatIntervalMs, streamInboxBytes)
   const http = createServer()
-  http.on('upgrade', (request, socket, head) => { mux.handleUpgrade(request, socket, head, admitted) })
+  http.on('upgrade', (request, socket, head) => {
+    mux.handleUpgrade(request, socket, head, admitted)
+  })
   await new Promise<void>((resolve, reject) => {
     http.once('error', reject)
     http.listen(0, '127.0.0.1', () => {
@@ -527,7 +594,9 @@ async function fixturePeer(): Promise<PeerScope> {
   return {
     id: 'fixture-peer' as PeerId,
     ctx: fiber.ctx,
-    dispose: async () => { await fiber.dispose() },
+    dispose: async () => {
+      await fiber.dispose()
+    },
   }
 }
 
@@ -556,7 +625,9 @@ function collectFrames(client: WebSocket): Record<string, unknown>[] {
 /** Count the text frames the mux has already dispatched, so a test can wait for the Host to hold them. */
 function countMessages(serverSocket: WebSocket): { count: number } {
   const received = { count: 0 }
-  serverSocket.on('message', () => { received.count += 1 })
+  serverSocket.on('message', () => {
+    received.count += 1
+  })
   return received
 }
 
@@ -581,33 +652,43 @@ function endFrame(streamId: string): string {
   return JSON.stringify({ type: 'end', streamId })
 }
 
-async function *echoUplink(uplink: AsyncIterable<unknown>): AsyncIterable<unknown> {
+async function* echoUplink(uplink: AsyncIterable<unknown>): AsyncIterable<unknown> {
   for await (const value of uplink) yield value
 }
 
-async function *waitForAbort(signal: AbortSignal): AsyncIterable<never> {
+async function* waitForAbort(signal: AbortSignal): AsyncIterable<never> {
   await new Promise<void>((resolve) => {
     if (signal.aborted) resolve()
-    else signal.addEventListener('abort', () => { resolve() }, { once: true })
+    else
+      signal.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
   })
 }
 
-async function *cleanlyCancelled(signal: AbortSignal, returned: () => void): AsyncIterable<never> {
+async function* cleanlyCancelled(signal: AbortSignal, returned: () => void): AsyncIterable<never> {
   try {
     await new Promise<void>((resolve) => {
       if (signal.aborted) resolve()
-      else signal.addEventListener('abort', () => { resolve() }, { once: true })
+      else
+        signal.addEventListener(
+          'abort',
+          () => {
+            resolve()
+          },
+          { once: true },
+        )
     })
   } finally {
     returned()
   }
 }
 
-async function *delayedItem(
-  released: Promise<void>,
-  opened: () => void,
-  returned: () => void = () => {},
-): AsyncIterable<string> {
+async function* delayedItem(released: Promise<void>, opened: () => void, returned: () => void = () => {}): AsyncIterable<string> {
   try {
     opened()
     await released

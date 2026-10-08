@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Model-list editing, endpoint interrogation, and hand-declared provider creation. */
 import { within, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import Schema from '@deepseek-ai/schemastery'
 import { Context } from '@deepseek-ai/cordis'
 import { bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
@@ -20,26 +20,30 @@ import { settingsSchema } from './settings-schema.client.ts'
 
 afterEach(cleanup)
 
-const t: ModelsSectionInjected['t'] = key => en[key]
+const t: ModelsSectionInjected['t'] = (key) => en[key]
 
 const PROTOCOLS = ['openai-completions', 'openai-responses', 'anthropic-messages']
 
 /** The pi-ai profile shape as the host serializes it, including the layer-1 fields. */
 const PiAiConfig = Schema.object({
-  providers: Schema.dict(Schema.object({
-    apiKey: Schema.string().role('secret'),
-    apiKeyEnv: Schema.string().role('credential-ref'),
-    displayName: Schema.string(),
-    api: Schema.union(PROTOCOLS),
-    baseURL: Schema.string(),
-    models: Schema.array(Schema.object({
-      id: Schema.string().required(),
-      name: Schema.string(),
-      contextWindow: Schema.number(),
-      maxTokens: Schema.number(),
-    })),
-    reasoning: Schema.union(['off', 'high']),
-  })),
+  providers: Schema.dict(
+    Schema.object({
+      apiKey: Schema.string().role('secret'),
+      apiKeyEnv: Schema.string().role('credential-ref'),
+      displayName: Schema.string(),
+      api: Schema.union(PROTOCOLS),
+      baseURL: Schema.string(),
+      models: Schema.array(
+        Schema.object({
+          id: Schema.string().required(),
+          name: Schema.string(),
+          contextWindow: Schema.number(),
+          maxTokens: Schema.number(),
+        }),
+      ),
+      reasoning: Schema.union(['off', 'high']),
+    }),
+  ),
 })
 
 function ok<T>(value: T) {
@@ -49,9 +53,8 @@ function ok<T>(value: T) {
 const DISCOVERY_FAILURES: {
   [Code in 'gateway/internal' | 'llm/model-discovery-rejected']: (message: string) => RemoteError<Code>
 } = {
-  'gateway/internal': message => new RemoteError('gateway/internal', message, {}),
-  'llm/model-discovery-rejected': message =>
-    new RemoteError('llm/model-discovery-rejected', message, { settingsNs: 'llm-pi-ai' }),
+  'gateway/internal': (message) => new RemoteError('gateway/internal', message, {}),
+  'llm/model-discovery-rejected': (message) => new RemoteError('llm/model-discovery-rejected', message, { settingsNs: 'llm-pi-ai' }),
 }
 function fail(message: string, code: keyof typeof DISCOVERY_FAILURES) {
   return { ok: false as const, error: DISCOVERY_FAILURES[code](message) }
@@ -65,10 +68,9 @@ type RefusalCode = 'credential/rejected' | 'settings/conflict' | 'settings/rejec
 
 /** One refusal per code, each carrying the details its own code declares. */
 const REFUSALS: { [Code in RefusalCode]: (message: string) => RemoteError<Code> } = {
-  'credential/rejected': message => new RemoteError('credential/rejected', message, { ref: 'OPENAI_API_KEY' }),
-  'settings/conflict': message =>
-    new RemoteError('settings/conflict', message, { ns: 'llm-pi-ai', expected: 7, actual: 8 }),
-  'settings/rejected': message => new RemoteError('settings/rejected', message, { ns: 'llm-pi-ai' }),
+  'credential/rejected': (message) => new RemoteError('credential/rejected', message, { ref: 'OPENAI_API_KEY' }),
+  'settings/conflict': (message) => new RemoteError('settings/conflict', message, { ns: 'llm-pi-ai', expected: 7, actual: 8 }),
+  'settings/rejected': (message) => new RemoteError('settings/rejected', message, { ns: 'llm-pi-ai' }),
 }
 function remoteFail(message: string, code: RefusalCode = 'credential/rejected') {
   return { ok: false as const, error: REFUSALS[code](message) }
@@ -87,24 +89,27 @@ function piAiNamespace(
     value: { providers },
     base: { providers: baseProviders },
     user: { providers: userProviders },
-    autoGenerate: true, applies: 'live',
+    autoGenerate: true,
+    applies: 'live',
     secrets: [],
     revision: 3,
   }
 }
 
-function scriptedFace(options: {
-  providers?: Record<string, JsonValue>
-  /** User layer, when it differs from the effective section. */
-  userProviders?: Record<string, JsonValue>
-  /** Composition layer, for a route a `cordis.yml` pins rather than the page. */
-  baseProviders?: Record<string, JsonValue>
-  /** Routes the adapter reports as hand-declared; the rest come back as shipped. */
-  declaredRoutes?: readonly string[]
-  discover?: ReturnType<typeof vi.fn>
-  mutate?: ReturnType<typeof vi.fn>
-  set?: ReturnType<typeof vi.fn>
-} = {}) {
+function scriptedFace(
+  options: {
+    providers?: Record<string, JsonValue>
+    /** User layer, when it differs from the effective section. */
+    userProviders?: Record<string, JsonValue>
+    /** Composition layer, for a route a `cordis.yml` pins rather than the page. */
+    baseProviders?: Record<string, JsonValue>
+    /** Routes the adapter reports as hand-declared; the rest come back as shipped. */
+    declaredRoutes?: readonly string[]
+    discover?: ReturnType<typeof vi.fn>
+    mutate?: ReturnType<typeof vi.fn>
+    set?: ReturnType<typeof vi.fn>
+  } = {},
+) {
   const providers = options.providers ?? {
     openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' },
   }
@@ -114,18 +119,20 @@ function scriptedFace(options: {
   const set = options.set ?? vi.fn(() => Promise.resolve(remoteOk(undefined)))
   const face = {
     llm: {
-      listProviders: vi.fn(() => Promise.resolve(ok(
-        Object.keys(providers).map(provider => ({ id: provider, name: provider })),
-      ))),
-      listConfigurableProviders: vi.fn(() => Promise.resolve(ok(
-        Object.keys(providers).map(provider => ({
-          provider,
-          displayName: provider,
-          settingsNs: 'llm-pi-ai',
-          settingsPath: ['providers', provider],
-          declared: options.declaredRoutes?.includes(provider) ?? false,
-        })),
-      ))),
+      listProviders: vi.fn(() => Promise.resolve(ok(Object.keys(providers).map((provider) => ({ id: provider, name: provider }))))),
+      listConfigurableProviders: vi.fn(() =>
+        Promise.resolve(
+          ok(
+            Object.keys(providers).map((provider) => ({
+              provider,
+              displayName: provider,
+              settingsNs: 'llm-pi-ai',
+              settingsPath: ['providers', provider],
+              declared: options.declaredRoutes?.includes(provider) ?? false,
+            })),
+          ),
+        ),
+      ),
       discoverModels: discover,
     },
     settings: {
@@ -133,9 +140,9 @@ function scriptedFace(options: {
       mutate,
     },
     credentials: {
-      describe: vi.fn((refs: string[]) => Promise.resolve(remoteOk(
-        Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: true }])),
-      ))),
+      describe: vi.fn((refs: string[]) =>
+        Promise.resolve(remoteOk(Object.fromEntries(refs.map((ref) => [ref, { configured: false, writable: true }])))),
+      ),
       set,
       unset: vi.fn(),
     },
@@ -154,9 +161,9 @@ const contexts = new WeakMap<object, PageContext>()
 function ctxWith(face: object): PageContext {
   const existing = contexts.get(face)
   if (existing !== undefined) return existing
-  const ctx = Object.assign(new Context(), { remote: { ...face,
-    session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) },
-  } })
+  const ctx = Object.assign(new Context(), {
+    remote: { ...face, session: { initializeDefaultModel: async () => ({ ok: true, value: undefined }) } },
+  })
   contexts.set(face, ctx)
   return ctx
 }
@@ -198,13 +205,12 @@ function firstMutate(mutate: ReturnType<typeof vi.fn>): MutateCall {
   const call = mutate.mock.calls[0] as [string, MutateCall['ops'], number | undefined] | undefined
   if (call === undefined) throw new Error('no settings write was recorded')
   const [ns, ops, expectedRevision] = call
-  return { ns, ops, ...expectedRevision === undefined ? {} : { expectedRevision } }
+  return { ns, ops, ...(expectedRevision === undefined ? {} : { expectedRevision }) }
 }
 
 async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   const scripted = scriptedFace(options)
-  const controller = new ModelsSettingsStore(
-    ctxWith(scripted.face), settingsSchema, new SettingsDescribeMirror(ctxWith(scripted.face)))
+  const controller = new ModelsSettingsStore(ctxWith(scripted.face), settingsSchema, new SettingsDescribeMirror(ctxWith(scripted.face)))
   await controller.load()
   const injected: ModelsSectionProps = {
     controller,
@@ -248,7 +254,7 @@ function buttonNamed(label: string): HTMLButtonElement {
 
 /** Click the button with `label` inside `scope`. */
 function within_(scope: HTMLElement, label: string): HTMLElement {
-  const found = [...scope.querySelectorAll('button')].find(button => button.textContent === label)
+  const found = [...scope.querySelectorAll('button')].find((button) => button.textContent === label)
   if (found === undefined) throw new Error(`no "${label}" button`)
   return found
 }
@@ -272,13 +278,20 @@ describe('model list editing', () => {
     })
     openEditor('openai')
     expandModel(1)
-    fireEvent.click(within(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).getByRole('checkbox', { name: en.modelInputImage }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).getByRole('checkbox', { name: en.modelInputImage }),
+    )
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops).toEqual([{
-      op: 'set', path: ['providers', 'openai', 'models'],
-      value: [{ id: 'preview', input: ['text', 'image'] }, neighbor],
-    }])
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
+    expect(firstMutate(mutate).ops).toEqual([
+      {
+        op: 'set',
+        path: ['providers', 'openai', 'models'],
+        value: [{ id: 'preview', input: ['text', 'image'] }, neighbor],
+      },
+    ])
   })
 
   it('adds, edits, and removes rows without storing emptied optional fields', async () => {
@@ -289,17 +302,27 @@ describe('model list editing', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     expandModel(1)
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: '65536' } })
-    fireEvent.click(within(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).getByRole('checkbox', { name: en.modelInputImage }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).getByRole('checkbox', { name: en.modelInputImage }),
+    )
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Acme' } })
     // Clearing an optional field must drop it rather than store an empty value.
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: '' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     expect(firstMutate(mutate)).toMatchObject({
       ns: 'llm-pi-ai',
       expectedRevision: 3,
-      ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] }] }],
+      ops: [
+        {
+          op: 'set',
+          path: ['providers', 'openai', 'models'],
+          value: [{ id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] }],
+        },
+      ],
     })
   })
 
@@ -336,10 +359,11 @@ describe('model list editing', () => {
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).value).toBe('1000')
 
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     // What lands in settings is always a plain token count.
-    expect(firstMutate(mutate).ops[0]?.value)
-      .toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 1000 }])
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 1000 }])
   })
 
   it('refuses to apply while a capacity is unreadable', async () => {
@@ -392,11 +416,10 @@ describe('model list editing', () => {
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 2`), { target: { value: '' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops[0]?.value).toEqual([
-      { id: 'first' },
-      { id: 'second', name: 'Second', maxTokens: 2048 },
-    ])
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'first' }, { id: 'second', name: 'Second', maxTokens: 2048 }])
   })
 
   it('shows the adapter defaults as inherited until an edit takes them over', async () => {
@@ -408,7 +431,6 @@ describe('model list editing', () => {
     expect(screen.getByText(en.modelsInherited)).toBeTruthy()
     expect(screen.queryByText(en.resetModels)).toBeNull()
   })
-
 
   it('keeps expansion on the row it belongs to after an earlier one is removed', async () => {
     await mountSection({
@@ -468,11 +490,11 @@ describe('model list editing', () => {
     expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
     fireEvent.click(screen.getByText(en.resetModels))
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops)
-      .toContainEqual({ op: 'unset', path: ['providers', 'openai', 'models'] })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
+    expect(firstMutate(mutate).ops).toContainEqual({ op: 'unset', path: ['providers', 'openai', 'models'] })
   })
-
 })
 
 describe('capacity spellings', () => {
@@ -515,19 +537,21 @@ describe('capacity spellings', () => {
 
 describe('endpoint interrogation', () => {
   it.each([[undefined], [[]], [['text']]])('renders catalog input inheritance for a stored declaration of %j', async (input) => {
-    const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'vision', inputModalities: ['text', 'image'] },
-    ])))
-    const model = { id: 'vision', ...input === undefined ? {} : { input } }
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'vision', inputModalities: ['text', 'image'] }])))
+    const model = { id: 'vision', ...(input === undefined ? {} : { input }) }
     const { mutate } = await mountSection({ discover, providers: { openai: { models: [model] } } })
     openEditor('openai')
     expandModel(1)
     const types = within(screen.getByRole('group', { name: `${en.modelInputTypes} 1` }))
-    await waitFor(() => { expect(types.getByRole<HTMLInputElement>('checkbox', { name: en.modelInputImage }).disabled).toBe(false) })
+    await waitFor(() => {
+      expect(types.getByRole<HTMLInputElement>('checkbox', { name: en.modelInputImage }).disabled).toBe(false)
+    })
     expect(types.getByRole<HTMLInputElement>('checkbox', { name: en.modelInputImage }).checked).toBe(input?.length !== 1)
     expect(discover).toHaveBeenCalledExactlyOnceWith('llm-pi-ai', { provider: 'openai' })
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(screen.queryByRole('button', { name: en.apply })).toBeNull() })
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: en.apply })).toBeNull()
+    })
     expect(mutate).not.toHaveBeenCalled()
   })
 
@@ -535,8 +559,10 @@ describe('endpoint interrogation', () => {
     const { discover, mutate } = await mountSection({
       providers: {
         'acme-gateway': {
-          api: 'openai-completions', baseURL: 'https://gateway.acme.example/v1',
-          defaultInput: ['text', 'image'], models: [{ id: 'custom' }],
+          api: 'openai-completions',
+          baseURL: 'https://gateway.acme.example/v1',
+          defaultInput: ['text', 'image'],
+          models: [{ id: 'custom' }],
         },
       },
       declaredRoutes: ['acme-gateway'],
@@ -553,11 +579,16 @@ describe('endpoint interrogation', () => {
 
     fireEvent.click(image)
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-    expect(firstMutate(mutate).ops).toEqual([{
-      op: 'set', path: ['providers', 'acme-gateway', 'models'],
-      value: [{ id: 'custom', input: ['text'] }],
-    }])
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledTimes(1)
+    })
+    expect(firstMutate(mutate).ops).toEqual([
+      {
+        op: 'set',
+        path: ['providers', 'acme-gateway', 'models'],
+        value: [{ id: 'custom', input: ['text'] }],
+      },
+    ])
   })
 
   it('asks the endpoint the form shows, with a key that is not yet stored', async () => {
@@ -569,7 +600,9 @@ describe('endpoint interrogation', () => {
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://edited.example/v1' } })
     fireEvent.click(screen.getByText(en.fetchModels))
 
-    await waitFor(() => { expect(discover).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(discover).toHaveBeenCalled()
+    })
     expect(lastProbe(discover)).toEqual({
       settingsNs: 'llm-pi-ai',
       // The route is named, so an adapter that already describes it answers
@@ -590,7 +623,9 @@ describe('endpoint interrogation', () => {
 
     fireEvent.click(screen.getByText(en.fetchModels))
 
-    await waitFor(() => { expect(discover).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(discover).toHaveBeenCalled()
+    })
     expect(lastProbe(discover)).toEqual({
       settingsNs: 'llm-pi-ai',
       provider: 'openai',
@@ -600,10 +635,14 @@ describe('endpoint interrogation', () => {
   })
 
   it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'kept', contextWindow: 999, inputModalities: ['text', 'image'] },
-      { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', inputModalities: ['text', 'image'] },
-    ])))
+    const discover = vi.fn(() =>
+      Promise.resolve(
+        ok([
+          { id: 'kept', contextWindow: 999, inputModalities: ['text', 'image'] },
+          { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', inputModalities: ['text', 'image'] },
+        ]),
+      ),
+    )
     const { mutate } = await mountSection({
       discover,
       providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept', contextWindow: 111 }] } },
@@ -616,7 +655,7 @@ describe('endpoint interrogation', () => {
     expect(screen.queryByRole('checkbox', { name: 'Fresh' })).toBeNull()
     // The already-configured row starts unchecked; the new one starts checked.
     const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([false, true])
+    expect(boxes.map((box) => box.checked)).toEqual([false, true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
@@ -625,9 +664,15 @@ describe('endpoint interrogation', () => {
     expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 2`).value).toBe('4096')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 2`).value).toBe('2048')
 
-    expect(within(screen.getByRole('group', { name: `${en.modelInputTypes} 2` })).getByRole<HTMLInputElement>('checkbox', { name: en.modelInputImage }).checked).toBe(true)
+    expect(
+      within(screen.getByRole('group', { name: `${en.modelInputTypes} 2` })).getByRole<HTMLInputElement>('checkbox', {
+        name: en.modelInputImage,
+      }).checked,
+    ).toBe(true)
     fireEvent.click(screen.getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
       { id: 'kept', contextWindow: 111 },
       { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', input: ['text', 'image'] },
@@ -635,9 +680,9 @@ describe('endpoint interrogation', () => {
   })
 
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
-    const discover = vi.fn(() => Promise.resolve(
-      fail('https://proxy.example/v1/models answered 401; check the API key', 'llm/model-discovery-rejected'),
-    ))
+    const discover = vi.fn(() =>
+      Promise.resolve(fail('https://proxy.example/v1/models answered 401; check the API key', 'llm/model-discovery-rejected')),
+    )
     await mountSection({ discover })
     openEditor('openai')
 
@@ -665,7 +710,9 @@ describe('endpoint interrogation', () => {
     expect(buttonNamed(en.fetchModels).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.fetchModels))
 
-    await waitFor(() => { expect(discover).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(discover).toHaveBeenCalled()
+    })
     expect(lastProbe(discover)).toEqual({ settingsNs: 'llm-pi-ai', provider: 'openai' })
   })
 
@@ -675,8 +722,13 @@ describe('endpoint interrogation', () => {
     const scripted = scriptedFace()
     render(
       <CustomProviderCard
-        taken={[]} protocols={PROTOCOLS} revision={7} operations={operationsWith(scripted.face)}
-        t={t} readOnly={false} onClose={vi.fn()}
+        taken={[]}
+        protocols={PROTOCOLS}
+        revision={7}
+        operations={operationsWith(scripted.face)}
+        t={t}
+        readOnly={false}
+        onClose={vi.fn()}
       />,
     )
     expect(buttonNamed(en.fetchModels).disabled).toBe(true)
@@ -718,14 +770,14 @@ describe('endpoint interrogation', () => {
     // The editor card carries a Cancel of its own; this one is the dialog's.
     fireEvent.click(within_(dialog, en.cancel))
 
-    await waitFor(() => { expect(screen.queryByText(en.fetchTitle)).toBeNull() })
+    await waitFor(() => {
+      expect(screen.queryByText(en.fetchTitle)).toBeNull()
+    })
     expect(mutate).not.toHaveBeenCalled()
   })
 
   it('toggles a candidate off and back on before adopting', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'a' }, { id: 'b', maxTokens: 2048 },
-    ])))
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])))
     const { mutate } = await mountSection({ discover })
     openEditor('openai')
 
@@ -738,15 +790,15 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.fetchAdopt))
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     // A disclosed output cap rides along with the candidate that has one.
     expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])
   })
 
   it('filters by model id or name, selects visible candidates, and clears every selection', async () => {
-    const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'alpha' }, { id: 'opaque-id', name: 'Beta Display' }, { id: 'gamma' },
-    ])))
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'alpha' }, { id: 'opaque-id', name: 'Beta Display' }, { id: 'gamma' }])))
     await mountSection({ discover })
     openEditor('openai')
 
@@ -755,8 +807,7 @@ describe('endpoint interrogation', () => {
     const search = screen.getByLabelText<HTMLInputElement>(en.fetchSearch)
     expect(dialog.textContent).toContain('opaque-id')
     expect(dialog.textContent).not.toContain('Beta Display')
-    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-      .map(box => box.checked)).toEqual([true, true, true])
+    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((box) => box.checked)).toEqual([true, true, true])
 
     fireEvent.change(search, { target: { value: 'ALP' } })
     expect(dialog.textContent).toContain('alpha')
@@ -771,20 +822,19 @@ describe('endpoint interrogation', () => {
     expect(dialog.textContent).not.toContain('alpha')
 
     fireEvent.click(within_(dialog, en.fetchDeselectAll))
-    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-      .map(box => box.checked)).toEqual([false])
+    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((box) => box.checked)).toEqual([false])
 
     // Deselecting a filtered result must also clear hidden selections so they
     // cannot be adopted accidentally.
     fireEvent.change(search, { target: { value: '' } })
     const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([false, false, false])
+    expect(boxes.map((box) => box.checked)).toEqual([false, false, false])
 
     // Selecting while filtered adds only visible candidates.
     fireEvent.change(search, { target: { value: 'alpha' } })
     fireEvent.click(within_(dialog, en.fetchSelectAll))
     fireEvent.change(search, { target: { value: '' } })
-    expect(boxes.map(box => box.checked)).toEqual([true, false, false])
+    expect(boxes.map((box) => box.checked)).toEqual([true, false, false])
 
     fireEvent.change(search, { target: { value: 'missing' } })
     expect(screen.getByText(en.fetchNoMatches)).toBeTruthy()
@@ -815,23 +865,30 @@ describe('provider rows', () => {
 
   it('shows no tag when the adapter draws no catalog distinction', async () => {
     const scripted = scriptedFace({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
-    scripted.face.llm.listConfigurableProviders = vi.fn(() => Promise.resolve(ok([{
-      provider: 'openai',
-      displayName: 'openai',
-      settingsNs: 'llm-pi-ai',
-      settingsPath: ['providers', 'openai'],
-    }]))) as never
-    const controller = new ModelsSettingsStore(
-      ctxWith(scripted.face), settingsSchema, new SettingsDescribeMirror(ctxWith(scripted.face)))
+    scripted.face.llm.listConfigurableProviders = vi.fn(() =>
+      Promise.resolve(
+        ok([
+          {
+            provider: 'openai',
+            displayName: 'openai',
+            settingsNs: 'llm-pi-ai',
+            settingsPath: ['providers', 'openai'],
+          },
+        ]),
+      ),
+    ) as never
+    const controller = new ModelsSettingsStore(ctxWith(scripted.face), settingsSchema, new SettingsDescribeMirror(ctxWith(scripted.face)))
     await controller.load()
-    render(<ModelsSection
-      controller={controller}
-      useSnapshot={bindSnapshotSelector(controller.store)}
-      operations={operationsWith(scripted.face)}
-      schema={settingsSchema}
-      t={t}
-      renderSlot={() => null}
-    />)
+    render(
+      <ModelsSection
+        controller={controller}
+        useSnapshot={bindSnapshotSelector(controller.store)}
+        operations={operationsWith(scripted.face)}
+        schema={settingsSchema}
+        t={t}
+        renderSlot={() => null}
+      />,
+    )
 
     // Absent is "unknown", never "shipped": an adapter that answers nothing
     // must not have its routes labelled either way.
@@ -840,10 +897,7 @@ describe('provider rows', () => {
 })
 
 describe('hand-declared providers', () => {
-  function mountCard(
-    overrides: Partial<Parameters<typeof CustomProviderCard>[0]> = {},
-    wire: Parameters<typeof scriptedFace>[0] = {},
-  ) {
+  function mountCard(overrides: Partial<Parameters<typeof CustomProviderCard>[0]> = {}, wire: Parameters<typeof scriptedFace>[0] = {}) {
     const scripted = scriptedFace(wire)
     const onClose = vi.fn()
     render(
@@ -870,7 +924,9 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'model' } })
     fireEvent.click(screen.getByText(en.create))
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     expect(mutate).toHaveBeenCalledOnce()
     expect(set).toHaveBeenCalledOnce()
     expect(initialize).not.toHaveBeenCalled()
@@ -889,20 +945,24 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: '65536' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     expect(firstMutate(mutate)).toEqual({
       ns: 'llm-pi-ai',
-      ops: [{
-        op: 'set',
-        path: ['providers', 'acme-gateway'],
-        value: {
-          displayName: 'Acme Gateway',
-          apiKeyEnv: 'ACME_GATEWAY_API_KEY',
-          api: 'openai-completions',
-          baseURL: 'https://gateway.acme.example/v1',
-          models: [{ id: 'acme-large', contextWindow: 65_536 }],
+      ops: [
+        {
+          op: 'set',
+          path: ['providers', 'acme-gateway'],
+          value: {
+            displayName: 'Acme Gateway',
+            apiKeyEnv: 'ACME_GATEWAY_API_KEY',
+            api: 'openai-completions',
+            baseURL: 'https://gateway.acme.example/v1',
+            models: [{ id: 'acme-large', contextWindow: 65_536 }],
+          },
         },
-      }],
+      ],
       // The section this card was drafted over: a route another tab declared
       // meanwhile makes this a conflict rather than an overwrite.
       expectedRevision: 7,
@@ -916,8 +976,7 @@ describe('hand-declared providers', () => {
     // control could only be set to a value some of them reject — which would
     // take the whole provider out of the picker. The composer's model picker
     // owns the choice, and a switch there records provider+model+effort together.
-    const fields = () => [...document.querySelectorAll('input,select')]
-      .map(el => el.getAttribute('aria-label')).filter(Boolean)
+    const fields = () => [...document.querySelectorAll('input,select')].map((el) => el.getAttribute('aria-label')).filter(Boolean)
 
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -959,9 +1018,10 @@ describe('hand-declared providers', () => {
     fireEvent.change(name, { target: { value: 'Acme 网关' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-    expect(firstMutate(mutate).ops)
-      .toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Acme 网关' }])
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledTimes(1)
+    })
+    expect(firstMutate(mutate).ops).toEqual([{ op: 'set', path: ['providers', 'acme-gateway', 'displayName'], value: 'Acme 网关' }])
   })
 
   it('offers the composition name as what a cleared field falls back to', async () => {
@@ -991,23 +1051,31 @@ describe('hand-declared providers', () => {
     })
     // The reload after the write answers with the renamed route, exactly as
     // the adapter re-registers it.
-    face.llm.listConfigurableProviders = vi.fn(() => Promise.resolve(ok([{
-      provider: 'acme-gateway',
-      displayName: 'Acme 网关',
-      settingsNs: 'llm-pi-ai',
-      settingsPath: ['providers', 'acme-gateway'],
-      declared: true,
-    }])))
+    face.llm.listConfigurableProviders = vi.fn(() =>
+      Promise.resolve(
+        ok([
+          {
+            provider: 'acme-gateway',
+            displayName: 'Acme 网关',
+            settingsNs: 'llm-pi-ai',
+            settingsPath: ['providers', 'acme-gateway'],
+            declared: true,
+          },
+        ]),
+      ),
+    )
     openEditor('acme-gateway')
 
     fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme 网关' } })
     fireEvent.click(screen.getByText(en.apply))
 
     const notice = await screen.findByRole('status')
-    expect(notice.textContent).toBe(providerCopy(en.savedProvider, {
-      provider: 'acme-gateway',
-      displayName: 'Acme 网关',
-    }))
+    expect(notice.textContent).toBe(
+      providerCopy(en.savedProvider, {
+        provider: 'acme-gateway',
+        displayName: 'Acme 网关',
+      }),
+    )
   })
 
   it('drops the stored name rather than storing an empty one the adapter refuses', async () => {
@@ -1022,9 +1090,10 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: '   ' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-    expect(firstMutate(mutate).ops)
-      .toEqual([{ op: 'unset', path: ['providers', 'acme-gateway', 'displayName'] }])
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledTimes(1)
+    })
+    expect(firstMutate(mutate).ops).toEqual([{ op: 'unset', path: ['providers', 'acme-gateway', 'displayName'] }])
   })
 
   it('edits the protocol a declared route was created with', async () => {
@@ -1046,7 +1115,9 @@ describe('hand-declared providers', () => {
     fireEvent.change(protocol, { target: { value: 'anthropic-messages' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledTimes(1)
+    })
     // Only the protocol travels: every other stored field is unchanged, so no
     // op restates it.
     expect(firstMutate(mutate)).toEqual({
@@ -1070,9 +1141,7 @@ describe('hand-declared providers', () => {
   })
 
   it('retries only the key after the profile landed, and reports the provider on cancel', async () => {
-    const set = vi.fn()
-      .mockResolvedValueOnce(remoteFail('credential store is read-only'))
-      .mockResolvedValueOnce(remoteOk(undefined))
+    const set = vi.fn().mockResolvedValueOnce(remoteFail('credential store is read-only')).mockResolvedValueOnce(remoteOk(undefined))
     const { mutate, onClose } = mountCard({}, { set })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
@@ -1083,7 +1152,9 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByText(en.create))
 
     // The profile landed; only the key failed. The card says so and stays open.
-    await waitFor(() => { expect(screen.getByText('credential store is read-only')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('credential store is read-only')).toBeTruthy()
+    })
     expect(onClose).not.toHaveBeenCalled()
     expect(mutate).toHaveBeenCalledTimes(1)
     // The key is stored trimmed, matching the editor.
@@ -1097,7 +1168,9 @@ describe('hand-declared providers', () => {
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key-2' } })
     fireEvent.click(screen.getByText(en.create))
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     // Re-running the profile write would carry the revision this card's own
     // first write superseded, so the Host would answer settings-conflict and
     // the key could never be stored from here at all.
@@ -1115,7 +1188,9 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
-    await waitFor(() => { expect(screen.getByText('nope')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('nope')).toBeTruthy()
+    })
 
     // Walking away leaves a real provider behind; reporting no change would
     // leave the page without the row it now has.
@@ -1175,7 +1250,8 @@ describe('hand-declared providers', () => {
   })
 
   it.each(['not-a-url', 'localhost:11434', 'ftp://gateway.acme.example/v1'])(
-    'rejects the non-HTTP base URL %j before discovery or creation', (baseURL) => {
+    'rejects the non-HTTP base URL %j before discovery or creation',
+    (baseURL) => {
       const { discover, mutate } = mountCard()
       fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
       fireEvent.click(screen.getByRole('button', { name: en.addModel }))
@@ -1192,24 +1268,22 @@ describe('hand-declared providers', () => {
     },
   )
 
-  it.each([
-    'http://localhost:11434/v1',
-    'http://127.0.0.1:8080/v1',
-    'http://[::1]:8080/v1',
-    'https://gateway.acme.example:8443/v1',
-  ])('allows the HTTP base URL %j to be interrogated', (baseURL) => {
-    const { discover } = mountCard()
-    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: baseURL } })
+  it.each(['http://localhost:11434/v1', 'http://127.0.0.1:8080/v1', 'http://[::1]:8080/v1', 'https://gateway.acme.example:8443/v1'])(
+    'allows the HTTP base URL %j to be interrogated',
+    (baseURL) => {
+      const { discover } = mountCard()
+      fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+      fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+      fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: baseURL } })
 
-    expect(screen.queryByText(en.customBaseUrlInvalid)).toBeNull()
-    expect(buttonNamed(en.fetchModels).disabled).toBe(false)
-    expect(buttonNamed(en.create).disabled).toBe(false)
-    fireEvent.click(screen.getByText(en.fetchModels))
-    expect(lastProbe(discover)).toMatchObject({ baseURL })
-  })
+      expect(screen.queryByText(en.customBaseUrlInvalid)).toBeNull()
+      expect(buttonNamed(en.fetchModels).disabled).toBe(false)
+      expect(buttonNamed(en.create).disabled).toBe(false)
+      fireEvent.click(screen.getByText(en.fetchModels))
+      expect(lastProbe(discover)).toMatchObject({ baseURL })
+    },
+  )
 
   it('normalizes surrounding whitespace before interrogating and storing a base URL', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([{ id: 'm' }])))
@@ -1221,13 +1295,19 @@ describe('hand-declared providers', () => {
 
     expect(screen.queryByText(en.customBaseUrlInvalid)).toBeNull()
     fireEvent.click(screen.getByText(en.fetchModels))
-    await waitFor(() => { expect(discover).toHaveBeenCalledTimes(1) })
+    await waitFor(() => {
+      expect(discover).toHaveBeenCalledTimes(1)
+    })
     expect(lastProbe(discover)).toMatchObject({ baseURL: 'https://gateway.acme.example/v1' })
 
     fireEvent.click(await screen.findByText(en.fetchAdopt))
-    await waitFor(() => { expect(buttonNamed(en.create).disabled).toBe(false) })
+    await waitFor(() => {
+      expect(buttonNamed(en.create).disabled).toBe(false)
+    })
     fireEvent.click(screen.getByText(en.create))
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ baseURL: 'https://gateway.acme.example/v1' })
   })
 
@@ -1284,13 +1364,16 @@ describe('hand-declared providers', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
-    for (const [at, id] of [[1, 'first'], [2, 'second'], [3, 'third']] as const) {
+    for (const [at, id] of [
+      [1, 'first'],
+      [2, 'second'],
+      [3, 'third'],
+    ] as const) {
       fireEvent.click(screen.getByRole('button', { name: en.addModel }))
       fireEvent.change(screen.getByLabelText(`${en.modelId} ${String(at)}`), { target: { value: id } })
       expandModel(at)
       // Deliberately mid-word: the buffer exists so text like this survives.
-      fireEvent.change(screen.getByLabelText(`${en.contextWindow} ${String(at)}`),
-        { target: { value: `${String(at)}.` } })
+      fireEvent.change(screen.getByLabelText(`${en.contextWindow} ${String(at)}`), { target: { value: `${String(at)}.` } })
     }
 
     // Removing the middle row: the one before keeps its position and text, the
@@ -1332,7 +1415,9 @@ describe('hand-declared providers', () => {
     expect(buttonNamed(en.create).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'bare' }] })
   })
 
@@ -1419,7 +1504,9 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     // No display name configured means none stored; the route id is the name.
     // No key typed means no reference either, matching the editor: the route
     // keeps its provider-native auth path instead of resolving a reference
@@ -1468,14 +1555,16 @@ describe('hand-declared providers', () => {
     expect(screen.getByRole('textbox', { name: en.customRoute })).toBeTruthy()
 
     fireEvent.click(screen.getByText(en.cancel))
-    await waitFor(() => { expect(screen.queryByRole('textbox', { name: en.customRoute })).toBeNull() })
+    await waitFor(() => {
+      expect(screen.queryByRole('textbox', { name: en.customRoute })).toBeNull()
+    })
     expect(screen.getByRole('button', { name: en.add })).toBeTruthy()
   })
 
   it('names each protocol by its product name and falls back to the identifier of an unknown one', () => {
     mountCard({ protocols: [...PROTOCOLS, 'google-generative-ai'] })
     const protocol = screen.getByLabelText<HTMLSelectElement>(en.customApi)
-    const labels = [...protocol.options].map(option => [option.value, option.textContent])
+    const labels = [...protocol.options].map((option) => [option.value, option.textContent])
     expect(labels).toEqual([
       ['openai-completions', en.protocolOpenAiCompletions],
       ['openai-responses', en.protocolOpenAiResponses],
@@ -1544,7 +1633,9 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith(true)
+    })
     expect(set).not.toHaveBeenCalled()
   })
 })
@@ -1560,7 +1651,9 @@ describe('API key field', () => {
     expect(buttonNamed(en.apply).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     expect(set).not.toHaveBeenCalled()
   })
 
@@ -1573,10 +1666,12 @@ describe('API key field', () => {
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: '   ' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalled()
+    })
     const ops = firstMutate(mutate).ops
-    expect(ops.some(op => op.op === 'set' && op.path.includes('baseURL'))).toBe(false)
-    expect(ops.some(op => op.op === 'unset' && op.path.includes('baseURL'))).toBe(true)
+    expect(ops.some((op) => op.op === 'set' && op.path.includes('baseURL'))).toBe(false)
+    expect(ops.some((op) => op.op === 'unset' && op.path.includes('baseURL'))).toBe(true)
   })
 
   it('blocks submit and names the field when the key holds only whitespace', async () => {
@@ -1620,7 +1715,9 @@ describe('API key field', () => {
     expect(buttonNamed(en.apply).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.apply))
 
-    await waitFor(() => { expect(set).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(set).toHaveBeenCalled()
+    })
     expect(set.mock.calls[0]?.[1]).toBe('sk-abc')
   })
 
@@ -1644,7 +1741,9 @@ describe('API key field', () => {
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '  sk-abc  ' } })
     fireEvent.click(screen.getByRole('button', { name: en.fetchModels }))
 
-    await waitFor(() => { expect(discover).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(discover).toHaveBeenCalled()
+    })
     expect(lastProbe(discover)).toMatchObject({ apiKey: 'sk-abc' })
   })
 
@@ -1659,8 +1758,12 @@ describe('API key field', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
-    await waitFor(() => { expect(load).toHaveBeenCalledOnce() })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledOnce()
+    })
+    await waitFor(() => {
+      expect(load).toHaveBeenCalledOnce()
+    })
     expect(screen.queryByRole('textbox', { name: en.customRoute })).toBeNull()
   })
 })

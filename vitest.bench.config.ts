@@ -1,5 +1,5 @@
 import tsconfigPaths from 'vite-tsconfig-paths'
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite-plus'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 
 /**
@@ -12,12 +12,10 @@ import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 export default defineConfig({
   plugins: [tsconfigPaths({ projects: ['./tsconfig.base.json'] }), standardDecoratorPlugin()],
   test: {
+    clearMocks: false,
     execArgv: vitestExecArgv,
     setupFiles: ['./scripts/test-proxy-environment.ts'],
-    include: [
-      'benchmarks/**/*.bench.ts',
-      'benchmarks/**/*.bench.client.ts',
-    ],
+    include: ['benchmarks/**/*.bench.ts', 'benchmarks/**/*.bench.client.ts'],
     fileParallelism: false,
     maxWorkers: 1,
     testTimeout: 600_000,

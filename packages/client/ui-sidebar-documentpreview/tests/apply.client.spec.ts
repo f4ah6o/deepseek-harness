@@ -10,7 +10,7 @@
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { TEXTPREVIEW_ID, TEXTPREVIEW_KIND } from '../src/client/definition.ts'
@@ -56,7 +56,9 @@ async function boot() {
     register: vi.fn((options: Omit<Recorded, 'component'>, component: unknown) => {
       const entry: Recorded = { ...options, component }
       registered.push(entry)
-      return () => { registered.splice(registered.indexOf(entry), 1) }
+      return () => {
+        registered.splice(registered.indexOf(entry), 1)
+      }
     }),
   }
   const dictionaries = new Map<string, unknown>()
@@ -64,7 +66,9 @@ async function boot() {
     bind: () => (key: string) => key,
     register: vi.fn((ns: string, dicts: unknown) => {
       dictionaries.set(ns, dicts)
-      return () => { dictionaries.delete(ns) }
+      return () => {
+        dictionaries.delete(ns)
+      }
     }),
   }
   const read = vi.fn().mockResolvedValue(page(1, ['first'], true))
@@ -75,20 +79,22 @@ async function boot() {
   ctx.provide('remote', { workspaceFiles: { read, readBytes } } as never)
   ctx.provide('remote.workspaceFiles', { read, readBytes } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
-  onTestFinished(async () => { await fiber.dispose() })
+  onTestFinished(async () => {
+    await fiber.dispose()
+  })
   await fiber.await()
   return { ctx, tabs, registered, dictionaries, fiber, read, readBytes }
 }
 
 describe('ui-sidebar-documentpreview apply', () => {
-  it('registers the type, its dictionaries, and the body and title seats under the type\'s id, the body with a store and a face', async () => {
+  it("registers the type, its dictionaries, and the body and title seats under the type's id, the body with a store and a face", async () => {
     const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')
     expect(tabs.get(TEXTPREVIEW_KIND)?.id).toBe(TEXTPREVIEW_ID)
     expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en })
     // The seat key is the implementation's id, not the kind: an extension may
     // take the kind over, and the seat must still find this body.
-    expect(registered.map(entry => [entry.name, entry.key, entry.locale, entry.component])).toEqual([
+    expect(registered.map((entry) => [entry.name, entry.key, entry.locale, entry.component])).toEqual([
       ['sidebar.right.pane.tab', TEXTPREVIEW_ID, 'sidebarDocumentPreview', TextPreview],
       ['sidebar.right.pane.tab.title', TEXTPREVIEW_ID, undefined, TextTitle],
       ['sidebar.right.tab.document', PLAIN_BODY_ID, undefined, TextBody],
@@ -121,7 +127,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     const sharedHighlighter = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code'
     const owners = new Map<string, string>()
     for (const definition of previews.getSnapshot()) {
-      for (const extension of new Set([...definition.extensions, ...definition.binaryExtensions ?? []])) {
+      for (const extension of new Set([...definition.extensions, ...(definition.binaryExtensions ?? [])])) {
         const winner = previews.candidates(`file.${extension}`)[0]
         const earlier = owners.get(extension)
         if (earlier === undefined) {
@@ -134,29 +140,35 @@ describe('ui-sidebar-documentpreview apply', () => {
       }
     }
     const excel = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel'
-    expect(previews.candidates('table.csv').map(candidate => candidate.id)).toEqual([excel, sharedHighlighter])
+    expect(previews.candidates('table.csv').map((candidate) => candidate.id)).toEqual([excel, sharedHighlighter])
     expect(previews.candidates('table.tsv')[0]?.id).toBe(excel)
   })
 
   it('injects paged and byte Remote reads independently of resource metadata', async () => {
     const { registered, read, readBytes } = await boot()
-    const registration = registered.find(entry => entry.component === TextPreview)
+    const registration = registered.find((entry) => entry.component === TextPreview)
     if (registration === undefined) throw new Error('missing preview registration')
     const instance = (registration.store as TextStore).create()
     const face = (registration.inject as ReturnType<typeof textFace>)(SESSION, instance.actions)
     const controller = new AbortController()
-    onTestFinished(() => { controller.abort() })
+    onTestFinished(() => {
+      controller.abort()
+    })
     face.loadPage(TAB_ID, FILE, 1, controller.signal, 'v1')
     await read.mock.results[0]?.value
     expect(read).toHaveBeenCalledExactlyOnceWith(FILE.sessionId, FILE.path, { offset: 1 }, controller.signal)
     expect(instance.getSnapshot().byTab[TAB_ID]?.pages[1]?.text).toBe('first')
     face.loadAll(TAB_ID, FILE, controller.signal, 'v1')
-    await vi.waitFor(() => { expect(instance.getSnapshot().byTab[TAB_ID]?.complete).toBeDefined() })
+    await vi.waitFor(() => {
+      expect(instance.getSnapshot().byTab[TAB_ID]?.complete).toBeDefined()
+    })
     expect(readBytes).toHaveBeenCalledExactlyOnceWith(FILE.sessionId, FILE.path, {}, expect.any(AbortSignal))
     expect(instance.getSnapshot().byTab[TAB_ID]?.complete?.data).toEqual(new Uint8Array([0, 1, 255]))
     readBytes.mockResolvedValueOnce({ ok: false, error: new RemoteError('workspace-file/not-found', 'File missing', { path: FILE.path }) })
     face.reloadAll(TAB_ID, FILE, controller.signal, 'v2')
-    await expect.poll(() => instance.getSnapshot().byTab[TAB_ID]?.failure).toMatchObject({ code: 'workspace-file/not-found', message: 'File missing' })
+    await expect
+      .poll(() => instance.getSnapshot().byTab[TAB_ID]?.failure)
+      .toMatchObject({ code: 'workspace-file/not-found', message: 'File missing' })
     expect(instance.getSnapshot().byTab[TAB_ID]?.complete).toBeUndefined()
   })
 })

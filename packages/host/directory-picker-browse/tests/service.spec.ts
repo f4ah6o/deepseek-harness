@@ -3,7 +3,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerBrowseCapability } from '@deepseek-ai/dsh-host-directory-picker'
@@ -49,10 +49,10 @@ describe('BrowseDirectoryPicker', () => {
     const listing = await capability.list(root)
     expect(listing.path).toBe(root)
     expect(listing.home).toBe(homedir())
-    expect(listing.entries.map(entry => entry.name)).toEqual(['.hidden-dir', 'linked', 'projects'])
-    expect(listing.entries.map(entry => entry.hidden)).toEqual([true, false, false])
+    expect(listing.entries.map((entry) => entry.name)).toEqual(['.hidden-dir', 'linked', 'projects'])
+    expect(listing.entries.map((entry) => entry.hidden)).toEqual([true, false, false])
     // Every entry path is absolute and host-joined — clients never join segments.
-    expect(listing.entries.every(entry => entry.path === join(root, entry.name))).toBe(true)
+    expect(listing.entries.every((entry) => entry.path === join(root, entry.name))).toBe(true)
     // Well under the default bound: the complete level, not a cut one.
     expect(listing.truncated).toBe(false)
   })
@@ -65,18 +65,18 @@ describe('BrowseDirectoryPicker', () => {
     if (bounded.kind !== 'browse') throw new Error('browse backend must advertise the browse capability')
     try {
       const cut = await bounded.list(root)
-      expect(cut.entries.map(entry => entry.name)).toEqual(['.hidden-dir'])
+      expect(cut.entries.map((entry) => entry.name)).toEqual(['.hidden-dir'])
       expect(cut.truncated).toBe(true)
       // Exactly at the bound is complete, not truncated.
       const exact = await bounded.list(join(root, 'projects'))
-      expect(exact.entries.map(entry => entry.name)).toEqual(['harness'])
+      expect(exact.entries.map((entry) => entry.name)).toEqual(['harness'])
       expect(exact.truncated).toBe(false)
       // A level that fits the window but exceeds the bound (two rows, bound
       // one): the in-window extra row proves the cut without any eviction.
       await mkdir(join(root, 'projects', 'harness', 'a'))
       await mkdir(join(root, 'projects', 'harness', 'b'))
       const inWindow = await bounded.list(join(root, 'projects', 'harness'))
-      expect(inWindow.entries.map(entry => entry.name)).toEqual(['a'])
+      expect(inWindow.entries.map((entry) => entry.name)).toEqual(['a'])
       expect(inWindow.truncated).toBe(true)
     } finally {
       await fiber.dispose()
@@ -90,17 +90,17 @@ describe('BrowseDirectoryPicker', () => {
     // and rejects even before any level row is read.
     await expect(capability.list(root, gone.signal)).rejects.toThrow('caller left')
     // The abandoned open that still succeeds is closed, not leaked.
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     // Aborted against a missing target: the abandoned open rejects on its
     // own and there is nothing to close.
     await expect(capability.list(join(root, 'no-such-dir'), gone.signal)).rejects.toThrow('caller left')
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     // A live signal leaves a normal listing untouched — the reads and the
     // symlink probes race it without ever losing.
     const live = new AbortController()
     const complete = await capability.list(root, live.signal)
     expect(complete.truncated).toBe(false)
-    expect(complete.entries.map(entry => entry.name)).toContain('linked')
+    expect(complete.entries.map((entry) => entry.name)).toContain('linked')
     // A live signal changes nothing about ordinary failures.
     const missing = join(root, 'no-such-dir')
     const failure = await capability.list(missing, live.signal).catch((error: unknown) => error)
@@ -118,18 +118,22 @@ describe('BrowseDirectoryPicker', () => {
     // The abort wins over a pending operation and carries its own reason;
     // the operation's late rejection is swallowed, never unhandled.
     const rejections: unknown[] = []
-    const onUnhandled = (reason: unknown): void => { rejections.push(reason) }
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason)
+    }
     process.on('unhandledRejection', onUnhandled)
     try {
       let rejectLate!: (reason: unknown) => void
-      const pending = new Promise<never>((_resolve, reject) => { rejectLate = reject })
+      const pending = new Promise<never>((_resolve, reject) => {
+        rejectLate = reject
+      })
       const controller = new AbortController()
       const raced = raceAbort(pending, controller.signal)
       // A bare-string abort reason exercises the Error wrap.
       controller.abort('caller left')
       await expect(raced).rejects.toThrow('caller left')
       rejectLate(new Error('late read failure'))
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await new Promise((resolve) => setTimeout(resolve, 10))
       expect(rejections).toEqual([])
     } finally {
       process.off('unhandledRejection', onUnhandled)
@@ -143,12 +147,12 @@ describe('BrowseDirectoryPicker', () => {
     expect(boundedInsert(window, candidate('z'), 2)).toBe(false)
     // A smaller name lands in place and pushes the current largest out.
     expect(boundedInsert(window, candidate('a'), 2)).toBe(true)
-    expect(window.map(entry => entry.name)).toEqual(['a', 'm'])
+    expect(window.map((entry) => entry.name)).toEqual(['a', 'm'])
     // A name at or beyond the full window's tail rejects on one comparison.
     expect(boundedInsert(window, candidate('t'), 2)).toBe(true)
-    expect(window.map(entry => entry.name)).toEqual(['a', 'm'])
+    expect(window.map((entry) => entry.name)).toEqual(['a', 'm'])
     expect(boundedInsert(window, candidate('m'), 2)).toBe(true)
-    expect(window.map(entry => entry.name)).toEqual(['a', 'm'])
+    expect(window.map((entry) => entry.name)).toEqual(['a', 'm'])
   })
 
   it('reports the ancestry as jump-target crumbs ending at the listed directory', async () => {
@@ -209,7 +213,7 @@ describe('BrowseDirectoryPicker', () => {
     const created = await capability.createDirectory(root, 'fresh')
     expect(created).toBe(join(root, 'fresh'))
     const listing = await capability.list(root)
-    expect(listing.entries.map(entry => entry.name)).toContain('fresh')
+    expect(listing.entries.map((entry) => entry.name)).toContain('fresh')
   })
 
   it('refuses an existing child with directory-exists', async () => {

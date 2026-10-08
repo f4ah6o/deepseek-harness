@@ -14,19 +14,26 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import {
-  SESSION_FORMAT_VERSION, SessionId as sessionId, type SessionEvent, type SessionHeader, type SessionId,
+  SESSION_FORMAT_VERSION,
+  SessionId as sessionId,
+  type SessionEvent,
+  type SessionHeader,
+  type SessionId,
 } from '@deepseek-ai/dsh-session'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
-  captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
-  webSnapshotMode, type WebScaffold,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
-import { openSettings,
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft,
-} from './support.ts'
+import { openSettings, connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/agent-preset-selection', import.meta.url))
 const HERO_EXPECTED = join(SNAPSHOT_DIR, 'hero.expected.md')
@@ -48,9 +55,10 @@ const REFUSING_ID = 'zz-refusing'
 async function seedRefusingPreset(root: string): Promise<void> {
   const directory = join(root, REFUSING_ID)
   await mkdir(directory, { recursive: true })
-  await writeFile(join(directory, 'refuses.mjs'),
-    'export const name = \'refuses\'\nexport function apply() { throw new Error(\'this row refuses to start\') }\n')
-
+  await writeFile(
+    join(directory, 'refuses.mjs'),
+    "export const name = 'refuses'\nexport function apply() { throw new Error('this row refuses to start') }\n",
+  )
 }
 
 /**
@@ -64,15 +72,12 @@ async function seedRefusingPreset(root: string): Promise<void> {
 async function seedWorkspaceSkill(workspaceCwd: string): Promise<void> {
   const directory = join(workspaceCwd, 'workspace', '.agents', 'skills', SKILL_NAME)
   await mkdir(directory, { recursive: true })
-  await writeFile(join(directory, 'SKILL.md'), [
-    '---',
-    `name: ${SKILL_NAME}`,
-    'description: Prove the slash catalog follows the session composition',
-    '---',
-    '',
-    'Body.',
-    '',
-  ].join('\n'))
+  await writeFile(
+    join(directory, 'SKILL.md'),
+    ['---', `name: ${SKILL_NAME}`, 'description: Prove the slash catalog follows the session composition', '---', '', 'Body.', ''].join(
+      '\n',
+    ),
+  )
 }
 
 /**
@@ -83,12 +88,16 @@ async function seedWorkspaceSkill(workspaceCwd: string): Promise<void> {
  * @returns a tokenized session log ending on a closed turn.
  */
 function seedLog(): string {
-  const at = (index: number, event: Record<string, unknown>): string =>
-    JSON.stringify({ ...event, seq: index, time: SEED_TIME + index })
+  const at = (index: number, event: Record<string, unknown>): string => JSON.stringify({ ...event, seq: index, time: SEED_TIME + index })
   return [
     JSON.stringify({
-      type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}',
-      createdAt: SEED_TIME, cwd: '{{cwd}}/workspace', isSeeded: false, delegationDepth: 0,
+      type: 'session',
+      version: SESSION_FORMAT_VERSION,
+      id: '{{sessionId}}',
+      createdAt: SEED_TIME,
+      cwd: '{{cwd}}/workspace',
+      isSeeded: false,
+      delegationDepth: 0,
     }),
     at(0, { type: 'turn/start', data: { turn: 1, trigger: { kind: 'message', source: { kind: 'user', rpcId: 'seed' } } } }),
     at(1, { type: 'step/start', data: { turn: 1, step: 1 } }),
@@ -164,7 +173,9 @@ async function seedSubagent(scaffold: WebScaffold, parentId: SessionId): Promise
       seq: 2,
       time: SEEDED_CHILD_CREATED_AT + 2,
       data: snapshotSubagentDescriptor({
-        mode: 'one-shot', provider: 'spawn', label: 'header order probe',
+        mode: 'one-shot',
+        provider: 'spawn',
+        label: 'header order probe',
       }),
     },
     {
@@ -190,11 +201,13 @@ async function livePreset(scaffold: WebScaffold): Promise<string | undefined> {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      type: 'client-request', rpcId: 'agent-preset-live', method: 'session/list',
+      type: 'client-request',
+      rpcId: 'agent-preset-live',
+      method: 'session/list',
       payload: { args: { _request: {} } },
     }),
   })
-  const body = await response.json() as {
+  const body = (await response.json()) as {
     result: {
       value?: {
         items: {
@@ -204,8 +217,7 @@ async function livePreset(scaffold: WebScaffold): Promise<string | undefined> {
       }
     }
   }
-  const preset = body.result.value?.items.find(item => item.sessionId !== SEED_ID)
-    ?.projections?.values.agentPreset
+  const preset = body.result.value?.items.find((item) => item.sessionId !== SEED_ID)?.projections?.values.agentPreset
   return typeof preset === 'string' ? preset : undefined
 }
 
@@ -228,7 +240,17 @@ describe('web e2e: agent-preset selection', () => {
     fixtureRoot = await realpath(await mkdtemp(join(tmpdir(), 'dsh-web-e2e-refusing-')))
     await seedRefusingPreset(fixtureRoot)
     scaffold = await launchWebScaffold({
-      agentPresets: { default: 'standard', definitions: [{ id: REFUSING_ID, name: 'Refusing mode', description: 'Refuses to start.', plugins: [{ name: pathToFileURL(join(fixtureRoot, REFUSING_ID, 'refuses.mjs')).href }] }] },
+      agentPresets: {
+        default: 'standard',
+        definitions: [
+          {
+            id: REFUSING_ID,
+            name: 'Refusing mode',
+            description: 'Refuses to start.',
+            plugins: [{ name: pathToFileURL(join(fixtureRoot, REFUSING_ID, 'refuses.mjs')).href }],
+          },
+        ],
+      },
     })
     // A resumed session runs what it was created with; seeding one that
     // records `minimal` is what makes the header label a claim about the
@@ -304,7 +326,7 @@ describe('web e2e: agent-preset selection', () => {
     // what the stage lands on. The host's own answer is what comes back.
     await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('minimal')
     const roster = await scaffold.ctx.agentPresets.remoteExportList()
-    expect(roster.presets.find(preset => preset.isDefault)?.id).toBe('standard')
+    expect(roster.presets.find((preset) => preset.isDefault)?.id).toBe('standard')
   })
 
   it('omits eagerly failed presets from selection and retains their diagnostics', async () => {
@@ -325,16 +347,17 @@ describe('web e2e: agent-preset selection', () => {
     // skill discovery, so the catalog the composer warmed under the
     // deployment default must not survive the switch.
     await writeComposerDraft(page, composer, '/')
-    await expect.poll(() => menuOptions(page), { timeout: 15_000 })
+    await expect
+      .poll(() => menuOptions(page), { timeout: 15_000 })
       .not.toEqual(expect.arrayContaining([expect.stringContaining(SKILL_NAME)]))
     // Rows read as `Title Description`; the title is the capitalized command name.
-    const onMinimal = (await menuOptions(page)).map(option => option.toLowerCase())
-    expect(onMinimal.some(option => option.startsWith('compact'))).toBe(false)
-    expect(onMinimal.some(option => option.startsWith('plan'))).toBe(false)
+    const onMinimal = (await menuOptions(page)).map((option) => option.toLowerCase())
+    expect(onMinimal.some((option) => option.startsWith('compact'))).toBe(false)
+    expect(onMinimal.some((option) => option.startsWith('plan'))).toBe(false)
     // Preset-scoped commands follow the switch; the client's own model command
     // remains outside every preset.
-    expect(onMinimal.some(option => option.startsWith('goal'))).toBe(false)
-    expect(onMinimal.some(option => option.startsWith('model'))).toBe(true)
+    expect(onMinimal.some((option) => option.startsWith('goal'))).toBe(false)
+    expect(onMinimal.some((option) => option.startsWith('model'))).toBe(true)
     await writeComposerDraft(page, composer, '')
 
     // Switching back up reaches the host at all — the chip compares the pick
@@ -342,16 +365,18 @@ describe('web e2e: agent-preset selection', () => {
     // answers "already standard" and sends nothing — and restores the catalog
     // instead of leaving the session reading the narrower composition.
     await page.getByRole('button', { name: 'Minimal mode' }).click()
-    await page.getByRole('menuitem', { name: /^Standard mode/ }).first().click()
+    await page
+      .getByRole('menuitem', { name: /^Standard mode/ })
+      .first()
+      .click()
     await expect.poll(() => livePreset(scaffold), { timeout: 15_000 }).toBe('standard')
 
     await writeComposerDraft(page, composer, '/')
-    await expect.poll(() => menuOptions(page), { timeout: 15_000 })
-      .toEqual(expect.arrayContaining([expect.stringContaining(SKILL_NAME)]))
-    const onStandard = (await menuOptions(page)).map(option => option.toLowerCase())
-    expect(onStandard.some(option => option.startsWith('compact'))).toBe(true)
-    expect(onStandard.some(option => option.startsWith('goal'))).toBe(true)
-    expect(onStandard.some(option => option.startsWith('plan'))).toBe(true)
+    await expect.poll(() => menuOptions(page), { timeout: 15_000 }).toEqual(expect.arrayContaining([expect.stringContaining(SKILL_NAME)]))
+    const onStandard = (await menuOptions(page)).map((option) => option.toLowerCase())
+    expect(onStandard.some((option) => option.startsWith('compact'))).toBe(true)
+    expect(onStandard.some((option) => option.startsWith('goal'))).toBe(true)
+    expect(onStandard.some((option) => option.startsWith('plan'))).toBe(true)
     await writeComposerDraft(page, composer, '')
   }, 90_000)
 
@@ -377,7 +402,9 @@ describe('web e2e: agent-preset selection', () => {
     expect(await page.getByRole('menuitem', { name: /^PTC mode|^Minimal mode/ }).count()).toBe(0)
     expect(await page.getByRole('menuitem', { name: /^Standard mode|^Creator mode/ }).count()).toBe(2)
     await page.keyboard.press('Escape')
-    await expect.poll(async () => (await scaffold.ctx.agentPresets.remoteExportList()).presets.find(preset => preset.isDefault)?.id).toBe('standard')
+    await expect
+      .poll(async () => (await scaffold.ctx.agentPresets.remoteExportList()).presets.find((preset) => preset.isDefault)?.id)
+      .toBe('standard')
 
     const reuse = page.waitForResponse('**/api/session/create')
     await page.getByRole('button', { name: 'New session', exact: true }).last().click()
@@ -463,34 +490,41 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
     expect(await page.getByRole('dialog', { name: 'Add plugin', exact: true }).count()).toBe(0)
     expect(scaffold.ctx.sessionProjections.stateOf(creator.session, 'agentPreset')).toBe('cordis')
     expect(scaffold.ctx.agentPresets.composedPreset(creator.ctx)).toBe('cordis')
-    expect(scaffold.ctx.tools.schemas(creator).map(tool => tool.name))
-      .toEqual(expect.arrayContaining(['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']))
-    expect(creator.session.snapshotEvents().some(event => event.type === 'agent-preset/selected'
-      && event.data.agentPreset === 'cordis')).toBe(true)
-    expect(creator.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
+    expect(scaffold.ctx.tools.schemas(creator).map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']),
+    )
+    expect(
+      creator.session.snapshotEvents().some((event) => event.type === 'agent-preset/selected' && event.data.agentPreset === 'cordis'),
+    ).toBe(true)
+    expect(creator.session.snapshotEvents().some((event) => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
     expect(scaffold.ctx.agentPresets.defaultId).toBe('standard')
 
     // Close a fixture turn on the real Creator Session without requesting a model.
     await writeComposerDraft(page, composer, '')
     creator.session.append('turn/start', { turn: 1 })
-    creator.session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'Creator fixture completed without a model call.' }], source: { kind: 'user' },
-    }), { surfaceOp: 'append' })
+    creator.session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'Creator fixture completed without a model call.' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: 'append' },
+    )
     creator.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     await scaffold.ctx.sessions.flush(creator.session)
     await page.getByText('Creator fixture completed without a model call.', { exact: true }).waitFor()
     const newSession = page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' })
     await Promise.all([page.waitForResponse('**/api/session/create'), newSession.click()])
-    expect(scaffold.ctx.agents.list().find(agent => agent.id !== creator.id)).toBeDefined()
-    const next = scaffold.ctx.agents.list().find(agent => agent.id !== creator.id)!
+    expect(scaffold.ctx.agents.list().find((agent) => agent.id !== creator.id)).toBeDefined()
+    const next = scaffold.ctx.agents.list().find((agent) => agent.id !== creator.id)!
     expect(next.id).not.toBe(creator.id)
     expect(next.session.header.agentPreset).toBe('standard')
     expect(scaffold.ctx.sessionProjections.stateOf(next.session, 'agentPreset')).toBe('standard')
     expect(scaffold.ctx.agentPresets.composedPreset(next.ctx)).toBe('standard')
     expect(scaffold.ctx.sessionProjections.stateOf(creator.session, 'agentPreset')).toBe('cordis')
     await page.getByRole('button', { name: 'Standard mode', exact: true }).waitFor()
-    expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
+    expect(scaffold.ctx.settings.describe().find((row) => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
     expect(scaffold.ctx.agentPresets.defaultId).toBe('standard')
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

@@ -4,10 +4,15 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { cp, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
-import { expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { expect, it, onTestFailed, onTestFinished } from 'vite-plus/test'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden, launchWebScaffold,
-  seedSession, watchConsole, webSnapshotMode,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
 } from './scaffold.ts'
 import { openSettings, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
@@ -58,16 +63,16 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
 
     await menu.getByRole('menuitem', { name: 'Export session' }).click()
     await expect.poll(() => menu.count()).toBe(0)
-    expect(await page.evaluate(() => ({
-      action: document.documentElement.dataset.sessionAction,
-      id: document.documentElement.dataset.sessionActionId,
-      title: document.documentElement.dataset.sessionActionTitle,
-    }))).toEqual({ action: 'fixture.export-session', id: sessionId, title: SESSION_TITLE })
+    expect(
+      await page.evaluate(() => ({
+        action: document.documentElement.dataset.sessionAction,
+        id: document.documentElement.dataset.sessionActionId,
+        title: document.documentElement.dataset.sessionActionTitle,
+      })),
+    ).toEqual({ action: 'fixture.export-session', id: sessionId, title: SESSION_TITLE })
 
     scaffold.ctx.loader.remove(entryId)
-    await expect.poll(() => page.evaluate(
-      () => document.documentElement.dataset.liveDisposals,
-    )).toBe('1')
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.liveDisposals)).toBe('1')
     await row.hover()
     await trigger.click()
     await menu.waitFor()
@@ -75,12 +80,19 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
-      expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
+      expect(
+        await remainingItems
+          .nth(index)
+          .and(menu.getByRole('menuitem', { name, exact: true }))
+          .count(),
+      ).toBe(1)
     }
     expect(await menu.getByRole('separator').count()).toBe(0)
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
-      'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',
+      'bootstrap-rebuild.expected.md',
+      'enabled.expected.md',
+      'recovered.expected.md',
       'session-actions.expected.md',
     ])
   } finally {
@@ -106,28 +118,42 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
     let entryId: string | undefined
     const toggle = async () => {
       if (entryId === undefined) entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
-      else { scaffold.ctx.loader.remove(entryId); entryId = undefined }
+      else {
+        scaffold.ctx.loader.remove(entryId)
+        entryId = undefined
+      }
     }
     let navigations = 0
-    for (const target of [page, other]) target.on('framenavigated', () => { navigations++ })
+    for (const target of [page, other])
+      target.on('framenavigated', () => {
+        navigations++
+      })
     const live = (target: Page) => target.locator('[data-live-client]')
-    const dataset = (target: Page) => target.evaluate(() => ({
-      liveMounts: document.documentElement.dataset.liveMounts,
-      liveDisposals: document.documentElement.dataset.liveDisposals,
-      liveHits: document.documentElement.dataset.liveHits,
-    }))
-    const ping = (target: Page) => target.evaluate(() => { window.dispatchEvent(new Event('dsh-fixture-ping')) })
+    const dataset = (target: Page) =>
+      target.evaluate(() => ({
+        liveMounts: document.documentElement.dataset.liveMounts,
+        liveDisposals: document.documentElement.dataset.liveDisposals,
+        liveHits: document.documentElement.dataset.liveHits,
+      }))
+    const ping = (target: Page) =>
+      target.evaluate(() => {
+        window.dispatchEvent(new Event('dsh-fixture-ping'))
+      })
     expect(await live(page).count()).toBe(0)
-    expect(scaffold.ctx.clientModules.graph().entries.some(row => row.id === '@fixture/live-client')).toBe(false)
+    expect(scaffold.ctx.clientModules.graph().entries.some((row) => row.id === '@fixture/live-client')).toBe(false)
 
     await toggle()
     for (const target of [page, other]) {
       await live(target).waitFor()
-      expect(await live(target).evaluate(el => getComputedStyle(el).color)).toBe('rgb(12, 34, 56)')
+      expect(await live(target).evaluate((el) => getComputedStyle(el).color)).toBe('rgb(12, 34, 56)')
       await ping(target)
       expect((await dataset(target)).liveHits).toBe('1')
     }
-    await compareOrRefreshGolden(join(EXPECTED, 'enabled.expected.md'), await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd), webSnapshotMode())
+    await compareOrRefreshGolden(
+      join(EXPECTED, 'enabled.expected.md'),
+      await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd),
+      webSnapshotMode(),
+    )
 
     // The inventory filter is page-owned state that live composition must preserve.
     const draft = otherInventory.getByRole('searchbox', { name: '搜索插件' })
@@ -149,12 +175,12 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
       expect(await target.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(1)
     }
 
-    const disconnected = other.waitForEvent('requestfailed', request => request.url().includes('/plugins/events'))
+    const disconnected = other.waitForEvent('requestfailed', (request) => request.url().includes('/plugins/events'))
     await otherContext.setOffline(true)
     // Chromium offline emulation leaves established SSE sockets open. Cycling this
     // fixture's transport plugin closes them without replacing the Host or profile.
-    const transport = [...scaffold.ctx.loader.entries()].find(entry => entry.options.name === '@deepseek-ai/dsh-client-hmr')!.fiber!
-    const reconnected = page.waitForResponse(response => response.url().includes('/plugins/events') && response.status() === 200)
+    const transport = [...scaffold.ctx.loader.entries()].find((entry) => entry.options.name === '@deepseek-ai/dsh-client-hmr')!.fiber!
+    const reconnected = page.waitForResponse((response) => response.url().includes('/plugins/events') && response.status() === 200)
     await transport.restart()
     await disconnected
     await reconnected
@@ -181,13 +207,13 @@ it('keeps a failed client download local and retries without changing Host enabl
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-live-retry'))
     await openInventory(page, scaffold.authenticatedUrl)
     const bundle = (url: URL) => url.pathname.startsWith('/plugins/') && url.search.includes('@fixture/live-client/client.js')
-    await page.route(bundle, route => route.abort())
+    await page.route(bundle, (route) => route.abort())
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
     const failure = page.locator('[data-client-sync-failure]')
     await failure.waitFor()
     expect(scaffold.ctx.loader.resolve(entryId).fiber?.state).toBe(2)
     expect(await page.locator('[data-live-client]').count()).toBe(0)
-    expect(scaffold.ctx.clientModules.graph().entries.some(row => row.id === '@fixture/live-client')).toBe(true)
+    expect(scaffold.ctx.clientModules.graph().entries.some((row) => row.id === '@fixture/live-client')).toBe(true)
     await page.unroute(bundle)
     await failure.getByRole('button', { name: '重试本页面同步' }).click()
     await page.locator('[data-live-client]').waitFor()
@@ -220,7 +246,9 @@ it('recovers an uncreated client entry with rebuilt factory code without navigat
     const draft = inventory.getByRole('searchbox', { name: '搜索插件' })
     await draft.fill('unfinished-filter')
     let navigations = 0
-    page.on('framenavigated', () => { navigations++ })
+    page.on('framenavigated', () => {
+      navigations++
+    })
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
     const failure = page.locator('[data-client-sync-failure]')
     await failure.getByText(/fixture r0 factory failed/).waitFor()
@@ -229,7 +257,11 @@ it('recovers an uncreated client entry with rebuilt factory code without navigat
     scaffold.ctx.clientModules.rebuilt('@fixture/live-client')
     await page.getByText('动态插件 r1 已启用', { exact: true }).waitFor()
     await expect.poll(() => failure.count()).toBe(0)
-    await compareOrRefreshGolden(join(EXPECTED, 'recovered.expected.md'), await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd), webSnapshotMode())
+    await compareOrRefreshGolden(
+      join(EXPECTED, 'recovered.expected.md'),
+      await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd),
+      webSnapshotMode(),
+    )
     expect(await draft.inputValue()).toBe('unfinished-filter')
     expect(await page.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(1)
     expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBe('1')
@@ -255,7 +287,9 @@ it('reports bootstrap rebuilds without remounting the settings page or navigatin
     await draft.fill('unfinished-filter')
     const originalInput = await draft.elementHandle()
     let navigations = 0
-    page.on('framenavigated', () => { navigations++ })
+    page.on('framenavigated', () => {
+      navigations++
+    })
     const clientPath = scaffold.ctx.clientModules.clientPath('@deepseek-ai/dsh-client-modules')!
     const originalStat = await stat(clientPath)
     onTestFinished(() => utimes(clientPath, originalStat.atime, originalStat.mtime))
@@ -265,8 +299,12 @@ it('reports bootstrap rebuilds without remounting the settings page or navigatin
     await failure.getByText(/replacing bootstrap module .* requires a page reload/).waitFor()
     await failure.getByRole('button', { name: '重试本页面同步' }).click()
     await failure.getByText(/replacing bootstrap module .* requires a page reload/).waitFor()
-    await compareOrRefreshGolden(join(EXPECTED, 'bootstrap-rebuild.expected.md'), await captureStableAria(page, '[data-client-sync-failure]', scaffold.workspaceCwd), webSnapshotMode())
-    expect(await originalInput!.evaluate(input => input.isConnected)).toBe(true)
+    await compareOrRefreshGolden(
+      join(EXPECTED, 'bootstrap-rebuild.expected.md'),
+      await captureStableAria(page, '[data-client-sync-failure]', scaffold.workspaceCwd),
+      webSnapshotMode(),
+    )
+    expect(await originalInput!.evaluate((input) => input.isConnected)).toBe(true)
     expect(await draft.inputValue()).toBe('unfinished-filter')
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)
     expect(navigations).toBe(0)
@@ -279,26 +317,38 @@ it('reports bootstrap rebuilds without remounting the settings page or navigatin
 it('removes the client UI and resources while Host cleanup is still pending', async () => {
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   let release!: () => void
-  const cleanup = new Promise<void>((resolve) => { release = resolve })
-  onTestFinished(async () => { release(); await scaffold.close() })
+  const cleanup = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  onTestFinished(async () => {
+    release()
+    await scaffold.close()
+  })
   const host = scaffold.ctx.loader.ctx.fiber.uid
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
     await openInventory(page, scaffold.authenticatedUrl)
     let navigations = 0
-    page.on('framenavigated', () => { navigations++ })
+    page.on('framenavigated', () => {
+      navigations++
+    })
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
     const live = page.locator('[data-live-client]')
     await live.waitFor()
     const fiber = scaffold.ctx.loader.resolve(entryId).fiber!
     let hostDisposed = false
-    fiber.ctx.effect(() => async () => { await cleanup; hostDisposed = true })
+    fiber.ctx.effect(() => async () => {
+      await cleanup
+      hostDisposed = true
+    })
     scaffold.ctx.loader.remove(entryId)
     await expect.poll(() => live.count()).toBe(0)
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.liveDisposals)).toBe('1')
     expect(await page.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(0)
-    await page.evaluate(() => { window.dispatchEvent(new Event('dsh-fixture-ping')) })
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('dsh-fixture-ping'))
+    })
     expect(await page.evaluate(() => document.documentElement.dataset.liveHits)).toBeUndefined()
     expect(hostDisposed).toBe(false)
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)

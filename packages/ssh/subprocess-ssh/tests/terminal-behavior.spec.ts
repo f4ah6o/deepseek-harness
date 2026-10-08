@@ -3,23 +3,34 @@ import { duplexPair } from 'node:stream'
 import { once } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import type { SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { z } from 'zod'
 import { SshSubprocessRuntime } from '../src/index.ts'
 
 const id = 'aa910b47-e7d7-467b-8421-3331569dd02b'
-const spec: SubprocessTerminalSpawnSpec = { argv: ['bash'], cwd: '/remote/workspace', terminalType: 'dumb', rows: 24, cols: 80, graceMs: 100 }
+const spec: SubprocessTerminalSpawnSpec = {
+  argv: ['bash'],
+  cwd: '/remote/workspace',
+  terminalType: 'dumb',
+  rows: 24,
+  cols: 80,
+  graceMs: 100,
+}
 const completion = { outcome: { exitCode: 0, signal: null }, spills: {}, collected: {} }
 
-async function setup(options: {
-  connectFailure?: Error
-  terminateFailure?: Error | undefined
-  pauseConnect?: boolean
-  missingEndpoint?: boolean
-} = {}) {
+async function setup(
+  options: {
+    connectFailure?: Error
+    terminateFailure?: Error | undefined
+    pauseConnect?: boolean
+    missingEndpoint?: boolean
+  } = {},
+) {
   const ctx = new Context()
   const cleanupErrors: unknown[] = []
-  ctx.logger.error = ((error: unknown) => { cleanupErrors.push(error) }) as typeof ctx.logger.error
+  ctx.logger.error = ((error: unknown) => {
+    cleanupErrors.push(error)
+  }) as typeof ctx.logger.error
   const [host, remote] = duplexPair({ allowHalfOpen: true })
   host.on('error', () => {})
   remote.on('error', () => {})
@@ -30,7 +41,11 @@ async function setup(options: {
   const calls: { method: string; params: unknown; longRunning?: boolean }[] = []
   let foreground: { processGroupId: number; inputWaiting: boolean } | null = null
   const connection = {
-    dispose: vi.fn(() => { host.destroy(); remote.destroy(); return Promise.resolve() }),
+    dispose: vi.fn(() => {
+      host.destroy()
+      remote.destroy()
+      return Promise.resolve()
+    }),
     request: async <T>(method: string, params: unknown, schema: z.ZodType<T>, _signal?: AbortSignal, longRunning?: boolean): Promise<T> => {
       calls.push({ method, params, ...(longRunning === undefined ? {} : { longRunning }) })
       let value: unknown
@@ -50,7 +65,13 @@ async function setup(options: {
     },
     connectStream: vi.fn(async (_endpoint: unknown, signal?: AbortSignal) => {
       entered.resolve(undefined)
-      signal?.addEventListener('abort', () => { allocationAborted.resolve(undefined) }, { once: true })
+      signal?.addEventListener(
+        'abort',
+        () => {
+          allocationAborted.resolve(undefined)
+        },
+        { once: true },
+      )
       if (options.pauseConnect) await release.promise
       if (options.connectFailure !== undefined) throw options.connectFailure
       return host
@@ -59,7 +80,7 @@ async function setup(options: {
   ctx.provide('ssh', connection as never)
   const fiber = await ctx.plugin(SshSubprocessRuntime)
   let closing: Promise<void> | undefined
-  const dispose = (): Promise<void> => closing ??= fiber.dispose()
+  const dispose = (): Promise<void> => (closing ??= fiber.dispose())
   const close = (): Promise<void> => {
     release.resolve(undefined)
     finished.resolve(completion)
@@ -73,10 +94,23 @@ async function setup(options: {
     if (closing === undefined) await close()
   })
   return {
-    runtime: ctx.subprocess, connection, calls, host, remote, finished, close, dispose, cleanupErrors,
-    entered: entered.promise, release: () => { release.resolve(undefined) },
+    runtime: ctx.subprocess,
+    connection,
+    calls,
+    host,
+    remote,
+    finished,
+    close,
+    dispose,
+    cleanupErrors,
+    entered: entered.promise,
+    release: () => {
+      release.resolve(undefined)
+    },
     allocationAborted: allocationAborted.promise,
-    setForeground: (value: typeof foreground) => { foreground = value },
+    setForeground: (value: typeof foreground) => {
+      foreground = value
+    },
   }
 }
 
@@ -90,26 +124,29 @@ describe('SSH terminal behavior', () => {
     expect(String((await data)[0])).toBe('terminal output')
     await handle.write('input\n')
     await handle.resize(120, 40)
-    expect(test.calls.find(call => call.method === 'terminal.resize')?.params).toEqual({ id, cols: 120, rows: 40 })
+    expect(test.calls.find((call) => call.method === 'terminal.resize')?.params).toEqual({ id, cols: 120, rows: 40 })
     expect(await handle.inspectForeground()).toBeUndefined()
     test.setForeground({ processGroupId: 321, inputWaiting: true })
     expect(await handle.inspectForeground()).toEqual({ processGroupId: 321, inputWaiting: true })
     expect(await handle.signalForeground('SIGINT')).toBe(321)
-    expect(test.calls.find(call => call.method === 'process.prepare')?.params).toEqual({
-      argv: ['bash'], cwd: spec.cwd, env: { KEEP: 'value' }, graceMs: 100,
+    expect(test.calls.find((call) => call.method === 'process.prepare')?.params).toEqual({
+      argv: ['bash'],
+      cwd: spec.cwd,
+      env: { KEEP: 'value' },
+      graceMs: 100,
       terminal: { terminalType: 'dumb', rows: 24, cols: 80 },
     })
-    expect(test.calls.find(call => call.method === 'terminal.write')?.params).toEqual({ id, value: 'input\n' })
-    expect(test.calls.find(call => call.method === 'terminal.signal')?.params).toEqual({ id, value: 'SIGINT' })
+    expect(test.calls.find((call) => call.method === 'terminal.write')?.params).toEqual({ id, value: 'input\n' })
+    expect(test.calls.find((call) => call.method === 'terminal.signal')?.params).toEqual({ id, value: 'SIGINT' })
     test.finished.resolve(completion)
     expect(await handle.done).toEqual({ exitCode: 0, signal: null })
     await Promise.all([handle.terminate(), handle.terminate()])
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(1)
-    expect(test.calls.find(call => call.method === 'process.terminate')?.longRunning).toBe(true)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(1)
+    expect(test.calls.find((call) => call.method === 'process.terminate')?.longRunning).toBe(true)
     expect(test.host.destroyed).toBe(true)
     expect(handle.output.destroyed).toBe(true)
     await test.close()
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(1)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(1)
   })
 
   it('retries termination after a remote cleanup failure without discarding the live handle', async () => {
@@ -123,7 +160,7 @@ describe('SSH terminal behavior', () => {
     options.terminateFailure = undefined
     await handle.terminate()
     expect(await handle.done).toEqual(completion.outcome)
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(2)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(2)
     expect(handle.output.destroyed).toBe(true)
   })
 
@@ -135,7 +172,7 @@ describe('SSH terminal behavior', () => {
     test.finished.reject(failure)
     await rejected
     await handle.terminate()
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(1)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(1)
     expect(handle.output.destroyed).toBe(true)
   })
 
@@ -145,7 +182,7 @@ describe('SSH terminal behavior', () => {
     const handle = await test.runtime.spawnTerminal({ ...spec, signal: controller.signal })
     controller.abort(new Error('caller stopped'))
     await handle.terminate()
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(1)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(1)
     expect(handle.output.destroyed).toBe(true)
     expect(await handle.done).toEqual(completion.outcome)
   })
@@ -167,7 +204,7 @@ describe('SSH terminal behavior', () => {
     const test = await setup({ missingEndpoint: true })
     await expect(test.runtime.spawnTerminal(spec)).rejects.toBeInstanceOf(z.ZodError)
     expect(test.connection.connectStream).not.toHaveBeenCalled()
-    expect(test.calls.map(call => call.method)).toEqual(['process.prepare', 'process.terminate'])
+    expect(test.calls.map((call) => call.method)).toEqual(['process.prepare', 'process.terminate'])
   })
 
   it('reports both unpublished allocation and cleanup failures during provider disposal', async () => {
@@ -182,12 +219,14 @@ describe('SSH terminal behavior', () => {
     await test.allocationAborted
     test.release()
     await Promise.all([failed, disposal])
-    expect(test.cleanupErrors).toMatchObject([{
-      message: 'SSH process cleanup could not be confirmed',
-      errors: [expect.objectContaining({ errors: [connectFailure, terminateFailure] })],
-    }])
+    expect(test.cleanupErrors).toMatchObject([
+      {
+        message: 'SSH process cleanup could not be confirmed',
+        errors: [expect.objectContaining({ errors: [connectFailure, terminateFailure] })],
+      },
+    ])
     expect(test.connection.dispose).toHaveBeenCalledOnce()
-    expect(test.calls.some(call => call.method === 'process.start')).toBe(false)
+    expect(test.calls.some((call) => call.method === 'process.start')).toBe(false)
   })
 
   it('refuses admission after caller cancellation or provider disposal', async () => {
@@ -204,7 +243,7 @@ describe('SSH terminal behavior', () => {
     const test = await setup()
     const handle = await test.runtime.spawnTerminal(spec)
     await test.close()
-    expect(test.calls.filter(call => call.method === 'process.terminate')).toHaveLength(1)
+    expect(test.calls.filter((call) => call.method === 'process.terminate')).toHaveLength(1)
     expect(handle.output.destroyed).toBe(true)
     expect(await handle.done).toEqual(completion.outcome)
   })

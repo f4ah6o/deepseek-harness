@@ -19,7 +19,7 @@ import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import Projections from '@deepseek-ai/dsh-session-projection'
-import { expect, vi } from 'vitest'
+import { expect, vi } from 'vite-plus/test'
 import type { BrowserMcpConfig } from '../src/mcp.ts'
 
 export async function verifyMcpBrowser(
@@ -48,19 +48,52 @@ export async function verifyMcpBrowser(
     let browserConfig: BrowserMcpConfig = { mode: 'launch', headless: true, executablePath: executable }
     if (mode === 'attach') {
       const profile = join(root, 'external-profile')
-      external = spawn(executable, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+      external = spawn(
+        executable,
+        [
+          '--headless=new',
+          '--remote-debugging-port=0',
+          `--user-data-dir=${profile}`,
+          '--no-first-run',
+          '--no-default-browser-check',
+          'about:blank',
+        ],
+        { stdio: 'ignore' },
+      )
       exited = once(external, 'exit')
       const portFile = join(profile, 'DevToolsActivePort')
       let port: string | undefined
-      await vi.waitFor(async () => { port = (await readFile(portFile, 'utf8')).split('\n')[0]; expect(Number(port)).toBeGreaterThan(0) }, { timeout: 20000 })
+      await vi.waitFor(
+        async () => {
+          port = (await readFile(portFile, 'utf8')).split('\n')[0]
+          expect(Number(port)).toBeGreaterThan(0)
+        },
+        { timeout: 20000 },
+      )
       browserConfig = { mode: 'attach', endpoint: `http://127.0.0.1:${port}` }
     }
     const modules = new Map<string, unknown>([
-      ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['llm', Llm],
-      ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections], ['browser', provider],
+      ['browserUse', BrowserUse],
+      ['prompt', SystemPrompt],
+      ['tools', Tools],
+      ['llm', Llm],
+      ['sessions', Sessions],
+      ['agents', Agents],
+      ['loop', AgentLoop],
+      ['projections', Projections],
+      ['browser', provider],
     ])
     const configPath = join(root, 'cordis.yml')
-    await writeFile(configPath, JSON.stringify([...modules.keys()].map(name => ({ id: name, name, config: name === 'loop' ? { agents: [] } : name === 'browser' ? browserConfig : {} }))))
+    await writeFile(
+      configPath,
+      JSON.stringify(
+        [...modules.keys()].map((name) => ({
+          id: name,
+          name,
+          config: name === 'loop' ? { agents: [] } : name === 'browser' ? browserConfig : {},
+        })),
+      ),
+    )
     ctx.baseUrl = pathToFileURL(root).href + '/'
     await ctx.plugin(Loader)
     ctx.loader.builtins.include = Include
@@ -78,8 +111,14 @@ export async function verifyMcpBrowser(
     await ctx.systemPrompt.assemble({ agent: owner.agent, scope: owner.agent, signal: new AbortController().signal })
     const schemas = ctx.tools.schemas(owner.agent)
     expect(schemas.length).toBeGreaterThan(5)
-    expect(schemas.every(tool => tool.name.startsWith(`mcp__${namespace}__`))).toBe(true)
-    const result = await ctx.tools.execute({ agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: ToolCallId('navigate'), signal: new AbortController().signal })
+    expect(schemas.every((tool) => tool.name.startsWith(`mcp__${namespace}__`))).toBe(true)
+    const result = await ctx.tools.execute({
+      agent: owner.agent,
+      name: `mcp__${namespace}__${navigate.name}`,
+      arguments: navigate.arguments(url),
+      callId: ToolCallId('navigate'),
+      signal: new AbortController().signal,
+    })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(observed.has(`/${namespace}-${mode}`)).toBe(true)
     expect(result.content.length).toBeGreaterThan(0)
@@ -88,8 +127,8 @@ export async function verifyMcpBrowser(
     if (browserConfig.mode === 'attach') {
       expect(external?.exitCode).toBeNull()
       const response = await fetch(`${browserConfig.endpoint}/json/list`)
-      const pages = await response.json() as { url: string }[]
-      expect(pages.some(page => page.url === url)).toBe(true)
+      const pages = (await response.json()) as { url: string }[]
+      expect(pages.some((page) => page.url === url)).toBe(true)
     }
   } finally {
     await ctx.fiber.dispose()

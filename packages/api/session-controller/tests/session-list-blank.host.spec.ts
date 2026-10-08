@@ -7,7 +7,7 @@
  * same predicate function (covered by the workspace spec's frame assertion).
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -35,12 +35,17 @@ async function harness(): Promise<{ ctx: Context; remote: TestSessionRemote; att
 /** Append the standalone (non-conversation) event family a fresh session can accumulate. */
 function appendStandalone(session: Session): void {
   session.append('command/run', {
-    commandId: CommandId('blank-cmd-1'), name: 'plan', args: '', source: { kind: 'user' },
+    commandId: CommandId('blank-cmd-1'),
+    name: 'plan',
+    args: '',
+    source: { kind: 'user' },
   })
   session.append('plan/mode', { active: true })
   session.append('command/done', { commandId: CommandId('blank-cmd-1'), kind: 'success', text: 'Plan mode on.' })
   session.append('session/title', {
-    title: 'standalone title', messageSeqs: [], source: { kind: 'fallback' },
+    title: 'standalone title',
+    messageSeqs: [],
+    source: { kind: 'fallback' },
   })
   // Permission configuration events from a /permission switch on a fresh session.
   session.append('permission/preset', { preset: 'danger-full-access' })
@@ -50,7 +55,7 @@ function appendStandalone(session: Session): void {
 async function listBlank(remote: TestSessionRemote, id: string): Promise<boolean | undefined> {
   const result = await remote.list({})
   if (!result.ok) throw new Error('list failed')
-  return result.value.items.find(item => item.sessionId === id)?.blank
+  return result.value.items.find((item) => item.sessionId === id)?.blank
 }
 
 describe('summary blank = conversation not started', () => {

@@ -1,10 +1,13 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * Single ESM bundle. The Python-side code is not TypeScript and ships verbatim
  * under `py/` (whitelisted in package.json `files`) — no build step needed.
  */
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: ['lib/types/index.js'],
   outDir: 'lib',
   format: ['esm'],

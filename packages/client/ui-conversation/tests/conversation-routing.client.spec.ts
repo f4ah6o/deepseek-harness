@@ -1,24 +1,29 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
-import {
-  ConversationEventRegistry, ConversationNodeAssembler,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ConversationEventRegistry, ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
-  ConversationMatchHandler, ConversationNodeDefinition, ConversationNodeDefinitionInput,
+  ConversationMatchHandler,
+  ConversationNodeDefinition,
+  ConversationNodeDefinitionInput,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 function registry(): ConversationEventRegistry {
   const ctx = new Context()
-  onTestFinished(async () => { await ctx.fiber.dispose() })
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+  })
   return new ConversationEventRegistry(ctx)
 }
 
 function definition(kind: string, match: ConversationNodeDefinitionInput['match'], target?: string): ConversationNodeDefinitionInput<null> {
   return {
-    kind, match, start: () => null, update: context => context.state,
-    ...target === undefined ? {} : { target, buildViewNode: () => null },
+    kind,
+    match,
+    start: () => null,
+    update: (context) => context.state,
+    ...(target === undefined ? {} : { target, buildViewNode: () => null }),
   }
 }
 
@@ -39,28 +44,32 @@ describe('Conversation event routing', () => {
     events.register(c)
     events.register(d)
     const selected = events.forEvent('turn/start')
-    expect([...selected].map(route => route.definition.kind)).toEqual(['a', 'b', 'c', 'd'])
-    expect([...events.forEvent('step/start')].map(route => route.definition.kind)).toEqual(['a', 'c', 'd'])
-    expect([...events.forEvent('unknown')].map(route => route.definition.kind)).toEqual(['a', 'c'])
+    expect([...selected].map((route) => route.definition.kind)).toEqual(['a', 'b', 'c', 'd'])
+    expect([...events.forEvent('step/start')].map((route) => route.definition.kind)).toEqual(['a', 'c', 'd'])
+    expect([...events.forEvent('unknown')].map((route) => route.definition.kind)).toEqual(['a', 'c'])
     expect(events.forEvent('unknown')).toBe(events.forEvent('another-unknown'))
     expect(events.forEvent('turn/start')).toBe(selected)
     removeB()
     removeB()
-    expect([...events.forEvent('turn/start')].map(route => route.definition.kind)).toEqual(['a', 'c', 'd'])
-    expect([...selected].map(route => route.definition.kind)).toEqual(['a', 'b', 'c', 'd'])
+    expect([...events.forEvent('turn/start')].map((route) => route.definition.kind)).toEqual(['a', 'c', 'd'])
+    expect([...selected].map((route) => route.definition.kind)).toEqual(['a', 'b', 'c', 'd'])
     events.register(b)
-    expect([...events.forEvent('turn/start')].map(route => route.definition.kind)).toEqual(['a', 'c', 'd', 'b'])
+    expect([...events.forEvent('turn/start')].map((route) => route.definition.kind)).toEqual(['a', 'c', 'd', 'b'])
   })
 
   it('reads table handlers at registration and invokes only candidates for each payload', () => {
     const events = registry()
-    const selected = vi.fn<ConversationMatchHandler>(event => event.type === 'turn/start' && event.data.turn === 2
-      ? { id: 'second', role: 'start' } : null)
+    const selected = vi.fn<ConversationMatchHandler>((event) =>
+      event.type === 'turn/start' && event.data.turn === 2 ? { id: 'second', role: 'start' } : null,
+    )
     const unrelated = vi.fn<ConversationMatchHandler>(() => null)
     const unrestricted = vi.fn<ConversationMatchHandler>(() => null)
     let handlerReads = 0
     const table: Record<string, ConversationMatchHandler> = {
-      get 'turn/start'() { handlerReads++; return selected },
+      get 'turn/start'() {
+        handlerReads++
+        return selected
+      },
       'step/start': unrelated,
     }
     events.register(definition('table', table))
@@ -85,14 +94,24 @@ describe('Conversation event routing', () => {
     const legacy = vi.fn<ConversationMatchHandler>(() => null)
     events.register(definition('table', { 'turn/start': table }))
     events.register(definition('legacy', legacy))
-    expect(events.entries().every(entry => typeof entry.match === 'function')).toBe(true)
-    const assembler = new ConversationNodeAssembler({
-      entries: () => events.entries(), fallbackEntry: () => events.fallbackEntry(),
-    }, { entries: () => [] })
+    expect(events.entries().every((entry) => typeof entry.match === 'function')).toBe(true)
+    const assembler = new ConversationNodeAssembler(
+      {
+        entries: () => events.entries(),
+        fallbackEntry: () => events.fallbackEntry(),
+      },
+      { entries: () => [] },
+    )
     assembler.append({ type: 'event', event: turn(1) })
-    assembler.append({ type: 'event', event: {
-      type: 'step/start', seq: SessionSeq(2), time: 2, data: { turn: 1, step: 1 },
-    } })
+    assembler.append({
+      type: 'event',
+      event: {
+        type: 'step/start',
+        seq: SessionSeq(2),
+        time: 2,
+        data: { turn: 1, step: 1 },
+      },
+    })
     expect(table).toHaveBeenCalledOnce()
     expect(legacy).toHaveBeenCalledTimes(2)
   })
@@ -114,8 +133,8 @@ describe('Conversation event routing', () => {
     const events = registry()
     const entry = definition('own-keys', { ['__proto__']: () => null, constructor: () => null })
     events.register(entry)
-    expect([...events.forEvent('__proto__')].map(route => route.definition.kind)).toEqual(['own-keys'])
-    expect([...events.forEvent('constructor')].map(route => route.definition.kind)).toEqual(['own-keys'])
+    expect([...events.forEvent('__proto__')].map((route) => route.definition.kind)).toEqual(['own-keys'])
+    expect([...events.forEvent('constructor')].map((route) => route.definition.kind)).toEqual(['own-keys'])
     expect(events.forEvent('toString').size).toBe(0)
     events.register(definition('empty', {}))
     expect(events.forEvent('unlisted').size).toBe(0)
@@ -144,8 +163,9 @@ describe('Conversation event routing', () => {
 
   it.each(['chat', 'other', undefined] as const)('suppresses fallback only after a real match for its target (%s)', (target) => {
     const events = registry()
-    const match = vi.fn<ConversationMatchHandler>(event => event.type === 'turn/start' && event.data.turn === 2
-      ? { id: 'second', role: 'start' } : null)
+    const match = vi.fn<ConversationMatchHandler>((event) =>
+      event.type === 'turn/start' && event.data.turn === 2 ? { id: 'second', role: 'start' } : null,
+    )
     const fallback = vi.fn<ConversationMatchHandler>(() => ({ id: 'fallback', role: 'start' }))
     events.register(definition('ordinary', { 'turn/start': match }, target))
     events.registerFallback(definition('fallback', { 'turn/start': fallback }, 'chat'))
@@ -157,26 +177,39 @@ describe('Conversation event routing', () => {
     expect(fallback).toHaveBeenCalledTimes(target === 'chat' ? 1 : 2)
   })
 
-  it.each(['indexed', 'legacy'].flatMap(adapter => (
-    ['first', 'second', 'third', 'unmatched'].map(target => ({ adapter, target }))
-  )))('checks fallback against every matched target ($adapter, $target)', ({ adapter, target }) => {
-    const events = registry()
-    const targets = ['first', 'first', 'second', 'third', 'second']
-    const matched: string[] = []
-    for (const [index, ordinaryTarget] of targets.entries()) {
-      events.register(definition(`ordinary-${index}`, { 'turn/start': () => {
-        matched.push(ordinaryTarget)
-        return { id: 'one', role: 'start' }
-      } }, ordinaryTarget))
-    }
-    const fallback = vi.fn<ConversationMatchHandler>(() => ({ id: 'fallback', role: 'start' }))
-    events.registerFallback(definition('fallback', fallback, target))
-    const definitions = adapter === 'indexed' ? events : {
-      entries: () => events.entries(), fallbackEntry: () => events.fallbackEntry(),
-    }
-    const assembler = new ConversationNodeAssembler(definitions, { entries: () => [] })
-    assembler.append({ type: 'event', event: turn(1) })
-    expect(matched).toEqual(targets)
-    expect(fallback).toHaveBeenCalledTimes(target === 'unmatched' ? 1 : 0)
-  })
+  it.each(['indexed', 'legacy'].flatMap((adapter) => ['first', 'second', 'third', 'unmatched'].map((target) => ({ adapter, target }))))(
+    'checks fallback against every matched target ($adapter, $target)',
+    ({ adapter, target }) => {
+      const events = registry()
+      const targets = ['first', 'first', 'second', 'third', 'second']
+      const matched: string[] = []
+      for (const [index, ordinaryTarget] of targets.entries()) {
+        events.register(
+          definition(
+            `ordinary-${index}`,
+            {
+              'turn/start': () => {
+                matched.push(ordinaryTarget)
+                return { id: 'one', role: 'start' }
+              },
+            },
+            ordinaryTarget,
+          ),
+        )
+      }
+      const fallback = vi.fn<ConversationMatchHandler>(() => ({ id: 'fallback', role: 'start' }))
+      events.registerFallback(definition('fallback', fallback, target))
+      const definitions =
+        adapter === 'indexed'
+          ? events
+          : {
+              entries: () => events.entries(),
+              fallbackEntry: () => events.fallbackEntry(),
+            }
+      const assembler = new ConversationNodeAssembler(definitions, { entries: () => [] })
+      assembler.append({ type: 'event', event: turn(1) })
+      expect(matched).toEqual(targets)
+      expect(fallback).toHaveBeenCalledTimes(target === 'unmatched' ? 1 : 0)
+    },
+  )
 })

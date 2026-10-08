@@ -4,7 +4,7 @@
 // mount of the same prefix shows, while reusing the frozen blocks' DOM nodes
 // instead of remounting them.
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import type { Root, RootContent } from 'mdast'
 import { MarkdownText } from './markdown-test-components.tsx'
 import { IncrementalMarkdownParser } from '../src/markdown/incremental.ts'
@@ -95,14 +95,10 @@ describe('incremental streaming rendering', () => {
 
   it('drops the streaming cache when the copy labels change identity', () => {
     const doc = ['```ts', 'const a = 1', '```', '', 'p1', '', 'p2', '', 'p3'].join('\n')
-    const live = render(
-      <MarkdownText text={doc} streaming codeLabels={{ copyLabel: 'Copy', copiedLabel: 'Copied' }} />,
-    )
-    expect([...live.container.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Copy'])
-    live.rerender(
-      <MarkdownText text={doc} streaming codeLabels={{ copyLabel: 'Kopieren', copiedLabel: 'Kopiert' }} />,
-    )
-    expect([...live.container.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Kopieren'])
+    const live = render(<MarkdownText text={doc} streaming codeLabels={{ copyLabel: 'Copy', copiedLabel: 'Copied' }} />)
+    expect([...live.container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Copy'])
+    live.rerender(<MarkdownText text={doc} streaming codeLabels={{ copyLabel: 'Kopieren', copiedLabel: 'Kopiert' }} />)
+    expect([...live.container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Kopieren'])
     live.unmount()
   })
 
@@ -147,8 +143,8 @@ describe('incremental parsing is actually in effect', () => {
     // Warm-up aside, every parse sees only the unstable tail: bounded by a
     // few paragraphs, not the growing document.
     const steady = calls.slice(5)
-    expect(Math.max(...steady.map(call => call.length))).toBeLessThan(200)
-    expect(steady.every(call => !call.includes('Paragraph number 0 '))).toBe(true)
+    expect(Math.max(...steady.map((call) => call.length))).toBeLessThan(200)
+    expect(steady.every((call) => !call.includes('Paragraph number 0 '))).toBe(true)
     // Cumulative parsed bytes stay linear in the document; full re-parsing
     // would have accumulated ~40/2 times the document length here.
     const totalParsed = calls.reduce((sum, call) => sum + call.length, 0)
@@ -169,7 +165,7 @@ describe('incremental parsing is actually in effect', () => {
       result = parser.update(text)
     }
     const parsed = calls.reduce((sum, call) => sum + call.length, 0)
-    expect(Math.max(...calls.slice(10).map(call => call.length))).toBeLessThan(80)
+    expect(Math.max(...calls.slice(10).map((call) => call.length))).toBeLessThan(80)
     expect(parsed).toBeLessThan(text.length * 4)
     expect(result.tail.at(-1)?.node).toEqual(parseGfm(text).children[0])
   })
@@ -222,7 +218,7 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
     text += '```\n\nafter one.\n\nafter two.\n'
     const closed = parser.update(text)
     expect(closed.frozen.length).toBeGreaterThan(frozenAtOpen)
-    const frozenCode = closed.frozen.find(block => block.node.type === 'code')?.node
+    const frozenCode = closed.frozen.find((block) => block.node.type === 'code')?.node
     expect(frozenCode?.type === 'code' && frozenCode.value).toContain('looks like a list')
   })
 
@@ -239,8 +235,11 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
       expect(actual?.key).toBe(expected?.position?.start.offset)
       expect(actual?.node.type).toBe(expected?.type)
       if (actual?.node.type === 'code' && expected?.type === 'code') {
-        expect({ lang: actual.node.lang, meta: actual.node.meta, value: actual.node.value })
-          .toEqual({ lang: expected.lang, meta: expected.meta, value: expected.value })
+        expect({ lang: actual.node.lang, meta: actual.node.meta, value: actual.node.value }).toEqual({
+          lang: expected.lang,
+          meta: expected.meta,
+          value: expected.value,
+        })
       }
     }
   })
@@ -260,15 +259,17 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
 
   it('falls back to the full grammar tail when a custom grammar rejects fence slices', () => {
     type Corruption = 'many' | 'paragraph' | 'mismatch'
-    const custom = (corruption: Corruption): ((text: string) => Root) => (text) => {
-      if (!text.startsWith('```\n')) return parseGfm(text)
-      if (corruption === 'many') return parseGfm('one\n\ntwo')
-      if (corruption === 'paragraph') return parseGfm('one')
-      const root = parseGfm(text)
-      const node = root.children[0]
-      if (node?.type === 'code') node.value += 'mismatch'
-      return root
-    }
+    const custom =
+      (corruption: Corruption): ((text: string) => Root) =>
+      (text) => {
+        if (!text.startsWith('```\n')) return parseGfm(text)
+        if (corruption === 'many') return parseGfm('one\n\ntwo')
+        if (corruption === 'paragraph') return parseGfm('one')
+        const root = parseGfm(text)
+        const node = root.children[0]
+        if (node?.type === 'code') node.value += 'mismatch'
+        return root
+      }
     const cases = [
       { corruption: 'many' as const, text: '```ts\nfirst' },
       { corruption: 'paragraph' as const, text: '```ts\nfirst' },
@@ -330,7 +331,7 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
     expect(tailList?.type === 'list' && tailList.children).toHaveLength(3)
     text += '\nafter.\n\nmore.\n\nend.\n'
     const after = parser.update(text)
-    const frozenList = after.frozen.find(block => block.node.type === 'list')?.node
+    const frozenList = after.frozen.find((block) => block.node.type === 'list')?.node
     expect(frozenList?.type === 'list' && frozenList.children).toHaveLength(3)
   })
 
@@ -339,7 +340,7 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
     let previous: readonly number[] = []
     for (let end = 7; end < STREAM_DOC.length + 7; end += 7) {
       const { frozen } = parser.update(STREAM_DOC.slice(0, Math.min(end, STREAM_DOC.length)))
-      const keys = frozen.map(block => block.key)
+      const keys = frozen.map((block) => block.key)
       expect(keys.slice(0, previous.length)).toEqual(previous)
       previous = keys
     }
@@ -387,8 +388,8 @@ describe('multibyte content', () => {
     for (let end = 6; end < CJK_DOC.length + 3; end += 3) {
       result = parser.update(CJK_DOC.slice(0, Math.min(end, CJK_DOC.length)))
     }
-    const oneShot = parseGfm(CJK_DOC).children.map(node => node.position?.start.offset)
-    expect([...result.frozen, ...result.tail].map(block => block.key)).toEqual(oneShot)
+    const oneShot = parseGfm(CJK_DOC).children.map((node) => node.position?.start.offset)
+    expect([...result.frozen, ...result.tail].map((block) => block.key)).toEqual(oneShot)
     expect(result.frozen.length).toBeGreaterThan(3)
   })
 })
@@ -413,9 +414,11 @@ describe('streaming composition across freezes', () => {
     const head = doc.slice(0, doc.indexOf('Beta'))
     const live = render(<MarkdownText text={head} streaming />)
     live.rerender(<MarkdownText text={doc} streaming />)
-    expect([...live.container.querySelectorAll('p sup')].map(sup => sup.textContent)).toEqual(['1', '2'])
-    expect([...live.container.querySelectorAll('section.footnotes li')].map(li => li.id))
-      .toEqual(['user-content-fn-a', 'user-content-fn-b'])
+    expect([...live.container.querySelectorAll('p sup')].map((sup) => sup.textContent)).toEqual(['1', '2'])
+    expect([...live.container.querySelectorAll('section.footnotes li')].map((li) => li.id)).toEqual([
+      'user-content-fn-a',
+      'user-content-fn-b',
+    ])
     expect(live.container.querySelector('section.footnotes')?.textContent).toContain('First note body. ↩')
     const fresh = render(<MarkdownText text={doc} streaming />)
     expect(live.container.innerHTML).toBe(fresh.container.innerHTML)
@@ -489,7 +492,7 @@ describe('IncrementalMarkdownParser', () => {
   it('freezes all but the trailing two blocks and keeps freezing as blocks appear', () => {
     const parser = new IncrementalMarkdownParser(parseGfm)
     const first = parser.update('a\n\nb\n\nc\n\nd\n\ne')
-    expect(first.frozen.map(b => b.node.type)).toEqual(['paragraph', 'paragraph', 'paragraph'])
+    expect(first.frozen.map((b) => b.node.type)).toEqual(['paragraph', 'paragraph', 'paragraph'])
     expect(first.tail).toHaveLength(2)
     const second = parser.update('a\n\nb\n\nc\n\nd\n\ne\n\nf\n\ng')
     expect(second.frozen).toHaveLength(5)
@@ -519,15 +522,15 @@ describe('IncrementalMarkdownParser', () => {
     const after = parser.update('different')
     expect(after.generation).toBe(before.generation + 1)
     expect(after.frozen).toHaveLength(0)
-    expect(after.tail.map(b => b.node.type)).toEqual(['paragraph'])
+    expect(after.tail.map((b) => b.node.type)).toEqual(['paragraph'])
   })
 
   it('keys blocks by absolute source offset across freezes', () => {
     const doc = 'aaa\n\nbbb\n\nccc\n\nddd\n\neee'
     const parser = new IncrementalMarkdownParser(parseGfm)
     const grown = parser.update(doc)
-    const oneShotKeys = parseGfm(doc).children.map(node => node.position?.start.offset)
-    expect([...grown.frozen, ...grown.tail].map(b => b.key)).toEqual(oneShotKeys)
+    const oneShotKeys = parseGfm(doc).children.map((node) => node.position?.start.offset)
+    expect([...grown.frozen, ...grown.tail].map((b) => b.key)).toEqual(oneShotKeys)
   })
 
   it('never freezes under a grammar that omits positions', () => {
@@ -547,6 +550,6 @@ describe('IncrementalMarkdownParser', () => {
     expect(result.frozen).toHaveLength(0)
     expect(result.tail).toHaveLength(5)
     // Fallback keys stay unique per sibling.
-    expect(new Set(result.tail.map(b => b.key)).size).toBe(5)
+    expect(new Set(result.tail.map((b) => b.key)).size).toBe(5)
   })
 })

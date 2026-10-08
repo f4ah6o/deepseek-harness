@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import type { BrowserTarget } from '../src/client/browser/url.ts'
 import { BrowserNavigation, MAX_BROWSER_HISTORY } from '../src/client/browser/BrowserNavigation.ts'
 
 const httpsTarget = (index: number): BrowserTarget => ({
-  kind: 'https', url: `https://example.test/${index}`, title: `page ${index}`,
+  kind: 'https',
+  url: `https://example.test/${index}`,
+  title: `page ${index}`,
 })
 
 describe('BrowserNavigation', () => {
@@ -25,7 +27,7 @@ describe('BrowserNavigation', () => {
     expect(navigation.canGoForward).toBe(true)
     navigation.navigate(httpsTarget(200))
     expect(navigation.snapshot.entries.at(-1)?.url).toBe('https://example.test/200')
-    expect(navigation.snapshot.entries.some(entry => entry.url === 'https://example.test/100')).toBe(false)
+    expect(navigation.snapshot.entries.some((entry) => entry.url === 'https://example.test/100')).toBe(false)
 
     const beforeReload = navigation.snapshot.request!.revision
     navigation.reload()

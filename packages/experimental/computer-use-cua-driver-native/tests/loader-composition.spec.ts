@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -30,10 +30,15 @@ class VisualModel extends LlmAdapter {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
 
-  async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     if (this.requests.length === 1) {
-      const call = { type: 'tool-call' as const, id: ToolCallId('native-window'), name: 'cua_driver_native__get_window_state', arguments: '{"pid":9,"window_id":7}' }
+      const call = {
+        type: 'tool-call' as const,
+        id: ToolCallId('native-window'),
+        name: 'cua_driver_native__get_window_state',
+        arguments: '{"pid":9,"window_id":7}',
+      }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: call }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -71,12 +76,17 @@ it('loads from cordis.yml and logs the native screenshot before the next model r
     ['@deepseek-ai/dsh-computer-use', ComputerUseRegistry],
     ['@deepseek-ai/dsh-experimental-computer-use-cua-driver-native', NativeProvider],
   ])
-  await writeFile(configPath, [...modules.keys()].flatMap(name => [
-    `- name: '${name}'`,
-    ...name === '@deepseek-ai/dsh-attachment-local' ? ['  config:', `    dshHome: ${JSON.stringify(root)}`] : [],
-  ]).join('\n') + '\n')
+  await writeFile(
+    configPath,
+    [...modules.keys()]
+      .flatMap((name) => [
+        `- name: '${name}'`,
+        ...(name === '@deepseek-ai/dsh-attachment-local' ? ['  config:', `    dshHome: ${JSON.stringify(root)}`] : []),
+      ])
+      .join('\n') + '\n',
+  )
 
-  const context = ctx = new Context()
+  const context = (ctx = new Context())
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
   context.loader.builtins.include = Include
@@ -104,11 +114,11 @@ it('loads from cordis.yml and logs the native screenshot before the next model r
   expect(model.requests).toHaveLength(2)
   expect(JSON.stringify(model.requests[0])).toContain('cua_driver_native__get_window_state')
   expect(JSON.stringify(model.requests[0])).toContain('Cua Driver native computer-use tools operate the host desktop.')
-  const toolEvent = agent.session.snapshotEvents().find(event => event.type === 'tool/result')
+  const toolEvent = agent.session.snapshotEvents().find((event) => event.type === 'tool/result')
   expect(toolEvent?.data.message.source.callId).toBe('native-window')
-  const toolResult = agent.session.deriveMessages().find(message => message.role === 'tool')
+  const toolResult = agent.session.deriveMessages().find((message) => message.role === 'tool')
   if (toolResult?.role !== 'tool') throw new Error('Native screenshot result was not admitted')
-  const image = toolResult.content.find(block => block.type === 'image')
+  const image = toolResult.content.find((block) => block.type === 'image')
   expect(image?.type).toBe('image')
   if (image?.type !== 'image') throw new Error('Native screenshot was not admitted')
   expect(image.attachment).toMatchObject({ mediaType: 'image/png', width: 1, height: 1 })
@@ -117,8 +127,11 @@ it('loads from cordis.yml and logs the native screenshot before the next model r
   expect(JSON.stringify(model.requests[1]?.messages)).toContain(JSON.stringify(image.attachment))
   expect(JSON.stringify(toolResult.content)).not.toContain(screenshotBase64)
   const direct = await context.tools.execute({
-    agent, signal: new AbortController().signal, callId: ToolCallId('programmatic-window'),
-    name: 'cua_driver_native__get_window_state', arguments: { pid: 9, window_id: 7 },
+    agent,
+    signal: new AbortController().signal,
+    callId: ToolCallId('programmatic-window'),
+    name: 'cua_driver_native__get_window_state',
+    arguments: { pid: 9, window_id: 7 },
   })
   if (direct.isError) throw new Error('Programmatic native screenshot failed')
   expect(direct.value).toMatchObject({ structuredContent: { window_id: 7, clicked: false } })

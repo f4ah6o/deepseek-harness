@@ -4,20 +4,23 @@
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-commands/types'
 import {
-  acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria,
-  compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode,
+  acknowledgeReloadConnectionLoss,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/goal-command-presentation', import.meta.url))
-const UI_EXPECTED = fileURLToPath(new URL(
-  './expected/goal-command-presentation/ui.expected.md', import.meta.url,
-))
+const UI_EXPECTED = fileURLToPath(new URL('./expected/goal-command-presentation/ui.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
 
 describe('web e2e: /goal human transcript presentation', () => {
@@ -29,7 +32,9 @@ describe('web e2e: /goal human transcript presentation', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold()
-    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { events.push(event) })
+    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => {
+      events.push(event)
+    })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -45,14 +50,15 @@ describe('web e2e: /goal human transcript presentation', () => {
 
   it('completes with Tab and shows the bare input and result without a model turn', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-goal-command-presentation'))
-    await expect.poll(() => page.getByText('Into the Unknown', { exact: false }).count(), {
-      timeout: 15_000,
-    }).toBe(1)
+    await expect
+      .poll(() => page.getByText('Into the Unknown', { exact: false }).count(), {
+        timeout: 15_000,
+      })
+      .toBe(1)
     const input = page.locator('[data-composer-input]').first()
     await input.fill('/go')
     const menu = page.getByRole('listbox', { name: 'Trigger suggestions' })
-    await menu.getByRole('option', { name: 'Goal Set or view the goal for a long-running task' })
-      .waitFor({ timeout: 10_000 })
+    await menu.getByRole('option', { name: 'Goal Set or view the goal for a long-running task' }).waitFor({ timeout: 10_000 })
     await input.press('Tab')
     await expect.poll(() => input.textContent()).toBe('/goal ')
     await expect.poll(() => menu.count()).toBe(0)
@@ -93,16 +99,16 @@ describe('web e2e: /goal human transcript presentation', () => {
     await expect.poll(() => page.locator('[data-phase="active"]').count()).toBe(1)
     expect(await page.getByText('Into the Unknown', { exact: false }).count()).toBe(0)
 
-    const run = events.find(event => event.type === 'command/run')
+    const run = events.find((event) => event.type === 'command/run')
     expect(run).toMatchObject({
       type: 'command/run',
       data: { name: 'goal', args: ' ', source: { kind: 'user' } },
     })
-    expect(events.some(event => event.type === 'command/done')).toBe(true)
-    expect(events.some(event => event.type === 'user/message')).toBe(false)
-    expect(events.some(event => event.type === 'turn/start')).toBe(false)
-    expect(events.some(event => event.type === 'step/start')).toBe(false)
-    expect(events.some(event => event.type === 'request/header')).toBe(false)
+    expect(events.some((event) => event.type === 'command/done')).toBe(true)
+    expect(events.some((event) => event.type === 'user/message')).toBe(false)
+    expect(events.some((event) => event.type === 'turn/start')).toBe(false)
+    expect(events.some((event) => event.type === 'step/start')).toBe(false)
+    expect(events.some((event) => event.type === 'request/header')).toBe(false)
 
     // The command result can arrive before Lexical clears the submitted claim.
     await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
@@ -125,12 +131,14 @@ describe('web e2e: /goal human transcript presentation', () => {
     const sessions = scaffold.ctx.sessions.list()
     expect(sessions).toHaveLength(1)
     const persisted = sessions[0]?.snapshotEvents() ?? []
-    expect(persisted.filter(event => event.type === 'command/run' || event.type === 'command/done')
-      .map(event => event.type)).toEqual(['command/run', 'command/done'])
-    expect(persisted.some(event => event.type === 'user/message')).toBe(false)
-    expect(persisted.some(event => event.type === 'turn/start')).toBe(false)
-    expect(persisted.some(event => event.type === 'step/start')).toBe(false)
-    expect(persisted.some(event => event.type === 'request/header')).toBe(false)
+    expect(persisted.filter((event) => event.type === 'command/run' || event.type === 'command/done').map((event) => event.type)).toEqual([
+      'command/run',
+      'command/done',
+    ])
+    expect(persisted.some((event) => event.type === 'user/message')).toBe(false)
+    expect(persisted.some((event) => event.type === 'turn/start')).toBe(false)
+    expect(persisted.some((event) => event.type === 'step/start')).toBe(false)
+    expect(persisted.some((event) => event.type === 'request/header')).toBe(false)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md'])

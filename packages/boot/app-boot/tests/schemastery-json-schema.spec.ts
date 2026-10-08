@@ -1,6 +1,6 @@
 /** JSON Schema describes Config inputs, while native normalization remains explicit. */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import Schema from '@deepseek-ai/schemastery'
 import { createConfigProjector, type ConfigProjection } from '../src/config-schema/projector.ts'
@@ -86,7 +86,16 @@ describe('Schemastery input projection', () => {
     expect(accepts(integer, 2)).toBe(true)
     expect(accepts(project(Schema.number().step(2).min(0)), 3)).toBe(false)
     expect(accepts(project(Schema.number().step(0)), 1.5)).toBe(true)
-    expect(accepts(project(Schema.string().min(1).pattern(/^https?:\/\/\S+$/u)), '')).toBe(false)
+    expect(
+      accepts(
+        project(
+          Schema.string()
+            .min(1)
+            .pattern(/^https?:\/\/\S+$/u),
+        ),
+        '',
+      ),
+    ).toBe(false)
     expect(accepts(project(Schema.string().max(0)), 'x')).toBe(false)
     expect(accepts(project(Schema.const('fixed')), 'other')).toBe(false)
     expect(accepts(project(Schema.boolean()), 'true')).toBe(false)
@@ -107,7 +116,9 @@ describe('Schemastery input projection', () => {
   })
 
   it('does not run transform callbacks and marks their validation partial', () => {
-    const callback = vi.fn((): string => { throw new Error('must not run') })
+    const callback = vi.fn((): string => {
+      throw new Error('must not run')
+    })
     const result = project(Schema.transform(Schema.string().required(), callback).default('value'))
     expect(callback).not.toHaveBeenCalled()
     expect(result.acceptsMissing).toBe('unknown')
@@ -235,8 +246,7 @@ describe('Schemastery input projection', () => {
 
   it.each(['transform', 'loose'])('allows original dictionary values affected by %s key collisions', (kind) => {
     const callback = vi.fn(() => 'b')
-    const key = kind === 'transform' ? Schema.transform(Schema.string(), callback)
-      : Schema.string().pattern(/^b$/).loose().default('b')
+    const key = kind === 'transform' ? Schema.transform(Schema.string(), callback) : Schema.string().pattern(/^b$/).loose().default('b')
     const native = Schema.dict(Schema.number().required(), key)
     const result = project(native)
     expect(callback).not.toHaveBeenCalled()
@@ -257,7 +267,12 @@ describe('Schemastery input projection', () => {
   it('preserves cached and fresh lazy loose fallback, including missing input', () => {
     const cached = Schema.lazy(() => Schema.string().required())
     Schema.resolve('warm', cached, {})
-    for (const native of [cached.required().loose(), Schema.lazy(() => Schema.string().required()).required().loose()]) {
+    for (const native of [
+      cached.required().loose(),
+      Schema.lazy(() => Schema.string().required())
+        .required()
+        .loose(),
+    ]) {
       const result = project(native)
       expect(accepts(result, 3)).toBe(true)
       expect(accepts(result, null)).toBe(true)
@@ -265,11 +280,22 @@ describe('Schemastery input projection', () => {
       expect(() => Schema.resolve(null, native, {})).not.toThrow()
       expect(result.limitations.join(' ')).toContain('lazy loose fallback')
     }
-    expect(accepts(project(Schema.lazy((): Schema => { throw new Error('builder failed') }).loose()), 3)).toBe(true)
+    expect(
+      accepts(
+        project(
+          Schema.lazy((): Schema => {
+            throw new Error('builder failed')
+          }).loose(),
+        ),
+        3,
+      ),
+    ).toBe(true)
   })
 
   it('does not turn a failed shared traversal into a dangling recursive reference', () => {
-    const builder = vi.fn((): Schema => { throw new Error('bad builder') })
+    const builder = vi.fn((): Schema => {
+      throw new Error('bad builder')
+    })
     const shared = Schema.object({ bad: Schema.lazy(builder) })
     expect(accepts(project(Schema.lazy(() => shared).loose()), {})).toBe(true)
     expect(builder).not.toHaveBeenCalled()
@@ -315,8 +341,14 @@ describe('Schemastery input projection', () => {
   })
 
   it('preserves roles, units, presentation metadata, and localized descriptions', () => {
-    const schema = Schema.string().role('credential-ref', { source: 'environment' }).hidden().collapse().disabled()
-      .link('https://example.com').comment('Credential name').experimental()
+    const schema = Schema.string()
+      .role('credential-ref', { source: 'environment' })
+      .hidden()
+      .collapse()
+      .disabled()
+      .link('https://example.com')
+      .comment('Credential name')
+      .experimental()
     schema.meta.description = { en: 'Credential reference', zh: '凭据引用' }
     const result = project(schema)
     expect(JSON.stringify(result.schema)).toContain('credential-ref')
@@ -352,7 +384,13 @@ describe('Schemastery input projection', () => {
   it('rejects lazy cycles without a concrete schema and reports builder failures', () => {
     const cycle: Schema = Schema.lazy(() => cycle)
     expect(() => project(cycle)).toThrow('lazy cycle has no concrete schema')
-    expect(() => project(Schema.lazy(() => { throw new Error('builder failed') }))).toThrow('builder failed')
+    expect(() =>
+      project(
+        Schema.lazy(() => {
+          throw new Error('builder failed')
+        }),
+      ),
+    ).toThrow('builder failed')
   })
 
   it('reuses recursive targets reached more than once and keeps required null rejection', () => {
@@ -428,7 +466,10 @@ describe('Schemastery input projection', () => {
   })
 
   it.each([
-    ['min', Infinity], ['max', -Infinity], ['step', Infinity], ['step', NaN],
+    ['min', Infinity],
+    ['max', -Infinity],
+    ['step', Infinity],
+    ['step', NaN],
   ] as const)('omits non-finite %s %d without losing type constraints', (key, value) => {
     const schema = Schema.number()
     schema.meta[key] = value
@@ -441,7 +482,10 @@ describe('Schemastery input projection', () => {
 
   it('treats native no-op infinite bounds as absent unless a step origin depends on them', () => {
     const inert: Schema[] = [
-      Schema.number().max(Infinity), Schema.number().min(-Infinity), Schema.string().max(Infinity), Schema.array(Number).max(Infinity),
+      Schema.number().max(Infinity),
+      Schema.number().min(-Infinity),
+      Schema.string().max(Infinity),
+      Schema.array(Number).max(Infinity),
     ]
     for (const schema of inert) {
       const result = project(schema)
@@ -463,21 +507,21 @@ describe('Schemastery input projection', () => {
     expect(accepts(result, 'text')).toBe(true)
     expect(accepts(result, ['text'])).toBe(true)
     expect(accepts(result, 3)).toBe(false)
-    const container = Schema.transform(Schema.object({ x: Schema.transform(Schema.string(), callback) }), value => value)
+    const container = Schema.transform(Schema.object({ x: Schema.transform(Schema.string(), callback) }), (value) => value)
     expect(project(Schema.union([container, Schema.object({})])).limitations.join(' ')).toContain('earlier union branches')
   })
 
   it('does not duplicate null in the type list of a wrapped null-only projection', () => {
-    const native = Schema.object({ never: Schema.transform(Schema.never(), value => value) })
+    const native = Schema.object({ never: Schema.transform(Schema.never(), (value) => value) })
     const result = project(native)
     expect(accepts(result, {})).toBe(true)
     expect(accepts(result, { never: null })).toBe(true)
     expect(accepts(result, { never: 1 })).toBe(false)
     expect(() => Schema.resolve({}, native, {})).not.toThrow()
-    const nullable = project(Schema.transform(Schema.string(), value => value))
+    const nullable = project(Schema.transform(Schema.string(), (value) => value))
     expect(nullable.schema).toMatchObject({ anyOf: [{ type: ['string', 'null'] }, { $ref: '#/$defs/loaderExpression' }] })
-    expect(accepts(project(Schema.transform(Schema.string(), value => value).required()), null)).toBe(false)
-    expect(accepts(project(Schema.transform(Schema.never(), value => value).required()), null)).toBe(false)
+    expect(accepts(project(Schema.transform(Schema.string(), (value) => value).required()), null)).toBe(false)
+    expect(accepts(project(Schema.transform(Schema.never(), (value) => value).required()), null)).toBe(false)
   })
 
   it('invokes a shared lazy builder once across chains within one document', () => {
@@ -507,18 +551,23 @@ describe('Schemastery input projection', () => {
     expect(project(Schema.object({ 'a/b~c': Schema.string().default('value') }))).toEqual(first)
   })
 
-  it.each([Infinity, () => {}, Symbol('value'), new Date(), { value: undefined }])('omits non-JSON defaults with an explicit partial annotation', (value) => {
-    const result = project(Schema.string().extra('default', value))
-    expect(result.schema).not.toHaveProperty('default')
-    expect(result.acceptsMissing).toBe('unknown')
-    expect(result.limitations.join(' ')).toContain('default: annotation omitted')
-    expect(accepts(result, 'value')).toBe(true)
-    expect(accepts(result, 3)).toBe(false)
-    expect(project(Schema.string().required().extra('default', value)).acceptsMissing).toBe(false)
-  })
+  it.each([Infinity, () => {}, Symbol('value'), new Date(), { value: undefined }])(
+    'omits non-JSON defaults with an explicit partial annotation',
+    (value) => {
+      const result = project(Schema.string().extra('default', value))
+      expect(result.schema).not.toHaveProperty('default')
+      expect(result.acceptsMissing).toBe('unknown')
+      expect(result.limitations.join(' ')).toContain('default: annotation omitted')
+      expect(accepts(result, 'value')).toBe(true)
+      expect(accepts(result, 3)).toBe(false)
+      expect(project(Schema.string().required().extra('default', value)).acceptsMissing).toBe(false)
+    },
+  )
 
   it('keeps valid defaults and input precision when presentation metadata is omitted', () => {
-    const render = vi.fn(() => { throw new Error('DO_NOT_CALL_RENDER') })
+    const render = vi.fn(() => {
+      throw new Error('DO_NOT_CALL_RENDER')
+    })
     const field = Schema.string().default('value').description('Field label').role('custom', { render })
     const result = project(Schema.object({ field }))
     expect(render).not.toHaveBeenCalled()
@@ -532,7 +581,11 @@ describe('Schemastery input projection', () => {
   })
 
   it.each(['default', 'constant'])('reports non-Error %s annotation failures without losing the document', (kind) => {
-    const value = { get field() { throw 'annotation getter failed' } }
+    const value = {
+      get field() {
+        throw 'annotation getter failed'
+      },
+    }
     const schema = kind === 'default' ? Schema.string().extra('default', value) : Schema.const(value)
     const result = project(schema)
     expect(result.limitations.join(' ')).toContain('annotation getter failed')
@@ -551,11 +604,13 @@ describe('Schemastery input projection', () => {
   })
 
   it('retains sibling constraints when a nested default or constant is not JSON-compatible', () => {
-    const result = project(Schema.object({
-      value: Schema.string().extra('default', () => 'dynamic'),
-      constant: Schema.const(new Date()),
-      count: Schema.number().required(),
-    }))
+    const result = project(
+      Schema.object({
+        value: Schema.string().extra('default', () => 'dynamic'),
+        constant: Schema.const(new Date()),
+        count: Schema.number().required(),
+      }),
+    )
     expect(accepts(result, { value: 'literal', count: 1 })).toBe(true)
     expect(accepts(result, { value: 3, count: 1 })).toBe(false)
     expect(accepts(result, { count: 'wrong' })).toBe(false)

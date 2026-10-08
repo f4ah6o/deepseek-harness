@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import ExcelJS from 'exceljs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Config } from '../src/config.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { XlsxPreviewArchive } from '../src/client/excel/xlsx-archive.ts'
@@ -14,7 +14,10 @@ const require = createRequire(import.meta.url)
 const browserExcel = require('exceljs/dist/exceljs.js') as typeof ExcelJS
 const limits = Config({}).excel
 
-describe.each([['Node', ExcelJS], ['browser bundle', browserExcel]] as const)('%s opening regressions', (_name, parser) => {
+describe.each([
+  ['Node', ExcelJS],
+  ['browser bundle', browserExcel],
+] as const)('%s opening regressions', (_name, parser) => {
   it.each(excelOpeningCases)('opens %s with cells, styles, comments, Tables and hyperlinks', async (name) => {
     const source = await excelOpeningFixture(name)
     const original = source.slice()

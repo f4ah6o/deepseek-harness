@@ -8,7 +8,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vite-plus/test'
 import { collectPackageSources, EventRelationCollector } from './gen-doc-graphs.ts'
 import { TypeScriptProject } from './ts-project.ts'
 
@@ -32,8 +32,7 @@ const FIXTURE: Record<string, string> = {
     '}',
     '',
   ].join('\n'),
-  'packages/core/agent/src/dispatch.ts':
-    'export interface AgentEventDispatch { emit(...args: unknown[]): void }\n',
+  'packages/core/agent/src/dispatch.ts': 'export interface AgentEventDispatch { emit(...args: unknown[]): void }\n',
   // fireLocal: every same-file reference is a direct callee, so the locality
   // proof holds and only this file is indexed. fireAliased: the exported
   // const is a value-position reference, so the proof fails and the global
@@ -47,19 +46,13 @@ const FIXTURE: Record<string, string> = {
     'export const aliased = fireAliased',
     '',
   ].join('\n'),
-  'packages/fix/pkgb/src/index.ts': [
-    "import { aliased } from '../../pkga/src/index.ts'",
-    "aliased(['pkgb/aliased-event'])",
-    '',
-  ].join('\n'),
+  'packages/fix/pkgb/src/index.ts': ["import { aliased } from '../../pkga/src/index.ts'", "aliased(['pkgb/aliased-event'])", ''].join('\n'),
   // Global script files (no import/export): scriptFire is program-visible, so
   // the cross-file call in caller.ts leaves no same-file reference. Only the
   // module-ness premise check routes this helper to the global index; without
   // it the proof would pass and the event would silently drop.
-  'packages/fix/pkgc/src/globals.ts':
-    "declare var gEvents: import('../../../../vendor/cordis/src/events.ts').EventsService\n",
-  'packages/fix/pkgc/src/helper.ts':
-    "function scriptFire(args: [string]): void { void gEvents.dispatch('emit', args) }\n",
+  'packages/fix/pkgc/src/globals.ts': "declare var gEvents: import('../../../../vendor/cordis/src/events.ts').EventsService\n",
+  'packages/fix/pkgc/src/helper.ts': "function scriptFire(args: [string]): void { void gEvents.dispatch('emit', args) }\n",
   'packages/fix/pkgc/src/caller.ts': "scriptFire(['pkgc/script-event'])\n",
 }
 
@@ -76,7 +69,7 @@ afterAll(() => {
 })
 
 function dispatchersOf(pkgs: readonly string[], event: string): string[] {
-  const subset = sources.filter(source => pkgs.includes(source.pkg))
+  const subset = sources.filter((source) => pkgs.includes(source.pkg))
   const relations = new EventRelationCollector(project, subset).collect()
   return [...(relations.get(event)?.dispatchers.keys() ?? [])]
 }

@@ -6,7 +6,7 @@
  * regression that `read` keeps its text-only contract.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -35,7 +35,10 @@ import {
 /** 1x1 red PNG (valid signature, IHDR, IDAT). */
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
 /** 3x3 red PNG used to trip a tiny configured pixel limit. */
-const PNG_3X3 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAIAAADZSiLoAAAAEElEQVR4nGP4z8AAQQxYWACPjgj4kWPEuQAAAABJRU5ErkJggg==', 'base64')
+const PNG_3X3 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAIAAADZSiLoAAAAEElEQVR4nGP4z8AAQQxYWACPjgj4kWPEuQAAAABJRU5ErkJggg==',
+  'base64',
+)
 /** 1x1 red GIF (GIF89a). */
 const GIF_1X1 = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
 
@@ -55,12 +58,12 @@ class CatalogAdapter extends LlmAdapter {
   }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    const resolved = this.resolvedModels.find(candidate => candidate.id === model)
+    const resolved = this.resolvedModels.find((candidate) => candidate.id === model)
     return Promise.resolve({
       provider,
       id: model,
       name: resolved?.name ?? model,
-      ...resolved?.inputModalities === undefined ? {} : { inputModalities: [...resolved.inputModalities] },
+      ...(resolved?.inputModalities === undefined ? {} : { inputModalities: [...resolved.inputModalities] }),
     })
   }
 
@@ -71,7 +74,9 @@ class CatalogAdapter extends LlmAdapter {
 
 /** In-process PTC mode seam fake that invokes the real registry bindings. */
 class FakeRuntime extends PtcRuntime {
-  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec {
+    return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
+  }
 
   readonly language = 'typescript'
   readonly isolation = 'fake'
@@ -117,11 +122,17 @@ async function setup(options: SetupOptions = {}) {
   }
   if (options.llm !== false) {
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['visual'], new CatalogAdapter(options.models ?? [
-      { provider: 'visual', id: 'vision-model', name: 'Vision', inputModalities: ['text', 'image'] },
-      { provider: 'visual', id: 'text-model', name: 'Text', inputModalities: ['text'] },
-      { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
-    ], options.resolvedModels))
+    ctx.llm.registerAdapter(
+      ['visual'],
+      new CatalogAdapter(
+        options.models ?? [
+          { provider: 'visual', id: 'vision-model', name: 'Vision', inputModalities: ['text', 'image'] },
+          { provider: 'visual', id: 'text-model', name: 'Text', inputModalities: ['text'] },
+          { provider: 'visual', id: 'legacy-model', name: 'Legacy' },
+        ],
+        options.resolvedModels,
+      ),
+    )
   }
   await ctx.plugin(ToolFs)
   return ctx
@@ -147,7 +158,7 @@ function call(ctx: Context, name: string, args: unknown, agent?: object) {
     callId: ToolCallId(`img-call-${++callCounter}`),
     name,
     arguments: args,
-    ...agent ? { agent: agent as never } : {},
+    ...(agent ? { agent: agent as never } : {}),
   })
 }
 
@@ -156,7 +167,10 @@ function readImage(ctx: Context, args: unknown, agent?: object) {
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  return result.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
 }
 
 describe('imageMediaTypeForPath', () => {
@@ -200,8 +214,10 @@ describe('imageRefFromValue', () => {
     const base = { attachmentId: 'sha256:00', mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1 }
     expect(imageRefFromValue(base)).toEqual(base)
     expect(imageRefFromValue({ ...base, name: 'a.png' })).toEqual({ ...base, name: 'a.png' })
-    expect(imageRefFromValue({ ...base, originalDimensions: { width: 4, height: 2 } }))
-      .toEqual({ ...base, originalDimensions: { width: 4, height: 2 } })
+    expect(imageRefFromValue({ ...base, originalDimensions: { width: 4, height: 2 } })).toEqual({
+      ...base,
+      originalDimensions: { width: 4, height: 2 },
+    })
   })
 })
 
@@ -221,13 +237,15 @@ describe('read_image happy path', () => {
     expect(image.attachment.bytes).toBe(PNG_1X1.length)
     expect(image.attachment.name).toBe('red.png')
     expect(image.attachment.attachmentId).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(text(result)).toBe(formatImageReadOutput(join(dir, 'red.png'), {
-      attachmentId: image.attachment.attachmentId,
-      mediaType: 'image/png',
-      bytes: PNG_1X1.length,
-      width: 1,
-      height: 1,
-    }))
+    expect(text(result)).toBe(
+      formatImageReadOutput(join(dir, 'red.png'), {
+        attachmentId: image.attachment.attachmentId,
+        mediaType: 'image/png',
+        bytes: PNG_1X1.length,
+        width: 1,
+        height: 1,
+      }),
+    )
 
     // The committed object must read back verbatim through the store.
     const attachments = ctx.get('attachments')
@@ -253,13 +271,15 @@ describe('read_image happy path', () => {
     expect(image.attachment.bytes).toBe(72)
     expect(image.attachment.name).toBe('red.gif')
     expect(image.attachment.attachmentId).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(text(result)).toBe(formatImageReadOutput(join(dir, 'red.gif'), {
-      attachmentId: image.attachment.attachmentId,
-      mediaType: 'image/webp',
-      bytes: 72,
-      width: 1,
-      height: 1,
-    }))
+    expect(text(result)).toBe(
+      formatImageReadOutput(join(dir, 'red.gif'), {
+        attachmentId: image.attachment.attachmentId,
+        mediaType: 'image/webp',
+        bytes: 72,
+        width: 1,
+        height: 1,
+      }),
+    )
 
     const attachments = ctx.get('attachments')
     if (attachments === undefined) throw new Error('expected the attachment service')
@@ -271,7 +291,7 @@ describe('read_image happy path', () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup()
     const observed: string[] = []
-    ctx.on('fs/observed', target => void observed.push(target.displayPath))
+    ctx.on('fs/observed', (target) => void observed.push(target.displayPath))
     await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(observed).toEqual([join(dir, 'red.png')])
   })
@@ -296,13 +316,18 @@ describe('read_image happy path', () => {
       return { logs: [], value }
     }
 
-    const result = await call(ctx, RUN_CODE_NAME, {
-      code: 'return await tools.read_image({ file_path: "red.png" })',
-      description: 'Read the image through PTC mode',
-    }, agentOn('vision-model'))
+    const result = await call(
+      ctx,
+      RUN_CODE_NAME,
+      {
+        code: 'return await tools.read_image({ file_path: "red.png" })',
+        description: 'Read the image through PTC mode',
+      },
+      agentOn('vision-model'),
+    )
 
     expect(result.isError).toBe(false)
-    expect(result.content.every(block => block.type === 'text')).toBe(true)
+    expect(result.content.every((block) => block.type === 'text')).toBe(true)
     expect(result.additionalContexts).toHaveLength(1)
     const forwarded = result.additionalContexts?.[0]?.content
     expect(forwarded).toHaveLength(2)
@@ -457,9 +482,7 @@ describe('strict image-modality gate', () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({
       models: [],
-      resolvedModels: [
-        { provider: 'visual', id: 'hidden-vision', name: 'Hidden Vision', inputModalities: ['text', 'image'] },
-      ],
+      resolvedModels: [{ provider: 'visual', id: 'hidden-vision', name: 'Hidden Vision', inputModalities: ['text', 'image'] }],
     })
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('hidden-vision'))
     expect(result.isError).toBe(false)
@@ -514,7 +537,7 @@ describe('argument and service preconditions', () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ attachments: false })
     expect(ctx.tools.get('read_image')).toBeUndefined()
-    expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('read_image')
+    expect(ctx.tools.schemas().map((schema) => schema.name)).not.toContain('read_image')
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('unknown tool "read_image"')
@@ -568,7 +591,9 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'wrong.jpg' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('the .jpg extension declares image/jpeg')
-    expect(text(result)).toContain('rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats')
+    expect(text(result)).toContain(
+      'rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats',
+    )
   })
 
   it('caps an extension-less read at maxImageBytes before format detection', async () => {
@@ -648,10 +673,15 @@ describe('image admission failures', () => {
       `cannot read "${join(dir, 'red.png')}": the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry`,
     )
 
-    FailingStore.failure = new AttachmentError('Image cannot be encoded within the configured normalized-image byte cap.', 'IMAGE_TOO_LARGE')
+    FailingStore.failure = new AttachmentError(
+      'Image cannot be encoded within the configured normalized-image byte cap.',
+      'IMAGE_TOO_LARGE',
+    )
     const overBudget = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(overBudget.isError).toBe(true)
-    expect(text(overBudget)).toContain('cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy')
+    expect(text(overBudget)).toContain(
+      "cannot be stored within the deployment's byte limits; downscale the image and read the smaller copy",
+    )
 
     FailingStore.failure = new Error('unrelated infrastructure failure')
     const unrelated = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
@@ -743,15 +773,23 @@ describe('image admission failures', () => {
     await ctx.plugin(DownscalingStore)
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(false)
-    expect(text(result)).toContain('image/png image, 2x1 px, 7 bytes (downscaled from 4x2 px; multiply coordinates by 2.00 to locate features in the original file)')
+    expect(text(result)).toContain(
+      'image/png image, 2x1 px, 7 bytes (downscaled from 4x2 px; multiply coordinates by 2.00 to locate features in the original file)',
+    )
   })
 
   it('names per-axis multipliers when integer rounding makes the ratios differ', () => {
     const envelope = formatImageReadOutput('/img/photo.jpg', {
-      attachmentId: 'sha256:feed', mediaType: 'image/jpeg', bytes: 9, width: 2, height: 1,
+      attachmentId: 'sha256:feed',
+      mediaType: 'image/jpeg',
+      bytes: 9,
+      width: 2,
+      height: 1,
       originalDimensions: { width: 5, height: 2 },
     })
-    expect(envelope).toContain('downscaled from 5x2 px; multiply x coordinates by 2.50 and y coordinates by 2.00 to locate features in the original file')
+    expect(envelope).toContain(
+      'downscaled from 5x2 px; multiply x coordinates by 2.50 and y coordinates by 2.00 to locate features in the original file',
+    )
   })
 })
 
@@ -764,7 +802,11 @@ describe('registration surface', () => {
     await ctx.plugin(FsPolicy)
     const attachmentsFiber = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
     const toolFsFiber = await ctx.plugin(ToolFs)
-    const names = () => ctx.tools.schemas().map(schema => schema.name).sort()
+    const names = () =>
+      ctx.tools
+        .schemas()
+        .map((schema) => schema.name)
+        .sort()
     expect(names()).toEqual(['edit', 'read', 'read_image', 'write'])
 
     // Disposing only the attachment store tears down the scoped inject fiber:
@@ -784,9 +826,14 @@ describe('registration surface', () => {
 
   it('declares read_image parallel-safe and presents a read-family card', async () => {
     const ctx = await setup()
-    expect(ctx.tools.executionMode({
-      signal: testToolSignal, callId: ToolCallId('img-parallel'), name: 'read_image', arguments: { file_path: 'a.png' },
-    })).toEqual({ kind: 'parallel' })
+    expect(
+      ctx.tools.executionMode({
+        signal: testToolSignal,
+        callId: ToolCallId('img-parallel'),
+        name: 'read_image',
+        arguments: { file_path: 'a.png' },
+      }),
+    ).toEqual({ kind: 'parallel' })
     expect(ctx.tools.get('read_image')?.presentCall?.({ file_path: 'shot.png' })).toEqual({
       card: 'generic',
       title: 'Read image shot.png',
@@ -841,7 +888,7 @@ describe('image result presentation', () => {
     const result = await call(ctx, 'read_image', { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(false)
     expect(result.meta).toEqual({ path: join(dir, 'red.png') })
-    const image = result.content.find(block => block.type === 'image')
+    const image = result.content.find((block) => block.type === 'image')
     expect(image?.attachment.width).toBe(1)
     expect(image?.attachment.height).toBe(1)
     expect(image?.attachment.attachmentId).toMatch(/^sha256:/u)

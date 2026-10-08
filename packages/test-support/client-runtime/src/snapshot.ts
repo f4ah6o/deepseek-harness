@@ -10,8 +10,8 @@
  *   element: path geometry is print noise, but the fingerprint still flips
  *   when an icon's artwork actually changes.
  */
-import { expect } from 'vitest'
-import type { SnapshotSerializer } from 'vitest'
+import { expect } from 'vite-plus/test'
+import type { SnapshotSerializer } from 'vite-plus/test'
 
 /** One scoped class token: `_<local>_<hash>` (local may itself contain underscores). */
 const SCOPED_CLASS = /^_(.+)_[a-z0-9]+$/
@@ -20,8 +20,8 @@ const SCOPED_CLASS = /^_(.+)_[a-z0-9]+$/
 function normalizeClassValue(value: string): string {
   return value
     .split(/\s+/)
-    .filter(token => token !== '')
-    .map(token => token.replace(SCOPED_CLASS, '$1'))
+    .filter((token) => token !== '')
+    .map((token) => token.replace(SCOPED_CLASS, '$1'))
     .join(' ')
 }
 
@@ -46,9 +46,9 @@ function svgsOf(root: Element): Element[] {
 function needsNormalization(root: Element): boolean {
   const scoped = [root, ...root.querySelectorAll('[class]')].some((el) => {
     const value = el.getAttribute('class')
-    return value !== null && value.split(/\s+/).some(token => SCOPED_CLASS.test(token))
+    return value !== null && value.split(/\s+/).some((token) => SCOPED_CLASS.test(token))
   })
-  return scoped || svgsOf(root).some(svg => svg.childNodes.length > 0)
+  return scoped || svgsOf(root).some((svg) => svg.childNodes.length > 0)
 }
 
 /**

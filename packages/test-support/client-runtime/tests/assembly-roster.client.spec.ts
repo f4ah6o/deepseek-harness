@@ -1,6 +1,11 @@
 /** ClientRoster: construction, duplicate refusal, order-preserving pick/closure/without with loud unknown names; graphFromRoster. */
-import { createClientModuleSystem, parseBootManifest, type ClientBundleRegistration, type ClientModuleLoaderTarget } from '@deepseek-ai/dsh-client-modules/client'
-import { describe, expect, it } from 'vitest'
+import {
+  createClientModuleSystem,
+  parseBootManifest,
+  type ClientBundleRegistration,
+  type ClientModuleLoaderTarget,
+} from '@deepseek-ai/dsh-client-modules/client'
+import { describe, expect, it } from 'vite-plus/test'
 import { ClientRoster, graphFromRoster, type ClientRosterRow } from '../src/assembly/roster.ts'
 import { MODULES_PACKAGE } from '../src/assembly/modules.ts'
 
@@ -25,8 +30,8 @@ describe('graphFromRoster', () => {
 
   it('parses through the production validator to plugin rows that mirror the roster, refusing duplicates and an empty roster', () => {
     const manifest = parseBootManifest(graphFromRoster(ROWS))
-    expect(manifest.plugins).toEqual(ROWS.map(row => ({ id: row.name, inject: [...row.inject], immediately: row.immediately })))
-    expect(manifest.modules.map(row => row.initialUrl)).toEqual(['plugins/local.js', 'plugins/local.js', 'plugins/local.js'])
+    expect(manifest.plugins).toEqual(ROWS.map((row) => ({ id: row.name, inject: [...row.inject], immediately: row.immediately })))
+    expect(manifest.modules.map((row) => row.initialUrl)).toEqual(['plugins/local.js', 'plugins/local.js', 'plugins/local.js'])
     const row = ROWS[1]!
     expect(() => parseBootManifest(graphFromRoster([row, row]))).toThrow('duplicate graph entry "@x/a"')
     expect(() => parseBootManifest(graphFromRoster([]))).toThrow('must be a non-empty string array')
@@ -38,15 +43,19 @@ describe('graphFromRoster', () => {
     const target: ClientModuleLoaderTarget = {
       mode: 'queue',
       pendingQueue,
-      load: (registration) => { pendingQueue.push(registration) },
-      create: options => createClientModuleSystem(target, { id: MODULES_PACKAGE, exports: {} }, options),
+      load: (registration) => {
+        pendingQueue.push(registration)
+      },
+      create: (options) => createClientModuleSystem(target, { id: MODULES_PACKAGE, exports: {} }, options),
     }
     const a = { apply() {} }
     const b = { apply() {} }
     const modules = target.create({
       boot: graphFromRoster(ROWS),
       staticModules: { '@x/a': a, '@x/b': b },
-      loadBundle: async (url) => { loaded.push(url) },
+      loadBundle: async (url) => {
+        loaded.push(url)
+      },
     })
     await expect(modules.import('@x/a')).resolves.toBe(a)
     await expect(modules.import('@x/b')).resolves.toBe(b)
@@ -76,23 +85,23 @@ describe('ClientRoster', () => {
 
   it('pick keeps roster order regardless of the requested order', () => {
     const roster = ClientRoster.of([A, B, C])
-    expect(roster.pick(['c', 'a']).rows.map(row => row.name)).toEqual(['a', 'c'])
+    expect(roster.pick(['c', 'a']).rows.map((row) => row.name)).toEqual(['a', 'c'])
     expect(roster.pick([]).rows).toEqual([])
     expect(Object.isFrozen(roster.pick(['b']).rows)).toBe(true)
   })
 
   it('without drops the named rows', () => {
     const roster = ClientRoster.of([A, B, C])
-    expect(roster.without(['b']).rows.map(row => row.name)).toEqual(['a', 'c'])
+    expect(roster.without(['b']).rows.map((row) => row.name)).toEqual(['a', 'c'])
     expect(roster.without(['a', 'b', 'c']).rows).toEqual([])
   })
 
   it('closure keeps the named rows and everything they inject, transitively, in roster order', () => {
     const D = { name: 'd', inject: [], immediately: false }
     const roster = ClientRoster.of([A, D, B, C])
-    expect(roster.closure(['c']).rows.map(row => row.name)).toEqual(['a', 'b', 'c'])
-    expect(roster.closure(['b', 'd']).rows.map(row => row.name)).toEqual(['a', 'd', 'b'])
-    expect(roster.closure(['a']).rows.map(row => row.name)).toEqual(['a'])
+    expect(roster.closure(['c']).rows.map((row) => row.name)).toEqual(['a', 'b', 'c'])
+    expect(roster.closure(['b', 'd']).rows.map((row) => row.name)).toEqual(['a', 'd', 'b'])
+    expect(roster.closure(['a']).rows.map((row) => row.name)).toEqual(['a'])
     expect(roster.closure([]).rows).toEqual([])
     expect(Object.isFrozen(roster.closure(['c']).rows)).toBe(true)
   })
@@ -107,6 +116,10 @@ describe('ClientRoster', () => {
 
   it('closure treats the platform seed modules as satisfied without a row', () => {
     const seeded = { name: 'seeded', inject: ['@deepseek-ai/dsh-client-ui-primitives', 'react', 'a'], immediately: false }
-    expect(ClientRoster.of([A, seeded]).closure(['seeded']).rows.map(row => row.name)).toEqual(['a', 'seeded'])
+    expect(
+      ClientRoster.of([A, seeded])
+        .closure(['seeded'])
+        .rows.map((row) => row.name),
+    ).toEqual(['a', 'seeded'])
   })
 })

@@ -12,7 +12,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -21,7 +21,9 @@ import type { DirectoryPicker } from '@deepseek-ai/dsh-host-directory-picker'
 import BrowseDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-browse'
 import NativeDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-native'
 import {
-  createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot,
+  createLaunchEnvironmentSnapshot,
+  DSH_LAUNCH_ENVIRONMENT_KEY,
+  type LaunchEnvironmentSnapshot,
 } from '@deepseek-ai/dsh-launch-environment'
 import * as DirectoryPickerAuto from '../src/index.ts'
 
@@ -97,14 +99,12 @@ async function loadComposition(
 ): Promise<{ ctx: Context; configPath: string }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-directory-picker-auto-'))
   const configPath = join(root, 'cordis.yml')
-  await writeFile(configPath, [
-    "- name: '@deepseek-ai/dsh-host-webserver'",
-    '  config:',
-    `    host: '${bindHost}'`,
-    '    port: 0',
-    `- name: '${AUTO}'`,
-    '',
-  ].join('\n'))
+  await writeFile(
+    configPath,
+    ["- name: '@deepseek-ai/dsh-host-webserver'", '  config:', `    host: '${bindHost}'`, '    port: 0', `- name: '${AUTO}'`, ''].join(
+      '\n',
+    ),
+  )
 
   context = new Context()
   if (options.launchEnvironment !== undefined) context.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.launchEnvironment)
@@ -139,13 +139,12 @@ async function loadComposition(
 
 /** Entry names currently present in the loader store (root tree plus subtrees). */
 function entryNames(ctx: Context): string[] {
-  return [...ctx.loader.entries()].map(entry => entry.options.name)
+  return [...ctx.loader.entries()].map((entry) => entry.options.name)
 }
 
 /** The Include tree that backs the booted `cordis.yml` file. */
 function includeTree(ctx: Context): Include {
-  const include = [...ctx.loader.entries()]
-    .find(entry => entry.options.name === 'cordis:include')?.subtree as Include | undefined
+  const include = [...ctx.loader.entries()].find((entry) => entry.options.name === 'cordis:include')?.subtree as Include | undefined
   if (include === undefined) throw new Error('expected the root Include tree')
   return include
 }
@@ -188,8 +187,8 @@ describe('real Loader composition', () => {
     const { ctx, configPath } = await loadComposition('127.0.0.1')
 
     const unloaded = [...ctx.loader.entries()]
-      .filter(entry => entry.fiber === undefined && !entry.disabled)
-      .map(entry => entry.options.name)
+      .filter((entry) => entry.fiber === undefined && !entry.disabled)
+      .map((entry) => entry.options.name)
     expect(unloaded).toEqual([])
     expect(entryNames(ctx)).toContain(NATIVE)
     expect(entryNames(ctx)).toContain(NATIVE_SURFACE)
@@ -204,17 +203,21 @@ describe('real Loader composition', () => {
     // HMR safety: disposing the chooser's fiber removes the entry it created,
     // and the disposer joins the backend's teardown — the service is gone the
     // moment dispose() settles, with no further loader await.
-    const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
-    const backendEntry = [...ctx.loader.entries()].find(entry => entry.options.name === NATIVE)!
+    const autoEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === AUTO)!
+    const backendEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === NATIVE)!
     const cleanupStarted = Promise.withResolvers<undefined>()
     const releaseCleanup = Promise.withResolvers<undefined>()
-    onTestFinished(() => { releaseCleanup.resolve(undefined) })
+    onTestFinished(() => {
+      releaseCleanup.resolve(undefined)
+    })
     backendEntry.fiber!.ctx.effect(() => async () => {
       cleanupStarted.resolve(undefined)
       await releaseCleanup.promise
     })
     let disposed = false
-    const disposal = autoEntry.fiber!.dispose().then(() => { disposed = true })
+    const disposal = autoEntry.fiber!.dispose().then(() => {
+      disposed = true
+    })
     await cleanupStarted.promise
     await Promise.resolve()
     expect(disposed).toBe(false)
@@ -260,7 +263,7 @@ describe('real Loader composition', () => {
   it('unmounts the backend when the surface entry fails to load', { timeout: 60_000 }, async () => {
     stubAttendedHost()
     const { ctx } = await loadComposition('127.0.0.1', { failSurface: true })
-    const chooser = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
+    const chooser = [...ctx.loader.entries()].find((entry) => entry.options.name === AUTO)!
     await expect(chooser.fiber!.await()).rejects.toThrow(/directory-picker-auto: failed to load/)
 
     // Setup owns both entries until it returns its disposer, so a failed surface
@@ -274,9 +277,9 @@ describe('real Loader composition', () => {
     stubAttendedHost()
     const { ctx, configPath } = await loadComposition('127.0.0.1')
 
-    const backendEntry = [...ctx.loader.entries()].find(entry => entry.options.name === NATIVE)!
+    const backendEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === NATIVE)!
     ctx.loader.remove(backendEntry.id)
-    const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
+    const autoEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === AUTO)!
     renameControl.remainingFailures = 1
     await expect(autoEntry.fiber!.dispose()).resolves.not.toThrow()
     expect(entryNames(ctx)).not.toContain(NATIVE)
@@ -293,7 +296,7 @@ describe('real Loader composition', () => {
   it('reports a terminal debounced-write failure again to the teardown owner', { timeout: 60_000 }, async () => {
     stubAttendedHost()
     const { ctx } = await loadComposition('127.0.0.1')
-    const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
+    const autoEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === AUTO)!
     const include = includeTree(ctx)
     renameControl.failureCode = 'EIO'
     renameControl.remainingFailures = 1

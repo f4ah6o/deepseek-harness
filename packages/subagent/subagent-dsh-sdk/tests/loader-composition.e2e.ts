@@ -12,7 +12,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { type SessionEvent } from '@deepseek-ai/dsh-session'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 
@@ -25,25 +25,27 @@ const repoTsconfig = fileURLToPath(new URL('../../../../tsconfig.json', import.m
 
 async function jsonlFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
-  const paths = await Promise.all(entries.map(async (entry) => {
-    const path = join(dir, entry.name)
-    if (entry.isDirectory()) return jsonlFiles(path)
-    return entry.isFile() && entry.name.endsWith('.jsonl') ? [path] : []
-  }))
+  const paths = await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) return jsonlFiles(path)
+      return entry.isFile() && entry.name.endsWith('.jsonl') ? [path] : []
+    }),
+  )
   return paths.flat()
 }
 
 async function sessionEvents(log: string): Promise<SessionEvent[]> {
   const lines = (await readFile(log, 'utf8')).trimEnd().split('\n')
-  return lines.slice(1).map(line => JSON.parse(line) as SessionEvent)
+  return lines.slice(1).map((line) => JSON.parse(line) as SessionEvent)
 }
 
 function toolResultText(events: SessionEvent[]): string {
-  const results = events.filter(event => event.type === 'tool/result')
+  const results = events.filter((event) => event.type === 'tool/result')
   expect(results).toHaveLength(1)
   return results[0]!.data.message.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
     .join('')
 }
 
@@ -53,8 +55,10 @@ async function childLaunch(failure = false): Promise<{
 }> {
   const childHome = await mkdtemp(join(tmpdir(), 'dsh-sdk-subagent-home-'))
   const childPatch = join(childHome, 'child.patch.yml')
-  await writeFile(childPatch, (await readFile(childConfigPath, 'utf8'))
-    .replace("'./child-mock-llm.ts'", JSON.stringify(pathToFileURL(childMockPath).href)))
+  await writeFile(
+    childPatch,
+    (await readFile(childConfigPath, 'utf8')).replace("'./child-mock-llm.ts'", JSON.stringify(pathToFileURL(childMockPath).href)),
+  )
   return {
     childHome,
     env: {
@@ -98,7 +102,7 @@ describe('SDK subagent routing and diagnostics through the production profile', 
           // The child runtime persists under its explicit isolated home.
           const childSessions = join(child.childHome, 'sessions')
           if (!existsSync(childSessions)) {
-            const result = events.find(event => event.type === 'tool/result')
+            const result = events.find((event) => event.type === 'tool/result')
             throw new Error(`SDK child persisted no session; parent tool result: ${JSON.stringify(result?.data)}`)
           }
           const childLogs = await jsonlFiles(childSessions)
@@ -112,17 +116,17 @@ describe('SDK subagent routing and diagnostics through the production profile', 
       // The parent's tool result carries the child model's echo of its real
       // process.cwd() — the parent session's workspace, never the harness
       // process's launch directory.
-      const results = events.filter(event => event.type === 'tool/result')
+      const results = events.filter((event) => event.type === 'tool/result')
       expect(results).toHaveLength(1)
       const resultText = results[0]!.data.message.content
-        .filter(block => block.type === 'text')
-        .map(block => block.text)
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
         .join('')
       expect(resultText).toBe(`child route: mock/mock-routed/max/777; cwd: ${workspace}`)
       expect(parentResolvedRoutes).toContain('mock/mock-routed')
 
       // The child ran a real turn with the model-selected route and tool-configured cap.
-      expect(childEvents.some(event => event.type === 'user/message')).toBe(true)
+      expect(childEvents.some((event) => event.type === 'user/message')).toBe(true)
       const childHeader = childEvents.find(
         (event): event is Extract<SessionEvent, { type: 'request/header' }> => event.type === 'request/header',
       )
@@ -132,7 +136,7 @@ describe('SDK subagent routing and diagnostics through the production profile', 
         reasoningEffort: 'max',
         maxTokens: 777,
       })
-      const childAnswers = childEvents.filter(event => event.type === 'assistant/message')
+      const childAnswers = childEvents.filter((event) => event.type === 'assistant/message')
       expect(childAnswers.length).toBeGreaterThan(0)
     } finally {
       await rm(child.childHome, { recursive: true, force: true })
@@ -162,9 +166,9 @@ describe('SDK subagent routing and diagnostics through the production profile', 
       })
       expect(stderr).not.toContain('UNHANDLED')
       expect(toolResultText(events)).toBe(
-        'Error: subagent run failed\n'
-        + 'Diagnostic: Subagent failure (provider: DSH SDK; stage: session-run; category: child-error)\n'
-        + 'Partial output before the run ended:\npartial child loader answer',
+        'Error: subagent run failed\n' +
+          'Diagnostic: Subagent failure (provider: DSH SDK; stage: session-run; category: child-error)\n' +
+          'Partial output before the run ended:\npartial child loader answer',
       )
     } finally {
       await rm(child.childHome, { recursive: true, force: true })

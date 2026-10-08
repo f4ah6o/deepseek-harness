@@ -1,13 +1,21 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { ClientRequest } from 'electron'
 import { DesktopUpdateHttpExecutor } from '../src/update-http-executor.ts'
 
-beforeEach(() => { vi.useFakeTimers() })
-afterEach(() => { vi.useRealTimers() })
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function fixture() {
-  const request = Object.assign(new EventEmitter(), { abort: vi.fn(() => { request.emit('abort') }) })
+  const request = Object.assign(new EventEmitter(), {
+    abort: vi.fn(() => {
+      request.emit('abort')
+    }),
+  })
   const reject = vi.fn()
   new DesktopUpdateHttpExecutor(1000).addErrorAndTimeoutHandlers(request as unknown as ClientRequest, reject)
   return { request, reject }

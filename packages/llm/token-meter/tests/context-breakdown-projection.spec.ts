@@ -1,7 +1,7 @@
 // contextBreakdown projection: heuristic system/tools/message composition,
 // plus the shared estimator's pricing branches.
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -13,31 +13,28 @@ import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { ContextBreakdownProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import { contextBreakdownProjectionDefinition } from '../src/breakdown-projection.ts'
-import {
-  estimateContent,
-  estimateMessage,
-  estimateSystemMessage,
-  estimateToolsTokens,
-} from '../src/estimate.ts'
+import { estimateContent, estimateMessage, estimateSystemMessage, estimateToolsTokens } from '../src/estimate.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'test': { kind: 'test' } & ContextFormed
+    test: { kind: 'test' } & ContextFormed
   }
 }
 
 const contexts: Context[] = []
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 const CONFIG = { provider: 'test', model: 'test-model' }
 
-const TOOLS: ToolSchema[] = [{
-  name: 'bash',
-  description: 'run a command',
-  parameters: { type: 'object', properties: {} },
-}]
+const TOOLS: ToolSchema[] = [
+  {
+    name: 'bash',
+    description: 'run a command',
+    parameters: { type: 'object', properties: {} },
+  },
+]
 
 const SYSTEM_SOURCE = { kind: 'system-prompt' } as const
 
@@ -57,28 +54,40 @@ const projected = (ctx: Context, session: Session): ContextBreakdownProjection =
 }
 
 function appendUser(session: Session, text: string): SessionSeqType {
-  return session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text }],
-    source: { kind: 'user' },
-  }), { surfaceOp: 'append' }).seq
+  return session.append(
+    'user/message',
+    createUserMessage({
+      content: [{ type: 'text', text }],
+      source: { kind: 'user' },
+    }),
+    { surfaceOp: 'append' },
+  ).seq
 }
 
 /** Append the rendered system prompt as surface node 0, the way the loop does before the first user message. */
 function appendSystem(session: Session, text: string): SessionSeqType {
-  return session.append('system/message', {
-    turn: 1,
-    step: 1,
-    message: createSystemMessage(text),
-  }, { surfaceOp: 'append' }).seq
+  return session.append(
+    'system/message',
+    {
+      turn: 1,
+      step: 1,
+      message: createSystemMessage(text),
+    },
+    { surfaceOp: 'append' },
+  ).seq
 }
 
 /** Replace the system node in place, the way the loop does when the rendered prompt changes. */
 function replaceSystem(session: Session, node: SessionSeqType, text: string): SessionSeqType {
-  return session.append('system/message', {
-    turn: 1,
-    step: 1,
-    message: createSystemMessage(text),
-  }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] }).seq
+  return session.append(
+    'system/message',
+    {
+      turn: 1,
+      step: 1,
+      message: createSystemMessage(text),
+    },
+    { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] },
+  ).seq
 }
 
 /**
@@ -88,14 +97,14 @@ function replaceSystem(session: Session, node: SessionSeqType, text: string): Se
  */
 function appendSummaryMeter(ctx: Context, session: Session, start: SessionSeqType, end: SessionSeqType): void {
   const nodes = ctx.tokenMeter.measure(session).nodes
-  const startIdx = nodes.findIndex(node => node.seq === start)
-  const endIdx = nodes.findIndex(node => node.seq === end)
+  const startIdx = nodes.findIndex((node) => node.seq === start)
+  const endIdx = nodes.findIndex((node) => node.seq === end)
   const shadowed = nodes.slice(startIdx, endIdx + 1)
   session.append('compaction/summary', {
     compactionId: CompactionId('context-breakdown-summary'),
     summary: [{ type: 'text', text: 'summary' }],
     shadowedRange: { start, end },
-    shadowedSeqs: shadowed.map(node => node.seq),
+    shadowedSeqs: shadowed.map((node) => node.seq),
     shadowedTokenCount: shadowed.reduce((total, node) => total + node.tokens, 0),
     provider: 'mock',
     model: 'mock',
@@ -124,7 +133,9 @@ describe('contextBreakdown session projection', () => {
     })
 
     const changed: string[] = []
-    ctx.sessionProjections.onChanged((_session, key) => { changed.push(key) })
+    ctx.sessionProjections.onChanged((_session, key) => {
+      changed.push(key)
+    })
     session.append('request/header', {
       header: { config: CONFIG, tools: TOOLS },
       reason: 'change',
@@ -207,25 +218,30 @@ describe('contextBreakdown session projection', () => {
       sourceEventSeqs: [question, newest],
     })
     expect(projected(ctx, session)).toEqual({ systemTokens: 5, toolsTokens: 0, messageTokens: estimateMessage(summary) })
-    expect(projected(ctx, session).systemTokens + projected(ctx, session).messageTokens)
-      .toBe(ctx.tokenMeter.measure(session).nodes.reduce((sum, node) => sum + node.heuristicTokens, 0))
+    expect(projected(ctx, session).systemTokens + projected(ctx, session).messageTokens).toBe(
+      ctx.tokenMeter.measure(session).nodes.reduce((sum, node) => sum + node.heuristicTokens, 0),
+    )
   })
 
   it('sums surface appends and skips an empty-content assistant message', async () => {
     const { ctx, session } = await harness()
     appendUser(session, 'abcd')
     session.append('step/start', { turn: 1, step: 1 })
-    session.append('assistant/message', {
-      stream: [],
-      turn: 1,
-      step: 1,
-      message: createMessage({
-        role: 'assistant',
-        content: [],
-        source: { kind: 'model', provider: 'mock', model: 'mock' },
-      }),
-      usage: { inputTokens: 9, outputTokens: 0 },
-    }, { surfaceOp: 'append' })
+    session.append(
+      'assistant/message',
+      {
+        stream: [],
+        turn: 1,
+        step: 1,
+        message: createMessage({
+          role: 'assistant',
+          content: [],
+          source: { kind: 'model', provider: 'mock', model: 'mock' },
+        }),
+        usage: { inputTokens: 9, outputTokens: 0 },
+      },
+      { surfaceOp: 'append' },
+    )
     session.append('step/end', { turn: 1, step: 1 })
     // 'abcd' prices to 9 (1 text + 4 block + 4 role); the usage-only assistant
     // message derives to no transcript entry and adds nothing.
@@ -266,17 +282,21 @@ describe('contextBreakdown session projection', () => {
 
     const question = appendUser(session, 'a first question, long enough to price above zero')
     session.append('step/start', { turn: 1, step: 1 })
-    const answer = session.append('assistant/message', {
-      stream: [],
-      turn: 1,
-      step: 1,
-      message: createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'a considered answer' }],
-        source: { kind: 'model', provider: 'mock', model: 'mock' },
-      }),
-      usage: { inputTokens: 40, outputTokens: 7 },
-    }, { surfaceOp: 'append' }).seq
+    const answer = session.append(
+      'assistant/message',
+      {
+        stream: [],
+        turn: 1,
+        step: 1,
+        message: createMessage({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'a considered answer' }],
+          source: { kind: 'model', provider: 'mock', model: 'mock' },
+        }),
+        usage: { inputTokens: 40, outputTokens: 7 },
+      },
+      { surfaceOp: 'append' },
+    ).seq
     session.append('step/end', { turn: 1, step: 1 })
     const grown = agree()
     expect(grown).toBeGreaterThan(0)
@@ -284,13 +304,17 @@ describe('contextBreakdown session projection', () => {
     appendSummaryMeter(ctx, session, question, answer)
     // The armed shadow price must not move the published figure by itself.
     expect(agree()).toBe(grown)
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'test' },
-    }), {
-      surfaceOp: { op: 'replace', startSeq: question, endSeq: answer },
-      sourceEventSeqs: [question, answer],
-    })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'summary' }],
+        source: { kind: 'test' },
+      }),
+      {
+        surfaceOp: { op: 'replace', startSeq: question, endSeq: answer },
+        sourceEventSeqs: [question, answer],
+      },
+    )
     expect(agree()).toBeLessThan(grown)
   })
 
@@ -301,9 +325,14 @@ describe('contextBreakdown session projection', () => {
     const definition = contextBreakdownProjectionDefinition
     const state = session.snapshotEvents().reduce(definition.apply, definition.init())
     const before = JSON.stringify(state)
-    const replacement = session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }], source: { kind: 'user' },
-    }), { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: [first, last] })
+    const replacement = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'summary' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: [first, last] },
+    )
     expect(definition.wire.view(definition.apply(state, replacement)).messageTokens).toBe(10)
     expect(JSON.stringify(state)).toBe(before)
     const invalid = { ...replacement, surfaceOp: { op: 'replace', startSeq: SessionSeq(999), endSeq: last } } as SessionEvent
@@ -322,22 +351,38 @@ describe('contextBreakdown session projection', () => {
       const view = projected(ctx, session)
       expect(view.systemTokens).toBe(estimateSystemMessage(createSystemMessage(text)))
       expect(view.messageTokens).toBeGreaterThanOrEqual(0)
-      expect(view.systemTokens + view.messageTokens)
-        .toBe(ctx.tokenMeter.measure(session).nodes.reduce((total, node) => total + node.heuristicTokens, 0))
+      expect(view.systemTokens + view.messageTokens).toBe(
+        ctx.tokenMeter.measure(session).nodes.reduce((total, node) => total + node.heuristicTokens, 0),
+      )
     }
     agree('last prompt in surface order')
-    question = session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'rewritten question' }], source: { kind: 'user' },
-    }), { surfaceOp: { op: 'replace', startSeq: question, endSeq: question }, sourceEventSeqs: [question] }).seq
+    question = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'rewritten question' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: question, endSeq: question }, sourceEventSeqs: [question] },
+    ).seq
     expect(question).toBeGreaterThan(middle)
     // Source-event references can cite a surviving prompt outside the replaced span.
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'middle summary' }], source: { kind: 'user' },
-    }), { surfaceOp: { op: 'replace', startSeq: question, endSeq: middle }, sourceEventSeqs: [question, middle, tail] })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'middle summary' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: question, endSeq: middle }, sourceEventSeqs: [question, middle, tail] },
+    )
     agree('last prompt in surface order')
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'tail summary' }], source: { kind: 'user' },
-    }), { surfaceOp: { op: 'replace', startSeq: tail, endSeq: tail }, sourceEventSeqs: [tail, head] })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'tail summary' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: tail, endSeq: tail }, sourceEventSeqs: [tail, head] },
+    )
     agree('head rewritten at a newer event seq')
     const repeated = appendSystem(session, 'head rewritten at a newer event seq')
     agree('head rewritten at a newer event seq')
@@ -378,9 +423,14 @@ describe('contextBreakdown session projection', () => {
     expect(state().nodes).toHaveLength(26)
     expect(Object.keys(state().nodes[0]!).sort()).toEqual(['heuristicTokens', 'seq', 'system'])
     const shadowed = [...session.surface.nodes]
-    session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }], source: { kind: 'test' },
-    }), { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: shadowed })
+    session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'summary' }],
+        source: { kind: 'test' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: shadowed },
+    )
     expect(state().nodes).toHaveLength(1)
     expect(projected(ctx, session).messageTokens).toBe(10)
   })
@@ -408,27 +458,40 @@ describe('contextBreakdown session projection', () => {
     const last = appendSystem(session, 'x'.repeat(4000))
     await ctx.plugin(TokenMeter)
     expect(projected(ctx, session)).toMatchObject({ systemTokens: 1004, messageTokens: 15 })
-    const checkpoint = JSON.parse(JSON.stringify(
-      ctx.sessionProjections.checkpoint(session),
-    )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
+    const checkpoint = JSON.parse(JSON.stringify(ctx.sessionProjections.checkpoint(session))) as ReturnType<
+      typeof ctx.sessionProjections.checkpoint
+    >
     const row = checkpoint['contextBreakdown']!
     expect(row.ver).toBe(5)
     expect(ctx.sessionProjections.viewCheckpoint(checkpoint).contextBreakdown).toEqual(projected(ctx, session))
-    const replacement = session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'summary' }], source: { kind: 'user' },
-    }), { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: [first, last] })
+    const replacement = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'summary' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: { op: 'replace', startSeq: first, endSeq: last }, sourceEventSeqs: [first, last] },
+    )
     const restored = ctx.sessionProjections.restore(
-      checkpoint, [replacement], SessionLogOffset(replacement.seq), session.header, session.inheritedEventCount,
+      checkpoint,
+      [replacement],
+      SessionLogOffset(replacement.seq),
+      session.header,
+      session.inheritedEventCount,
     )
     expect(restored.snapshot.values.contextBreakdown).toEqual({ systemTokens: 5, toolsTokens: 0, messageTokens: 10 })
     const stale = { ...checkpoint, contextBreakdown: { ...row, ver: 2, val: { systemTokens: 1004, toolsTokens: 0, messageTokens: -989 } } }
     expect(ctx.sessionProjections.viewCheckpoint(stale).contextBreakdown).toBeUndefined()
     expect(ctx.sessionProjections.restoreFloor(stale)).toBe(0)
-    expect(() => ctx.sessionProjections.restore(
-      stale, [replacement], SessionLogOffset(replacement.seq), session.header, session.inheritedEventCount,
-    )).toThrow('re-read from seq 0')
+    expect(() =>
+      ctx.sessionProjections.restore(stale, [replacement], SessionLogOffset(replacement.seq), session.header, session.inheritedEventCount),
+    ).toThrow('re-read from seq 0')
     const replayed = ctx.sessionProjections.restore(
-      stale, session.snapshotEvents(), SessionLogOffset(0), session.header, session.inheritedEventCount,
+      stale,
+      session.snapshotEvents(),
+      SessionLogOffset(0),
+      session.header,
+      session.inheritedEventCount,
     )
     expect(replayed.snapshot.values.contextBreakdown).toEqual(projected(ctx, session))
     expect(replayed.checkpoint['contextBreakdown']?.ver).toBe(5)
@@ -439,9 +502,9 @@ describe('contextBreakdown session projection', () => {
         val: { nodes: [{ seq: 0, heuristicTokens: -1, system: true }], breakdown: { systemTokens: 0, toolsTokens: 0, messageTokens: 0 } },
       },
     }
-    expect(() => ctx.sessionProjections.restore(
-      invalid, session.snapshotEvents(), SessionLogOffset(0), session.header, session.inheritedEventCount,
-    )).toThrow()
+    expect(() =>
+      ctx.sessionProjections.restore(invalid, session.snapshotEvents(), SessionLogOffset(0), session.header, session.inheritedEventCount),
+    ).toThrow()
   })
 
   it('discards lower-layer version-3 scalar caches and refolds the full surface', async () => {
@@ -459,10 +522,16 @@ describe('contextBreakdown session projection', () => {
       expect.soft(ctx.sessionProjections.viewCheckpoint(checkpoint)).not.toHaveProperty('contextBreakdown')
       expect.soft(ctx.sessionProjections.restoreFloor(checkpoint)).toBe(0)
       const restored = ctx.sessionProjections.restore(
-        checkpoint, session.snapshotEvents(), SessionLogOffset(0), session.header, session.inheritedEventCount,
+        checkpoint,
+        session.snapshotEvents(),
+        SessionLogOffset(0),
+        session.header,
+        session.inheritedEventCount,
       )
       expect(restored.snapshot.values.contextBreakdown).toEqual({
-        systemTokens: 8, toolsTokens: staleValue.toolsTokens, messageTokens: 9,
+        systemTokens: 8,
+        toolsTokens: staleValue.toolsTokens,
+        messageTokens: 9,
       })
       expect(restored.checkpoint).toEqual(current)
       expect(restored.checkpoint['contextBreakdown']?.ver).toBe(5)
@@ -480,9 +549,9 @@ describe('contextBreakdown session projection', () => {
     const session = ctx.sessions.create()
     appendSystem(session, 'You are terse.')
     appendUser(session, 'abcd')
-    const checkpoint = JSON.parse(JSON.stringify(
-      ctx.sessionProjections.checkpoint(session),
-    )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
+    const checkpoint = JSON.parse(JSON.stringify(ctx.sessionProjections.checkpoint(session))) as ReturnType<
+      typeof ctx.sessionProjections.checkpoint
+    >
 
     await meterFiber.dispose()
     expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('contextBreakdown')
@@ -513,17 +582,20 @@ describe('shared estimator', () => {
     expect(estimateMessage(createSystemMessage('abcdefgh'))).toBe(6)
     // A non-text block in a system message keeps a conservative JSON price.
     const image = { type: 'image', attachment: { attachmentId: 'a' } } as unknown as ContentBlock
-    expect(estimateSystemMessage(createMessage({
-      role: 'system',
-      content: [{ type: 'text', text: 'abcd' }, image],
-      source: SYSTEM_SOURCE,
-    }))).toBe(Math.ceil((4 + JSON.stringify(image).length) / 4) + 4)
+    expect(
+      estimateSystemMessage(
+        createMessage({
+          role: 'system',
+          content: [{ type: 'text', text: 'abcd' }, image],
+          source: SYSTEM_SOURCE,
+        }),
+      ),
+    ).toBe(Math.ceil((4 + JSON.stringify(image).length) / 4) + 4)
   })
 
   it('prices the envelope tool schemas and absent tools to zero', () => {
     expect(estimateToolsTokens(undefined)).toBe(0)
     expect(estimateToolsTokens({ config: CONFIG, tools: [] })).toBe(0)
-    expect(estimateToolsTokens({ config: CONFIG, tools: TOOLS }))
-      .toBe(Math.ceil(JSON.stringify(TOOLS).length / 4) + 4)
+    expect(estimateToolsTokens({ config: CONFIG, tools: TOOLS })).toBe(Math.ceil(JSON.stringify(TOOLS).length / 4) + 4)
   })
 })

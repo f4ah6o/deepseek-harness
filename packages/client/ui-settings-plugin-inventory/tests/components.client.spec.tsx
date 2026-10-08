@@ -6,12 +6,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
-import type {
-  PluginInventorySettingsTabInjected,
-  PluginInventorySettingsTabProps,
-} from '../src/client/PluginInventorySettingsTab.tsx'
+import type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from '../src/client/PluginInventorySettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -25,8 +22,8 @@ const t = ((key: PluginInventoryLocaleKey, params?: Record<string, string>): str
 
 function props(
   list: PluginInventorySettingsTabInjected['list'],
-  presetName: PluginInventorySettingsTabInjected['presetName'] = preset => preset.name ?? preset.id,
-  resolveText: PluginInventorySettingsTabInjected['resolveText'] = text => typeof text === 'string' ? text : text.en,
+  presetName: PluginInventorySettingsTabInjected['presetName'] = (preset) => preset.name ?? preset.id,
+  resolveText: PluginInventorySettingsTabInjected['resolveText'] = (text) => (typeof text === 'string' ? text : text.en),
 ): PluginInventorySettingsTabProps {
   return {
     t,
@@ -40,13 +37,19 @@ function props(
 
 function localizedProps(list: PluginInventorySettingsTabInjected['list']) {
   const ctx = new Context()
-  onTestFinished(async () => { await ctx.fiber.dispose() })
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+  })
   const locale = new LocaleRuntime(ctx)
   ctx.effect(() => locale.register('settings.pluginInventory', 'en', en), 'test: English inventory dictionary')
   ctx.effect(() => locale.register('settings.pluginInventory', 'zh', zh), 'test: Chinese inventory dictionary')
   locale.setLocale('en')
   const pageProps: PluginInventorySettingsTabProps = {
-    ...props(list, preset => preset.name ?? preset.id, text => locale.resolveText(text)),
+    ...props(
+      list,
+      (preset) => preset.name ?? preset.id,
+      (text) => locale.resolveText(text),
+    ),
     t: locale.bind('settings.pluginInventory'),
   }
   return { locale, pageProps }
@@ -75,7 +78,7 @@ const SNAPSHOT = {
           entryId: 'pwsh',
           moduleName: '@fixture/pwsh',
           enabled: 'conditional',
-          condition: 'process.platform === \'win32\'',
+          condition: "process.platform === 'win32'",
           fiberPhase: null,
         },
         { entryId: 'codex', moduleName: '@fixture/codex', enabled: false, fiberPhase: null },
@@ -102,8 +105,7 @@ async function renderReady(snapshot: Snapshot = SNAPSHOT): Promise<ReturnType<ty
   return view
 }
 
-const globalToggle = (): HTMLElement =>
-  screen.getByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })
+const globalToggle = (): HTMLElement => screen.getByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })
 const presetToggle = (): HTMLElement => screen.getByRole('button', { name: en.presetTitle })
 
 describe('PluginInventorySettingsTab', () => {
@@ -117,16 +119,17 @@ describe('PluginInventorySettingsTab', () => {
       ['@acme/dsh-sidebar/navigation', 'sidebar/navigation'],
       ['plain-plugin', 'plain-plugin'],
     ] as const
-    const rows = names.flatMap(([moduleName], index) => [false, true].map(fromManifest => ({
-      entryId: `include:short-${String(index)}-${String(fromManifest)}` as PluginEntryId,
-      moduleName,
-      enabled: true,
-      fiberPhase: null,
-      ...fromManifest ? { meta: { title: moduleName, description: 'Package description.' } } : {},
-    })))
-    const snapshot: Snapshot = scope === 'global'
-      ? { entries: rows }
-      : { entries: [], agentPresets: [{ id: 'custom', isDefault: true, rows }] }
+    const rows = names.flatMap(([moduleName], index) =>
+      [false, true].map((fromManifest) => ({
+        entryId: `include:short-${String(index)}-${String(fromManifest)}` as PluginEntryId,
+        moduleName,
+        enabled: true,
+        fiberPhase: null,
+        ...(fromManifest ? { meta: { title: moduleName, description: 'Package description.' } } : {}),
+      })),
+    )
+    const snapshot: Snapshot =
+      scope === 'global' ? { entries: rows } : { entries: [], agentPresets: [{ id: 'custom', isDefault: true, rows }] }
     const view = await renderReady(snapshot)
     if (scope === 'global') fireEvent.click(globalToggle())
     for (const [index, [moduleName, title]] of names.entries()) {
@@ -151,10 +154,15 @@ describe('PluginInventorySettingsTab', () => {
 
   it('keeps authored locale titles verbatim when they resemble module names', async () => {
     const { locale, pageProps } = localizedProps(async () => ({
-      entries: [{
-        entryId: 'include:navigation' as PluginEntryId, moduleName: '@acme/dsh-navigation', enabled: true, fiberPhase: null,
-        meta: { title: { en: 'dsh-Navigation', zh: 'dsh-导航' } },
-      }],
+      entries: [
+        {
+          entryId: 'include:navigation' as PluginEntryId,
+          moduleName: '@acme/dsh-navigation',
+          enabled: true,
+          fiberPhase: null,
+          meta: { title: { en: 'dsh-Navigation', zh: 'dsh-导航' } },
+        },
+      ],
     }))
     const view = render(<PluginInventorySettingsTab {...pageProps} />)
     await screen.findByRole('searchbox', { name: en.search })
@@ -169,25 +177,39 @@ describe('PluginInventorySettingsTab', () => {
     const globalError = 'locale/zh.json: invalid title'
     const presetError = 'locale/fr.json: invalid description'
     const snapshot: Snapshot = {
-      entries: [{
-        entryId: 'include:global-navigation' as PluginEntryId, moduleName: '@acme/navigation', enabled: true, fiberPhase: 'active',
-        meta: {
-          title: { en: 'Navigation', zh: '导航' },
-          description: { en: 'Global navigation controls', zh: '全局导航控件' },
-          error: globalError,
-        },
-      }],
-      agentPresets: [{
-        id: 'custom', name: 'My preset', isDefault: true,
-        rows: [{
-          entryId: 'include:preset-runner', moduleName: '@acme/runner', enabled: true, fiberPhase: null,
+      entries: [
+        {
+          entryId: 'include:global-navigation' as PluginEntryId,
+          moduleName: '@acme/navigation',
+          enabled: true,
+          fiberPhase: 'active',
           meta: {
-            title: { en: 'Session runner', zh: '会话执行器' },
-            description: { en: 'Run per session', zh: '运行会话命令' },
-            error: presetError,
+            title: { en: 'Navigation', zh: '导航' },
+            description: { en: 'Global navigation controls', zh: '全局导航控件' },
+            error: globalError,
           },
-        }],
-      }],
+        },
+      ],
+      agentPresets: [
+        {
+          id: 'custom',
+          name: 'My preset',
+          isDefault: true,
+          rows: [
+            {
+              entryId: 'include:preset-runner',
+              moduleName: '@acme/runner',
+              enabled: true,
+              fiberPhase: null,
+              meta: {
+                title: { en: 'Session runner', zh: '会话执行器' },
+                description: { en: 'Run per session', zh: '运行会话命令' },
+                error: presetError,
+              },
+            },
+          ],
+        },
+      ],
     }
     const list = vi.fn(async () => snapshot)
     const { locale, pageProps } = localizedProps(list)
@@ -236,21 +258,29 @@ describe('PluginInventorySettingsTab', () => {
   it.each(['global', 'preset'])('resolves each %s row field independently and hides empty English descriptions', async (scope) => {
     const rows: Snapshot['entries'] = [
       {
-        entryId: 'include:navigation' as PluginEntryId, moduleName: '@acme/dsh-sidebar/navigation', enabled: true, fiberPhase: null,
+        entryId: 'include:navigation' as PluginEntryId,
+        moduleName: '@acme/dsh-sidebar/navigation',
+        enabled: true,
+        fiberPhase: null,
         meta: { description: { en: 'Navigation description.' } },
       },
       {
-        entryId: 'include:commands' as PluginEntryId, moduleName: '@acme/dsh-sidebar/commands', enabled: true, fiberPhase: null,
+        entryId: 'include:commands' as PluginEntryId,
+        moduleName: '@acme/dsh-sidebar/commands',
+        enabled: true,
+        fiberPhase: null,
         meta: { title: { en: 'English title' }, description: { en: 'Package description.', zh: '中文命令说明。' } },
       },
       {
-        entryId: 'include:theme' as PluginEntryId, moduleName: '@acme/dsh-theme/client', enabled: true, fiberPhase: null,
+        entryId: 'include:theme' as PluginEntryId,
+        moduleName: '@acme/dsh-theme/client',
+        enabled: true,
+        fiberPhase: null,
         meta: { title: { en: '@acme/dsh-theme', zh: '主题插件' }, description: { en: '', zh: '中文主题说明。' } },
       },
     ]
-    const snapshot: Snapshot = scope === 'global'
-      ? { entries: rows }
-      : { entries: [], agentPresets: [{ id: 'custom', isDefault: true, rows }] }
+    const snapshot: Snapshot =
+      scope === 'global' ? { entries: rows } : { entries: [], agentPresets: [{ id: 'custom', isDefault: true, rows }] }
     const list = vi.fn(async () => snapshot)
     const { locale, pageProps } = localizedProps(list)
     const view = render(<PluginInventorySettingsTab {...pageProps} />)
@@ -294,10 +324,15 @@ describe('PluginInventorySettingsTab', () => {
   it('keeps metadata-error-only rows inspectable by their full module specifier', async () => {
     const error = 'locale/zh.json: invalid title'
     await renderReady({
-      entries: [{
-        entryId: 'include:legacy' as PluginEntryId, moduleName: '@acme/dsh-legacy', enabled: false, fiberPhase: null,
-        meta: { error },
-      }],
+      entries: [
+        {
+          entryId: 'include:legacy' as PluginEntryId,
+          moduleName: '@acme/dsh-legacy',
+          enabled: false,
+          fiberPhase: null,
+          meta: { error },
+        },
+      ],
     })
     fireEvent.click(globalToggle())
     expect(screen.getByText(en.metadataError.replace('{error}', error))).toBeTruthy()
@@ -314,7 +349,7 @@ describe('PluginInventorySettingsTab', () => {
     const switcher = screen.getByRole('button', { name: en.switcherLabel })
     expect(switcher.textContent).toBe('标准模式 (default)')
     fireEvent.click(switcher)
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       '标准模式 (default)',
       'ptc',
       '坏预设 (failed to load)',
@@ -346,7 +381,7 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getByText(en.fromPreset)).toBeTruthy()
     expect(screen.getByText('标准模式')).toBeTruthy()
     expect(screen.getByText(en.condition)).toBeTruthy()
-    expect(screen.getByText('process.platform === \'win32\'')).toBeTruthy()
+    expect(screen.getByText("process.platform === 'win32'")).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'pwsh, Conditional' }))
     expect(screen.queryByText(en.condition)).toBeNull()
 
@@ -369,14 +404,16 @@ describe('PluginInventorySettingsTab', () => {
         { entryId: 'running', moduleName: '@fixture/running', enabled: true, fiberPhase: 'active' },
         { entryId: 'unobserved', moduleName: '@fixture/unobserved', enabled: true, fiberPhase: null },
       ],
-      agentPresets: [{
-        id: 'standard',
-        isDefault: true,
-        rows: [
-          { entryId: 'stopping', moduleName: '@fixture/stopping', enabled: true, fiberPhase: 'unloading' },
-          { entryId: 'preset-running', moduleName: '@fixture/preset-running', enabled: true, fiberPhase: 'active' },
-        ],
-      }],
+      agentPresets: [
+        {
+          id: 'standard',
+          isDefault: true,
+          rows: [
+            { entryId: 'stopping', moduleName: '@fixture/stopping', enabled: true, fiberPhase: 'unloading' },
+            { entryId: 'preset-running', moduleName: '@fixture/preset-running', enabled: true, fiberPhase: 'active' },
+          ],
+        },
+      ],
     } as unknown as Snapshot)
 
     fireEvent.click(globalToggle())
@@ -394,18 +431,21 @@ describe('PluginInventorySettingsTab', () => {
     const subtitle = 'agent-presets:tool-subagent-secondary-with-a-complete-stable-identity'
     await renderReady({
       entries: [],
-      agentPresets: [{
-        id: 'same-module',
-        isDefault: true,
-        rows: [
-          { entryId: 'tool-subagent-primary', moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: true, fiberPhase: null },
-          { entryId: longId, moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: false, fiberPhase: null },
-        ],
-      }],
+      agentPresets: [
+        {
+          id: 'same-module',
+          isDefault: true,
+          rows: [
+            { entryId: 'tool-subagent-primary', moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: true, fiberPhase: null },
+            { entryId: longId, moduleName: '@deepseek-ai/dsh-tool-subagent', enabled: false, fiberPhase: null },
+          ],
+        },
+      ],
     })
 
-    expect(screen.getByRole('button', { name: 'tool-subagent, tool-subagent-primary, Enabled' })
-      .getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'tool-subagent, tool-subagent-primary, Enabled' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    )
     const secondary = screen.getByRole('button', { name: `tool-subagent, ${longId}, Disabled` })
     expect(secondary.getAttribute('aria-expanded')).toBe('false')
     expect(secondary.children).toHaveLength(2)
@@ -414,7 +454,9 @@ describe('PluginInventorySettingsTab', () => {
     expect(secondary.children[1]?.textContent).toBe(subtitle)
     expect(screen.getByTitle(longId).textContent).toBe(subtitle)
 
-    fireEvent.change(screen.getByRole('searchbox', { name: en.search }), { target: { value: 'include:agent-presets:tool-subagent-secondary' } })
+    fireEvent.change(screen.getByRole('searchbox', { name: en.search }), {
+      target: { value: 'include:agent-presets:tool-subagent-secondary' },
+    })
     expect(screen.queryByRole('button', { name: 'tool-subagent, tool-subagent-primary, Enabled' })).toBeNull()
     const filteredSecondary = screen.getByRole('button', { name: `tool-subagent, ${longId}, Disabled` })
     fireEvent.click(filteredSecondary)
@@ -519,15 +561,15 @@ describe('PluginInventorySettingsTab', () => {
   it('routes every preset name through the display resolver', async () => {
     // The resolver stands in for presetDisplayText: shipped presets localize,
     // user-authored ones keep their own metadata.
-    const localized: PluginInventorySettingsTabInjected['presetName'] = preset =>
-      ['standard', 'ptc'].includes(preset.id) ? `Localized ${preset.id}` : preset.name ?? preset.id
+    const localized: PluginInventorySettingsTabInjected['presetName'] = (preset) =>
+      ['standard', 'ptc'].includes(preset.id) ? `Localized ${preset.id}` : (preset.name ?? preset.id)
     render(<PluginInventorySettingsTab {...props(async () => SNAPSHOT, localized)} />)
     await screen.findByRole('searchbox', { name: en.search })
 
     const switcher = screen.getByRole('button', { name: en.switcherLabel })
     expect(switcher.textContent).toBe('Localized standard (default)')
     fireEvent.click(switcher)
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Localized standard (default)',
       'Localized ptc',
       '坏预设 (failed to load)',
@@ -550,8 +592,7 @@ describe('PluginInventorySettingsTab', () => {
     fireEvent.click(globalToggle())
     fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash-host, Via presets' }))
     fireEvent.click(screen.getByRole('button', { name: en.viewInPreset }))
-    expect(screen.getByRole('button', { name: en.switcherLabel }).textContent)
-      .toBe('标准模式 (default)')
+    expect(screen.getByRole('button', { name: en.switcherLabel }).textContent).toBe('标准模式 (default)')
   })
 
   it('searches across scopes and points at matches in other presets', async () => {
@@ -611,11 +652,13 @@ describe('PluginInventorySettingsTab', () => {
   it('renders a preset-only snapshot without the global section', async () => {
     await renderReady({
       entries: [],
-      agentPresets: [{
-        id: 'solo',
-        isDefault: false,
-        rows: [{ entryId: 'one', moduleName: '@fixture/one', enabled: true, fiberPhase: null }],
-      }],
+      agentPresets: [
+        {
+          id: 'solo',
+          isDefault: false,
+          rows: [{ entryId: 'one', moduleName: '@fixture/one', enabled: true, fiberPhase: null }],
+        },
+      ],
     })
 
     expect(screen.queryByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })).toBeNull()
@@ -624,7 +667,8 @@ describe('PluginInventorySettingsTab', () => {
   })
 
   it('shows a generic failure and retries into the empty state', async () => {
-    const list = vi.fn<PluginInventorySettingsTabInjected['list']>()
+    const list = vi
+      .fn<PluginInventorySettingsTabInjected['list']>()
       .mockRejectedValueOnce(new Error('private transport detail'))
       .mockResolvedValueOnce({ entries: [] })
     render(<PluginInventorySettingsTab {...props(list)} />)
@@ -632,12 +676,16 @@ describe('PluginInventorySettingsTab', () => {
     expect((await screen.findByRole('alert')).querySelector('[data-state="error"]')).not.toBeNull()
     expect(screen.queryByText('private transport detail')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.retry }))
-    await waitFor(() => { expect(list).toHaveBeenCalledTimes(2) })
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2)
+    })
     expect(await screen.findByText(en.empty)).toBeTruthy()
   })
 
   it('contains a synchronous Remote failure and ignores a result after unmount', async () => {
-    const syncFailure = vi.fn(() => { throw new Error('namespace unavailable') }) as PluginInventorySettingsTabInjected['list']
+    const syncFailure = vi.fn(() => {
+      throw new Error('namespace unavailable')
+    }) as PluginInventorySettingsTabInjected['list']
     const failed = render(<PluginInventorySettingsTab {...props(syncFailure)} />)
     expect((await screen.findByRole('alert')).textContent).toBe(en.error)
     failed.unmount()
@@ -647,12 +695,16 @@ describe('PluginInventorySettingsTab', () => {
     // Loading shows skeleton cards; the status region announces the label as visually hidden text.
     expect(screen.getByRole('status').textContent).toBe(en.loading)
     pending.unmount()
-    await act(async () => { deferred.resolve(SNAPSHOT) })
+    await act(async () => {
+      deferred.resolve(SNAPSHOT)
+    })
 
     const deferredFailure = Promise.withResolvers<Snapshot>()
     const pendingFailure = render(<PluginInventorySettingsTab {...props(() => deferredFailure.promise)} />)
     pendingFailure.unmount()
-    await act(async () => { deferredFailure.reject(new Error('late failure')) })
+    await act(async () => {
+      deferredFailure.reject(new Error('late failure'))
+    })
   })
 })
 
@@ -662,13 +714,19 @@ it('shows current-page sync errors and retries without re-reading Host inventory
   const retryClient = vi.fn()
   render(<PluginInventorySettingsTab {...props(list)} useClientSync={bindSnapshotSelector(sync)} retryClient={retryClient} />)
   expect(screen.getByText(en.clientSyncing).closest('[role="status"]')?.querySelector('[data-state="ongoing"]')).not.toBeNull()
-  await waitFor(() => { expect(list).toHaveBeenCalledOnce() })
-  act(() => { sync.set({ syncing: false, failures: [{ id: 'client-addon', message: 'download failed' }] }) })
+  await waitFor(() => {
+    expect(list).toHaveBeenCalledOnce()
+  })
+  act(() => {
+    sync.set({ syncing: false, failures: [{ id: 'client-addon', message: 'download failed' }] })
+  })
   expect(screen.getByRole('alert').querySelector('[data-state="error"]')).not.toBeNull()
   expect(screen.getByText('client-addon: download failed')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Retry this page' }))
   expect(retryClient).toHaveBeenCalledOnce()
   expect(list).toHaveBeenCalledOnce()
-  act(() => { sync.set({ syncing: false, failures: [] }) })
+  act(() => {
+    sync.set({ syncing: false, failures: [] })
+  })
   expect(screen.queryByRole('alert')).toBeNull()
 })

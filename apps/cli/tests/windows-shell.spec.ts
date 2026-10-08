@@ -10,7 +10,7 @@
  * cold-start resolution closure for the pwsh rows' bare plugin names.
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +34,9 @@ function disabledOn(row: { disabled?: unknown }, platform: 'win32' | 'linux'): b
 
 describe('the shipped shell composition (real bundle layers)', () => {
   let home: string
-  afterEach(() => { if (home !== undefined) rmSync(home, { recursive: true, force: true }) })
+  afterEach(() => {
+    if (home !== undefined) rmSync(home, { recursive: true, force: true })
+  })
   // The app installation anchor, mirroring profile-boot.ts: the bundle layers
   // resolve from the REAL dsh-base/dsh-web-app packages through it, so this
   // suite composes the shipped patch files, not test fixtures.
@@ -46,10 +48,10 @@ describe('the shipped shell composition (real bundle layers)', () => {
     const profile = loadProfile('dsh', 'web', anchor, home)
     const warnings: string[] = []
     const rows = composeEntries(
-      profile.layers.map(layer => layer.patches),
-      message => warnings.push(message),
+      profile.layers.map((layer) => layer.patches),
+      (message) => warnings.push(message),
     )
-    const byId = new Map(rows.map(row => [row.id, row]))
+    const byId = new Map(rows.map((row) => [row.id, row]))
     // One shared patch set, two rosters: the shell stacks gate themselves.
     for (const id of ['bash-sandbox', 'pwsh-sandbox', 'tool-bash', 'tool-pwsh']) {
       expect(byId.has(id), `row ${id}`).toBe(true)
@@ -84,10 +86,10 @@ describe('the shipped shell composition (real bundle layers)', () => {
     const profile = loadProfile('dsh', 'base-only', anchor, home)
     const warnings: string[] = []
     const rows = composeEntries(
-      profile.layers.map(layer => layer.patches),
-      message => warnings.push(message),
+      profile.layers.map((layer) => layer.patches),
+      (message) => warnings.push(message),
     )
-    const byId = new Map(rows.map(row => [row.id, row]))
+    const byId = new Map(rows.map((row) => [row.id, row]))
     for (const id of ['bash-sandbox', 'tool-bash', 'pwsh-sandbox', 'tool-pwsh']) {
       expect(byId.has(id), `row ${id}`).toBe(true)
     }
@@ -103,18 +105,28 @@ describe('the shipped shell composition (real bundle layers)', () => {
 describe('shipped agent presets gate both shell tools by platform', () => {
   const webBundle = fileURLToPath(new URL('../../../packages/bundle/web-app/', import.meta.url))
   const webManifest = JSON.parse(readFileSync(join(webBundle, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string[] } } }
-  const presetRows = composeEntries([bundlePatchPaths(webBundle, webManifest.dsh.bundle).flatMap(file =>
-    yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema }) as import('@deepseek-ai/cordis-plugin-include').PatchOptions[])])
+  const presetRows = composeEntries([
+    bundlePatchPaths(webBundle, webManifest.dsh.bundle).flatMap(
+      (file) =>
+        yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema }) as import('@deepseek-ai/cordis-plugin-include').PatchOptions[],
+    ),
+  ])
 
-  const definitions = presetRows.filter(row => row.name === '@deepseek-ai/dsh-agent-preset').map(row => row.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition)
+  const definitions = presetRows
+    .filter((row) => row.name === '@deepseek-ai/dsh-agent-preset')
+    .map((row) => row.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition)
 
   it.each(['standard', 'ptc', 'cordis'])('preset %s gates its shell tool rows by platform', (preset) => {
-    const entries: unknown = definitions.find(row => row.id === preset)!.plugins
+    const entries: unknown = definitions.find((row) => row.id === preset)!.plugins
     if (!Array.isArray(entries)) throw new TypeError(`preset ${preset} must parse to an entry array`)
-    for (const [id, win32] of [['tool-bash', true], ['tool-pwsh', false]] as const) {
-      const row = entries.find((entry): entry is Record<string, unknown> => (
-        typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === id
-      ))
+    for (const [id, win32] of [
+      ['tool-bash', true],
+      ['tool-pwsh', false],
+    ] as const) {
+      const row = entries.find(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === id,
+      )
       if (row === undefined) throw new TypeError(`preset ${preset} must mount ${id}`)
       expect(row.disabled).toMatchObject({ __jsExpr: expect.any(String) as string })
       // A platform-scoped context pins both outcomes on every host.
@@ -125,22 +137,26 @@ describe('shipped agent presets gate both shell tools by platform', () => {
   })
 
   it('minimal mounts no shell tool row and gates its persistent shell stack by platform', () => {
-    const entries: unknown = definitions.find(row => row.id === 'minimal')!.plugins
+    const entries: unknown = definitions.find((row) => row.id === 'minimal')!.plugins
     if (!Array.isArray(entries)) throw new TypeError('minimal preset must parse to an entry array')
     for (const id of ['tool-bash', 'tool-pwsh']) {
-      expect(entries.some(entry => (
-        typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === id
-      )), `${id} must be absent from minimal`).toBe(false)
+      expect(
+        entries.some((entry) => typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === id),
+        `${id} must be absent from minimal`,
+      ).toBe(false)
     }
-    const group = entries.find((entry): entry is Record<string, unknown> => (
-      typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === 'persistent-shell'
-    ))
+    const group = entries.find(
+      (entry): entry is Record<string, unknown> =>
+        typeof entry === 'object' && entry !== null && (entry as Record<string, unknown>).id === 'persistent-shell',
+    )
     if (group === undefined) throw new TypeError('minimal preset must mount persistent-shell')
     const rows = group.config as unknown[]
     if (!Array.isArray(rows)) throw new TypeError('persistent-shell must carry a row list')
-    const byId = new Map(rows
-      .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
-      .map(entry => [entry.id, entry]))
+    const byId = new Map(
+      rows
+        .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
+        .map((entry) => [entry.id, entry]),
+    )
     // The bash stack (terminal-bash + persistent-bash) mounts on POSIX only; the
     // pwsh twin (terminal-bash with shellDialect pwsh + persistent-pwsh) mounts on
     // win32 only — exactly one persistent shell per host.

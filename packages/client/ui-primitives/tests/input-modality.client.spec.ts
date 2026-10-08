@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 /** Keyboard navigation and pointer focus use distinct tooltip and ring policies. */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { INPUT_MODALITY, INPUT_MODALITY_ATTRIBUTE, pointerModality } from '../src/input-modality.ts'
 
 const press = (key: string, init: KeyboardEventInit = {}): void => {
   document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, ...init }))
 }
-const click = (): void => { window.dispatchEvent(new Event('pointerdown')) }
+const click = (): void => {
+  window.dispatchEvent(new Event('pointerdown'))
+}
 const published = (): string | null => document.documentElement.getAttribute(INPUT_MODALITY_ATTRIBUTE)
 const button = (): HTMLButtonElement => {
   const element = document.createElement('button')

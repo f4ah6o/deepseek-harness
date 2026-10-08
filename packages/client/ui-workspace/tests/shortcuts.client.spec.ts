@@ -1,6 +1,6 @@
 /** Workspace commands capture their business target before the dispatcher executes them. */
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
@@ -16,55 +16,96 @@ import { en, zh } from '../src/client/locales.ts'
 const sid = (value: string) => value as SessionId
 const context = { region: 'page', modal: null, target: null } as const
 const key = (code: string, rest: Partial<ShortcutGesture> = {}): ShortcutGesture => ({
-  code, control: false, alt: false, shift: false, meta: true, repeat: false,
-  composing: false, defaultPrevented: false, ...rest,
+  code,
+  control: false,
+  alt: false,
+  shift: false,
+  meta: true,
+  repeat: false,
+  composing: false,
+  defaultPrevented: false,
+  ...rest,
 })
 const row = (id: string, main = false): SessionSummary => ({
-  id: sid(id), title: id, displayTitle: id, cwd: `/workspace/${id}`, blank: false,
-  running: false, updatedAt: 0, retainedBy: main ? { mainView: 1 } : {},
+  id: sid(id),
+  title: id,
+  displayTitle: id,
+  cwd: `/workspace/${id}`,
+  blank: false,
+  running: false,
+  updatedAt: 0,
+  retainedBy: main ? { mainView: 1 } : {},
 })
 async function bench(runtime: 'web' | 'desktop' = 'desktop', platform: ShortcutPlatform = 'macos') {
   const ctx = new Context()
-  onTestFinished(async () => { await ctx.fiber.dispose() })
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+  })
   const registry = new ShortcutRegistry(runtime, platform)
   const commands = new Map<string, ShortcutCommand>()
-  ctx.provide('shortcuts', { register: (command: ShortcutCommand) => {
-    commands.set(command.id, command)
-    return registry.register(command)
-  }, catalog: registry.catalog })
+  ctx.provide('shortcuts', {
+    register: (command: ShortcutCommand) => {
+      commands.set(command.id, command)
+      return registry.register(command)
+    },
+    catalog: registry.catalog,
+  })
   const list = createSnapshotStore<SessionListState>({
-    ids: [sid('a'), sid('b')], byId: { [sid('a')]: row('a', true), [sid('b')]: row('b') },
-    phase: 'ready', projectionsBySession: {},
+    ids: [sid('a'), sid('b')],
+    byId: { [sid('a')]: row('a', true), [sid('b')]: row('b') },
+    phase: 'ready',
+    projectionsBySession: {},
   })
   const history = createSnapshotStore({ openState: 'open', hasMore: false, loadingOlder: false } as SessionSnapshot)
   const loadOlder = vi.fn(async () => {})
-  const bindings = new Map(['a', 'b'].map(id => [sid(id), {
-    sessionId: sid(id), session: { ...history, loadOlder },
-  }]))
+  const bindings = new Map(
+    ['a', 'b'].map((id) => [
+      sid(id),
+      {
+        sessionId: sid(id),
+        session: { ...history, loadOlder },
+      },
+    ]),
+  )
   ctx.provide('sessions', { list, binding: (id: SessionId) => bindings.get(id) })
   const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
   ctx.provide('layout', { panelInfo })
   const directory = createSnapshotStore(true)
-  ctx.provide('slots', { entries: () => directory.getSnapshot() ? [{}] : [], subscribe: (_name: string, listener: () => void) => directory.subscribe(listener) })
+  ctx.provide('slots', {
+    entries: () => (directory.getSnapshot() ? [{}] : []),
+    subscribe: (_name: string, listener: () => void) => directory.subscribe(listener),
+  })
   const locale = new LocaleRuntime(ctx)
   locale.register('workspace', { en, zh })
   locale.setLocale('en')
   ctx.provide('locale', locale)
   const navigation = {
-    startSession: vi.fn(), forkSession: vi.fn(async () => 'fork-child' as SessionId), archiveSession: vi.fn(async (_sessionId: SessionId) => {}),
+    startSession: vi.fn(),
+    forkSession: vi.fn(async () => 'fork-child' as SessionId),
+    archiveSession: vi.fn(async (_sessionId: SessionId) => {}),
   }
   const controls = createWorkspaceShortcutControls()
   const fiber = ctx.plugin((scoped) => {
-    installWorkspaceShortcuts(scoped, navigation, controls, (id) => { void navigation.archiveSession(id) })
+    installWorkspaceShortcuts(scoped, navigation, controls, (id) => {
+      void navigation.archiveSession(id)
+    })
   })
   await fiber.await()
-  const select = (id: string) => { list.set({ ...list.getSnapshot(), byId: {
-    [sid('a')]: row('a', id === 'a'), [sid('b')]: row('b', id === 'b'),
-  } }) }
+  const select = (id: string) => {
+    list.set({
+      ...list.getSnapshot(),
+      byId: {
+        [sid('a')]: row('a', id === 'a'),
+        [sid('b')]: row('b', id === 'b'),
+      },
+    })
+  }
   return { ctx, fiber, registry, commands, navigation, controls, list, directory, select, history, loadOlder, panelInfo }
 }
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('workspace shortcut ownership', () => {
   it('refuses rename and archive without a selected Session and keeps a busy picker closed', async () => {
@@ -79,21 +120,33 @@ describe('workspace shortcut ownership', () => {
   })
   it('registers six commands with Desktop and Web defaults and removes registrations with the plugin', async () => {
     const b = await bench()
-    expect(b.registry.catalog.getSnapshot().map(row => row.id)).toEqual([
-      'session.new', 'session.search', 'workspace.add', 'session.rename', 'session.fork', 'session.archive',
+    expect(b.registry.catalog.getSnapshot().map((row) => row.id)).toEqual([
+      'session.new',
+      'session.search',
+      'workspace.add',
+      'session.rename',
+      'session.fork',
+      'session.archive',
     ])
-    expect(b.registry.catalog.getSnapshot().every(row => row.keys.length > 0)).toBe(true)
+    expect(b.registry.catalog.getSnapshot().every((row) => row.keys.length > 0)).toBe(true)
     const web = await bench('web')
-    expect(web.registry.catalog.getSnapshot().map(row => row.aria)).toEqual([
-      'Alt+Meta+N', 'Alt+Meta+K', 'Alt+Meta+O', 'Alt+Meta+G', 'Shift+Meta+F', 'Alt+Meta+A',
+    expect(web.registry.catalog.getSnapshot().map((row) => row.aria)).toEqual([
+      'Alt+Meta+N',
+      'Alt+Meta+K',
+      'Alt+Meta+O',
+      'Alt+Meta+G',
+      'Shift+Meta+F',
+      'Alt+Meta+A',
     ])
     await b.fiber.dispose()
     expect(b.registry.catalog.getSnapshot()).toEqual([])
   })
 
   it.each([
-    { runtime: 'web', platform: 'macos' }, { runtime: 'web', platform: 'windows' },
-    { runtime: 'desktop', platform: 'macos' }, { runtime: 'desktop', platform: 'windows' },
+    { runtime: 'web', platform: 'macos' },
+    { runtime: 'web', platform: 'windows' },
+    { runtime: 'desktop', platform: 'macos' },
+    { runtime: 'desktop', platform: 'windows' },
   ] as const)('uses the shared three-key rename binding on $runtime/$platform', async ({ runtime, platform }) => {
     const b = await bench(runtime, platform)
     const primary = { meta: platform === 'macos', control: platform === 'windows' }
@@ -183,17 +236,21 @@ describe('workspace shortcut ownership', () => {
   it('blocks absent or blank Sessions and permits retry while running after the Host refuses a fork', async () => {
     const b = await bench()
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    b.navigation.forkSession.mockRejectedValueOnce(new SessionForkError(
-      new RemoteError('session/fork-unavailable', 'no completed turn', { sessionId: sid('a') }), sid('a'),
-    ))
+    b.navigation.forkSession.mockRejectedValueOnce(
+      new SessionForkError(new RemoteError('session/fork-unavailable', 'no completed turn', { sessionId: sid('a') }), sid('a')),
+    )
     const invoke = () => b.registry.dispatch(key('KeyF', { alt: true }), context, vi.fn())
     expect(invoke().status).toBe('handled')
-    await vi.waitFor(() => { expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'unavailable' }) })
+    await vi.waitFor(() => {
+      expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'unavailable' })
+    })
     expect(warning).not.toHaveBeenCalled()
     b.controls.dismissForkError()
     b.navigation.forkSession.mockRejectedValueOnce(new Error('connection closed'))
     expect(invoke().status).toBe('handled')
-    await vi.waitFor(() => { expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'failed' }) })
+    await vi.waitFor(() => {
+      expect(b.controls.state.getSnapshot().forkError).toMatchObject({ reason: 'failed' })
+    })
     expect(warning).toHaveBeenCalledOnce()
     b.list.set({ ...b.list.getSnapshot(), byId: { [sid('a')]: { ...row('a', true), running: true } } })
     expect(invoke().status).toBe('handled')

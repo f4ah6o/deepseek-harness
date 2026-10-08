@@ -1,6 +1,6 @@
 /** Vite adapters for recording product chunk, asset, CSS, and worker inputs. */
 
-import type { Plugin } from 'vite'
+import type { Plugin } from 'vite-plus'
 import { WebProductBundleIsolation } from '../../scripts/web-product-bundle-isolation.ts'
 
 const DEPENDENCY_ANALYSIS_PLUGIN = 'dsh-browser-dependency-analysis'
@@ -13,7 +13,9 @@ export function browserDependencyAnalysis(): Plugin {
   return {
     name: DEPENDENCY_ANALYSIS_PLUGIN,
     apply: 'build',
-    configResolved(config) { requireNonWritingAnalysis(config.build.write) },
+    configResolved(config) {
+      requireNonWritingAnalysis(config.build.write)
+    },
   }
 }
 
@@ -30,76 +32,97 @@ function requireNonWritingAnalysis(write: boolean): void {
 export function productWebBundleIsolation(repository: string, webRoot: string): Plugin[] {
   const inputs = new WebProductBundleIsolation(repository, webRoot)
   let dependencyAnalysis = false
-  return [{
-    name: 'dsh-product-web-chunk-inputs',
-    apply: 'build',
-    generateBundle: {
-      order: 'pre',
-      handler(_options, bundle) {
-        if (!dependencyAnalysis) inputs.captureChunks(bundle)
+  return [
+    {
+      name: 'dsh-product-web-chunk-inputs',
+      apply: 'build',
+      generateBundle: {
+        order: 'pre',
+        handler(_options, bundle) {
+          if (!dependencyAnalysis) inputs.captureChunks(bundle)
+        },
       },
     },
-  }, {
-    name: 'dsh-product-web-bundle-isolation',
-    apply: 'build',
-    enforce: 'post',
-    config(config) {
-      const renderBuiltUrl = config.experimental?.renderBuiltUrl
-      const workerPlugins = config.worker?.plugins
-      return {
-        experimental: {
-          renderBuiltUrl(filename, context) {
-            inputs.assetReference(filename, context.hostId, context.type)
-            return renderBuiltUrl?.(filename, context)
+    {
+      name: 'dsh-product-web-bundle-isolation',
+      apply: 'build',
+      enforce: 'post',
+      config(config) {
+        const renderBuiltUrl = config.experimental?.renderBuiltUrl
+        const workerPlugins = config.worker?.plugins
+        return {
+          experimental: {
+            renderBuiltUrl(filename, context) {
+              inputs.assetReference(filename, context.hostId, context.type)
+              return renderBuiltUrl?.(filename, context)
+            },
           },
-        },
-        worker: {
-          plugins: () => [...workerPlugins?.() ?? [], {
-            name: 'dsh-worker-build-inputs',
-            generateBundle: {
-              order: 'post',
-              handler(_options, bundle) { inputs.workerBundle(bundle, this.getWatchFiles()) },
-            },
-          }],
-        },
-      }
-    },
-    configResolved(config) {
-      dependencyAnalysis = config.plugins.some(plugin => plugin.name === DEPENDENCY_ANALYSIS_PLUGIN)
-      if (dependencyAnalysis) {
-        requireNonWritingAnalysis(config.build.write)
-        return
-      }
-      const cssPlugins = config.plugins.filter(plugin => plugin.name === 'vite:css')
-      const css = cssPlugins[0]
-      if (cssPlugins.length !== 1 || css?.transform === undefined) {
-        throw new Error('Web product isolation: Vite CSS input instrumentation is unavailable')
-      }
-      const transform = typeof css.transform === 'function' ? css.transform : css.transform.handler
-      css.transform = {
-        ...typeof css.transform === 'function' ? {} : css.transform,
-        handler(code, id, options) {
-          inputs.cssTransform(id)
-          const context = new Proxy(this, {
-            get(target, property) {
-              if (property === 'addWatchFile') return (file: string): void => {
-                inputs.cssDependency(id, file)
-                target.addWatchFile(file)
+          worker: {
+            plugins: () => [
+              ...(workerPlugins?.() ?? []),
+              {
+                name: 'dsh-worker-build-inputs',
+                generateBundle: {
+                  order: 'post',
+                  handler(_options, bundle) {
+                    inputs.workerBundle(bundle, [...this.getModuleIds()])
+                  },
+                },
+              },
+            ],
+          },
+        }
+      },
+      configResolved(config) {
+        dependencyAnalysis = config.plugins.some((plugin) => plugin.name === DEPENDENCY_ANALYSIS_PLUGIN)
+        if (dependencyAnalysis) {
+          requireNonWritingAnalysis(config.build.write)
+          return
+        }
+        const cssPlugins = config.plugins.filter((plugin) => plugin.name === 'vite:css')
+        const css = cssPlugins[0]
+        if (cssPlugins.length !== 1 || css?.transform === undefined) {
+          throw new Error('Web product isolation: Vite CSS input instrumentation is unavailable')
+        }
+        const transform = typeof css.transform === 'function' ? css.transform : css.transform.handler
+        css.transform = {
+          ...(typeof css.transform === 'function' ? {} : css.transform),
+          handler(code, id, options) {
+            inputs.cssTransform(id)
+            const context = new Proxy(this, {
+              get(target, property) {
+                if (property === 'addWatchFile')
+                  return (file: string): void => {
+                    inputs.cssDependency(id, file)
+                    target.addWatchFile(file)
+                  }
+                const value: unknown = Reflect.get(target, property, target)
+                return typeof value === 'function' ? value.bind(target) : value
+              },
+            })
+            return transform.call(context, code, id, options)
+          },
+        }
+      },
+      buildStart() {
+        inputs.reset()
+      },
+      generateBundle: {
+        order: 'post',
+        handler(_options, bundle) {
+          if (!dependencyAnalysis)
+            inputs.verify(bundle, (id) => {
+              const info = this.getModuleInfo(id)
+              if (info === null) return null
+              return {
+                importedIds: info.importedIds,
+                dynamicallyImportedIds: info.dynamicallyImportedIds,
+                isExternal: Reflect.get(info, 'isExternal') === true,
+                isIncluded: Reflect.get(info, 'isIncluded') === true,
               }
-              const value: unknown = Reflect.get(target, property, target)
-              return typeof value === 'function' ? value.bind(target) : value
-            },
-          })
-          return transform.call(context, code, id, options)
+            })
         },
-      }
-    },
-    buildStart() { inputs.reset() },
-    generateBundle: {
-      order: 'post',
-      handler(_options, bundle) {
-        if (!dependencyAnalysis) inputs.verify(bundle, id => this.getModuleInfo(id))
       },
     },
-  }]
+  ]
 }

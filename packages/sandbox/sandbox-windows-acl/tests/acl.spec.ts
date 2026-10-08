@@ -12,7 +12,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import koffi from 'koffi'
 
 import { buildExplicitAccess, grantWrite, lockFilePath, revokeWrite, withPathLock } from '../src/acl.ts'
@@ -59,10 +59,11 @@ function sidFromString(api: Win32Bindings, sid: string): NativePtr {
 
 /** Stringify a decoded SID layout (identifierAuthority bytes 2..5 are the big-endian value). */
 function sidString(sid: SidLayout): string {
-  const authority = ((sid.identifierAuthority[2] ?? 0) << 24)
-    | ((sid.identifierAuthority[3] ?? 0) << 16)
-    | ((sid.identifierAuthority[4] ?? 0) << 8)
-    | (sid.identifierAuthority[5] ?? 0)
+  const authority =
+    ((sid.identifierAuthority[2] ?? 0) << 24) |
+    ((sid.identifierAuthority[3] ?? 0) << 16) |
+    ((sid.identifierAuthority[4] ?? 0) << 8) |
+    (sid.identifierAuthority[5] ?? 0)
   const subs = sid.subAuthority.slice(0, sid.subAuthorityCount).join('-')
   return `S-${sid.revision}-${authority}${sid.subAuthorityCount > 0 ? `-${subs}` : ''}`
 }
@@ -80,8 +81,14 @@ function readDirectAces(api: Win32Bindings, path: string): DirectAce[] {
   const saclSlot = allocPtrSlot()
   const descriptorSlot = allocPtrSlot()
   const readResult = api.getNamedSecurityInfoW(
-    path, abi.SE_FILE_OBJECT, abi.DACL_SECURITY_INFORMATION,
-    ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot,
+    path,
+    abi.SE_FILE_OBJECT,
+    abi.DACL_SECURITY_INFORMATION,
+    ownerSlot,
+    groupSlot,
+    daclSlot,
+    saclSlot,
+    descriptorSlot,
   )
   if (readResult !== abi.ERROR_SUCCESS) throw new Error(`GetNamedSecurityInfoW failed (${readResult}) for ${path}`)
   const acl = decodePtr(daclSlot)
@@ -94,7 +101,10 @@ function readDirectAces(api: Win32Bindings, path: string): DirectAce[] {
       const flags = koffi.decode(acl, offset + 1, 'uint8') as number
       const aceSize = koffi.decode(acl, offset + 2, 'uint16') as number
       if ((flags & abi.INHERITED_ACE) === 0) {
-        aces.push({ sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout), mask: koffi.decode(acl, offset + 4, 'uint32') as number })
+        aces.push({
+          sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout),
+          mask: koffi.decode(acl, offset + 4, 'uint32') as number,
+        })
       }
       offset += aceSize
     }
@@ -132,8 +142,14 @@ function readLabelAces(api: Win32Bindings, path: string): DirectLabelAce[] {
   const saclSlot = allocPtrSlot()
   const descriptorSlot = allocPtrSlot()
   const readResult = api.getNamedSecurityInfoW(
-    path, abi.SE_FILE_OBJECT, abi.LABEL_SECURITY_INFORMATION,
-    ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot,
+    path,
+    abi.SE_FILE_OBJECT,
+    abi.LABEL_SECURITY_INFORMATION,
+    ownerSlot,
+    groupSlot,
+    daclSlot,
+    saclSlot,
+    descriptorSlot,
   )
   if (readResult !== abi.ERROR_SUCCESS) throw new Error(`GetNamedSecurityInfoW (label) failed (${readResult}) for ${path}`)
   const acl = decodePtr(saclSlot)
@@ -147,7 +163,10 @@ function readLabelAces(api: Win32Bindings, path: string): DirectLabelAce[] {
       const flags = koffi.decode(acl, offset + 1, 'uint8') as number
       const aceSize = koffi.decode(acl, offset + 2, 'uint16') as number
       if (type === abi.SYSTEM_MANDATORY_LABEL_ACE_TYPE && (flags & abi.INHERITED_ACE) === 0) {
-        aces.push({ sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout), mask: koffi.decode(acl, offset + 4, 'uint32') as number })
+        aces.push({
+          sid: sidString(koffi.decode(acl, offset + 8, SID_STRUCT) as SidLayout),
+          mask: koffi.decode(acl, offset + 4, 'uint32') as number,
+        })
       }
       offset += aceSize
     }
@@ -176,8 +195,14 @@ function readTypedAces(api: Win32Bindings, path: string): TypedAce[] {
   const saclSlot = allocPtrSlot()
   const descriptorSlot = allocPtrSlot()
   const readResult = api.getNamedSecurityInfoW(
-    path, abi.SE_FILE_OBJECT, abi.DACL_SECURITY_INFORMATION,
-    ownerSlot, groupSlot, daclSlot, saclSlot, descriptorSlot,
+    path,
+    abi.SE_FILE_OBJECT,
+    abi.DACL_SECURITY_INFORMATION,
+    ownerSlot,
+    groupSlot,
+    daclSlot,
+    saclSlot,
+    descriptorSlot,
   )
   if (readResult !== abi.ERROR_SUCCESS) throw new Error(`GetNamedSecurityInfoW failed (${readResult}) for ${path}`)
   const acl = decodePtr(daclSlot)
@@ -254,8 +279,8 @@ describe.skipIf(!isWin32)('ACL editing', () => {
       grantWrite(api, dir, sidA, lowSid, world)
       grantWrite(api, dir, sidB, lowSid, world)
       revokeWrite(api, dir, sidA)
-      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-21')).toBe(false)
-      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-22')).toBe(true)
+      expect(readDirectAces(api, dir).some((ace) => ace.sid === 'S-1-4-4242-21')).toBe(false)
+      expect(readDirectAces(api, dir).some((ace) => ace.sid === 'S-1-4-4242-22')).toBe(true)
       expect(readLabelAces(api, dir)).toHaveLength(1) // the surviving grant still needs it
       revokeWrite(api, dir, sidB)
       expect(readLabelAces(api, dir)).toEqual([]) // the last revoke clears it
@@ -283,9 +308,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
       expect(mergeResult, `SetEntriesInAclW setup (${mergeResult})`).toBe(abi.ERROR_SUCCESS)
       const newAcl = decodePtr(newAclSlot)
       expect(newAcl).not.toBeNull()
-      const applyResult = api.setNamedSecurityInfoW(
-        dir, abi.SE_FILE_OBJECT, abi.DACL_SECURITY_INFORMATION, null, null, newAcl, null,
-      )
+      const applyResult = api.setNamedSecurityInfoW(dir, abi.SE_FILE_OBJECT, abi.DACL_SECURITY_INFORMATION, null, null, newAcl, null)
       const freed = newAcl === null ? null : api.localFree(newAcl)
       expect(applyResult, `SetNamedSecurityInfoW setup (${applyResult})`).toBe(abi.ERROR_SUCCESS)
       expect(isNullPtr(freed)).toBe(true)
@@ -293,14 +316,14 @@ describe.skipIf(!isWin32)('ACL editing', () => {
       grantWrite(api, dir, capabilitySid, lowSid, world)
 
       const granted = readDirectAces(api, dir)
-      expect(granted.some(ace => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
-      expect(granted.some(ace => ace.sid === 'S-1-4-4242-1')).toBe(true)
+      expect(granted.some((ace) => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
+      expect(granted.some((ace) => ace.sid === 'S-1-4-4242-1')).toBe(true)
 
       revokeWrite(api, dir, capabilitySid)
 
       const aces = readDirectAces(api, dir)
-      expect(aces.some(ace => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
-      expect(aces.some(ace => ace.sid === 'S-1-4-4242-1')).toBe(false) // orphan grant fully removed
+      expect(aces.some((ace) => ace.sid === 'S-1-5-32-545')).toBe(true) // explicit ACE preserved
+      expect(aces.some((ace) => ace.sid === 'S-1-4-4242-1')).toBe(false) // orphan grant fully removed
       expect(readLabelAces(api, dir)).toEqual([]) // the label went with it
     } finally {
       if (!isNullPtr(usersSid)) api.localFree(usersSid)
@@ -319,16 +342,14 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     try {
       expect(readLabelAces(api, dir)).toEqual([])
       grantWrite(api, dir, capabilitySid, lowSid, world)
-      expect(readLabelAces(api, dir)).toEqual([
-        { sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP },
-      ])
+      expect(readLabelAces(api, dir)).toEqual([{ sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP }])
       // The ambient delete route inside another granted root is what the deny
       // removes; the capability ACE stays the only delete authority there.
-      const denied = readDirectAces(api, dir).filter(ace => ace.sid === 'S-1-1-0')
+      const denied = readDirectAces(api, dir).filter((ace) => ace.sid === 'S-1-1-0')
       expect(denied).toEqual([{ sid: 'S-1-1-0', mask: abi.FILE_DELETE_CHILD }])
       revokeWrite(api, dir, capabilitySid)
       expect(readLabelAces(api, dir)).toEqual([])
-      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-9')).toBe(false)
+      expect(readDirectAces(api, dir).some((ace) => ace.sid === 'S-1-4-4242-9')).toBe(false)
     } finally {
       if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
       if (!isNullPtr(lowSid)) api.localFree(lowSid)
@@ -351,11 +372,11 @@ describe.skipIf(!isWin32)('ACL editing', () => {
       grantWrite(api, dir, capabilitySid, lowSid, world)
       expect(apply).toHaveBeenCalledTimes(1)
       const aces = readDirectAces(api, dir)
-      expect(aces.filter(ace => ace.sid === 'S-1-4-4242-2')).toHaveLength(1)
-      expect(aces.filter(ace => ace.sid === 'S-1-1-0')).toHaveLength(1)
+      expect(aces.filter((ace) => ace.sid === 'S-1-4-4242-2')).toHaveLength(1)
+      expect(aces.filter((ace) => ace.sid === 'S-1-1-0')).toHaveLength(1)
       expect(readLabelAces(api, dir)).toHaveLength(1)
       revokeWrite(api, dir, capabilitySid)
-      expect(readDirectAces(api, dir).some(ace => ace.sid === 'S-1-4-4242-2')).toBe(false)
+      expect(readDirectAces(api, dir).some((ace) => ace.sid === 'S-1-4-4242-2')).toBe(false)
     } finally {
       apply.mockRestore()
       if (!isNullPtr(capabilitySid)) api.localFree(capabilitySid)
@@ -377,8 +398,8 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     sandboxA.dispose()
     sandboxB.dispose()
     const aces = readDirectAces(api, dir)
-    expect(aces.some(ace => ace.sid === 'S-1-4-9000-1')).toBe(true)
-    expect(aces.some(ace => ace.sid === 'S-1-4-9000-2')).toBe(true)
+    expect(aces.some((ace) => ace.sid === 'S-1-4-9000-1')).toBe(true)
+    expect(aces.some((ace) => ace.sid === 'S-1-4-9000-2')).toBe(true)
   })
 
   it('dispose revokes the revocable temp ACE and label and keeps the standing workspace pair (self-managed flow)', async () => {
@@ -395,12 +416,10 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     await sandbox.init()
     sandbox.dispose()
     const workspaceAces = readDirectAces(api, workspaceDir)
-    expect(workspaceAces.some(ace => ace.sid === 'S-1-4-9000-3')).toBe(true)
-    expect(readLabelAces(api, workspaceDir)).toEqual([
-      { sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP },
-    ])
+    expect(workspaceAces.some((ace) => ace.sid === 'S-1-4-9000-3')).toBe(true)
+    expect(readLabelAces(api, workspaceDir)).toEqual([{ sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP }])
     const tempAces = readDirectAces(api, tempDir)
-    expect(tempAces.some(ace => ace.sid === 'S-1-4-9000-3-1')).toBe(false)
+    expect(tempAces.some((ace) => ace.sid === 'S-1-4-9000-3-1')).toBe(false)
     expect(readLabelAces(api, tempDir)).toEqual([])
   })
 
@@ -420,37 +439,48 @@ describe.skipIf(!isWin32)('ACL editing', () => {
 
     await expect(sandbox.init()).rejects.toThrow(/private temp directory must be disjoint/u)
     const api = await win32()
-    expect(readDirectAces(api, workspaceDir).some(ace => ace.sid === writeSid)).toBe(false)
-    expect(readDirectAces(api, nestedTemp).some(ace => ace.sid === privateTempSid)).toBe(false)
+    expect(readDirectAces(api, workspaceDir).some((ace) => ace.sid === writeSid)).toBe(false)
+    expect(readDirectAces(api, nestedTemp).some((ace) => ace.sid === privateTempSid)).toBe(false)
   })
 
   it('workspace-write without a write SID fails at construction; the token layer guards the same contract', () => {
     const dir = scratch()
-    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' }))
-      .toThrow(/requires a write SID/)
-    expect(() => new AclSandbox({ writableDirs: [dir], writeSid: 'S-1-4-1-1', mode: 'workspace-write' }))
-      .toThrow(/requires an explicit private temp directory or null/)
-    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: dir, writeSid: 'S-1-4-1-1', mode: 'workspace-write' }))
-      .toThrow(/requires a temp write SID/)
-    expect(() => new AclSandbox({
-      writableDirs: [dir],
-      tempDir: dir,
-      writeSid: 'S-1-4-1-1',
-      tempWriteSid: 'S-1-4-1-1',
-      mode: 'workspace-write',
-    })).toThrow(/must be distinct/)
-    expect(() => createRestrictedToken({} as never, 0n as never, 0n as never, [], { world: 0n as never }, 'workspace-write'))
-      .toThrow(/requires at least one write SID/)
+    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' })).toThrow(/requires a write SID/)
+    expect(() => new AclSandbox({ writableDirs: [dir], writeSid: 'S-1-4-1-1', mode: 'workspace-write' })).toThrow(
+      /requires an explicit private temp directory or null/,
+    )
+    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: dir, writeSid: 'S-1-4-1-1', mode: 'workspace-write' })).toThrow(
+      /requires a temp write SID/,
+    )
+    expect(
+      () =>
+        new AclSandbox({
+          writableDirs: [dir],
+          tempDir: dir,
+          writeSid: 'S-1-4-1-1',
+          tempWriteSid: 'S-1-4-1-1',
+          mode: 'workspace-write',
+        }),
+    ).toThrow(/must be distinct/)
+    expect(() => createRestrictedToken({} as never, 0n as never, 0n as never, [], { world: 0n as never }, 'workspace-write')).toThrow(
+      /requires at least one write SID/,
+    )
   })
 
   it('the per-path lock is exclusive: a second immediate lock attempt fails with ERROR_LOCK_VIOLATION until release', async () => {
     const api = await win32()
     const dir = scratch()
     const lockPath = lockFilePath(api, dir)
-    const open = (): NativePtr => api.createFileW(
-      lockPath, abi.GENERIC_READ | abi.GENERIC_WRITE,
-      abi.FILE_SHARE_READ | abi.FILE_SHARE_WRITE, null, abi.OPEN_ALWAYS, 0, null,
-    )
+    const open = (): NativePtr =>
+      api.createFileW(
+        lockPath,
+        abi.GENERIC_READ | abi.GENERIC_WRITE,
+        abi.FILE_SHARE_READ | abi.FILE_SHARE_WRITE,
+        null,
+        abi.OPEN_ALWAYS,
+        0,
+        null,
+      )
     const first = open()
     const second = open()
     expect(isInvalidHandle(first)).toBe(false)
@@ -474,15 +504,22 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     const dir = scratch()
     const lockPath = lockFilePath(api, dir)
     let attempts = 0
-    expect(() => withPathLock(api, dir, () => {
-      attempts++
-      throw new Error('action failure')
-    })).toThrow('action failure')
+    expect(() =>
+      withPathLock(api, dir, () => {
+        attempts++
+        throw new Error('action failure')
+      }),
+    ).toThrow('action failure')
     expect(attempts).toBe(1)
     // The lock was released: a fresh immediate lock succeeds.
     const handle = api.createFileW(
-      lockPath, abi.GENERIC_READ | abi.GENERIC_WRITE,
-      abi.FILE_SHARE_READ | abi.FILE_SHARE_WRITE, null, abi.OPEN_ALWAYS, 0, null,
+      lockPath,
+      abi.GENERIC_READ | abi.GENERIC_WRITE,
+      abi.FILE_SHARE_READ | abi.FILE_SHARE_WRITE,
+      null,
+      abi.OPEN_ALWAYS,
+      0,
+      null,
     )
     expect(isInvalidHandle(handle)).toBe(false)
     try {
@@ -500,7 +537,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     const sandbox = new AclSandbox({ writableDirs: [dir], tempDir: null, writeSid: 'S-1-4-1234-5', mode: 'workspace-write' })
     try {
       await sandbox.init()
-      const grant = readDirectAces(api, dir).find(ace => ace.sid === 'S-1-4-1234-5')
+      const grant = readDirectAces(api, dir).find((ace) => ace.sid === 'S-1-4-1234-5')
       expect(grant).toBeDefined()
       const mask = grant?.mask ?? 0
       expect(mask).toBe(abi.GRANT_MASK)

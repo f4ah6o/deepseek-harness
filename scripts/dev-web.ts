@@ -5,8 +5,8 @@
  * Stages, in order: `pnpm run build` (skipped by `--skip-build`), three
  * long-lived watchers, then `dsh web` (skipped by `--no-serve`). The watchers
  * exist because the compile shell links built lib products rather than
- * sources: `tsc -b tsconfig.client.json --watch` emits `lib/types` (the tsdown
- * lib entries are that emit, not `src`), tsdown watch bundles `lib/index.js`
+ * sources: `tsc -b tsconfig.client.json --watch` emits `lib/types` (the pack
+ * lib entries are that emit, not `src`), Vite+ Pack watches `lib/index.js`
  * and `lib/client.js`, and `vite build --watch` rewrites `apps/web/dist`, which
  * `dsh web` serves. A missing watcher does not fail — it silently shows the
  * previous artifact, so an edit appears to do nothing; any stage exiting on its
@@ -34,16 +34,17 @@
  * to this process alone and is forwarded once. The exit code is 130 after
  * SIGINT, 0 after SIGTERM, and 1 when a stage exited on its own.
  *
- * Each package keeps its own tsdown.config.ts untouched: this script layers
- * `watch` through API-level inline config (tsdown workspace mode fills inline
- * keys under each package's file config, and no package config defines it).
+ * Each package keeps its pack config in its Vite config. This script loads and
+ * materializes each config before passing it to Vite+ Pack's public API with
+ * watch settings.
  */
 import { globSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
-import { build } from 'tsdown'
-import type { TsdownBundle } from 'tsdown'
+import { build } from 'vite-plus/pack'
+import type { InlineConfig, TsdownHandle } from 'vite-plus/pack'
+import { loadVitePackConfigs } from './resolve-vite-pack-config.ts'
 import {
   CLIENT_BUILD_PROFILE_SELECTOR,
   clientBuildProcessEnvironment,
@@ -53,7 +54,7 @@ import { pnpmInvocation } from './pnpm-invocation.ts'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
-/** Client-face type emit feeding every tsdown lib entry in the watch set. */
+/** Client-face type emit feeding every pack lib entry in the watch set. */
 const CLIENT_TYPE_PROGRAM = 'tsconfig.client.json'
 
 /** Compile-shell workspace whose dist `dsh web` serves. */
@@ -71,10 +72,7 @@ const TEST_INFRASTRUCTURE_PREFIX = 'packages/test-support/'
  * @param environment - watcher launch environment supplying public extensions.
  * @returns process environment shared by tsdown and spawned watcher stages.
  */
-export function devWebBuildEnvironment(
-  root: string,
-  environment: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
+export function devWebBuildEnvironment(root: string, environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return clientBuildProcessEnvironment(environment, repositoryClientBuildEnvironment(root, environment))
 }
 
@@ -169,44 +167,65 @@ export function discoverLibraryDirs(root = repoRoot): string[] {
 }
 
 /**
- * Start the tsdown watch build used by `pnpm run dev:web`.
- * @param root - repository or fixture root passed to tsdown.
+ * Start the Vite+ Pack watch builds used by `pnpm run dev:web`.
+ * @param root - repository or fixture root passed to Vite+ Pack.
  * @param pluginDirs - workspace-relative package directories to watch.
  * @param pollInterval - optional source-watcher polling interval in milliseconds.
- * @returns live bundles after every watcher has completed its initial build and package-owned post-build hooks.
+ * @returns the live watch handle after every package completes its initial build and post-build hooks.
  */
 export async function watchClientPlugins(
   root: string,
   pluginDirs: readonly string[],
   pollInterval?: number,
-): Promise<TsdownBundle[]> {
-  let resolveInitialBuilds: (() => void) | undefined
-  const initialBuilds = new Promise<void>((resolve) => { resolveInitialBuilds = resolve })
-  const initialized = new WeakSet<object>()
-  const readiness: { expectedBuilds?: number; initializedBuilds: number } = { initializedBuilds: 0 }
-  const bundles = await build({
-    cwd: root,
-    workspace: [...pluginDirs],
-    configLoader: 'native',
-    watch: true,
-    // Workspace hooks override inline hooks; onSuccess runs after each package's build:done work.
-    onSuccess: (options) => {
-      if (initialized.has(options)) return
-      initialized.add(options)
-      readiness.initializedBuilds += 1
-      if (
-        readiness.expectedBuilds !== undefined
-        && readiness.initializedBuilds >= readiness.expectedBuilds
-      ) resolveInitialBuilds?.()
-    },
-    ...pollInterval !== undefined
-      ? { inputOptions: { watch: { watcher: { usePolling: true, pollInterval } } } }
-      : {},
-  })
-  readiness.expectedBuilds = bundles.length
-  if (readiness.initializedBuilds >= readiness.expectedBuilds) resolveInitialBuilds?.()
-  await initialBuilds
-  return bundles
+): Promise<{ watch: { close: () => Promise<void> } }> {
+  const previousFace = process.env.DSH_BUILD_FACE
+  process.env.DSH_BUILD_FACE = 'client'
+  const handles: TsdownHandle[] = []
+  try {
+    const configs = []
+    for (const dir of pluginDirs) {
+      const packageRoot = resolve(root, dir)
+      configs.push({ packageRoot, configs: await loadVitePackConfigs('vite.config.ts', packageRoot) })
+    }
+    const buildCount = configs.reduce((total, pkg) => total + pkg.configs.length, 0)
+    if (buildCount === 0) throw new Error('Vite+ pack: dev:web found no Client build configs')
+
+    let resolveInitialBuilds: (() => void) | undefined
+    const initialBuilds = new Promise<void>((resolve) => {
+      resolveInitialBuilds = resolve
+    })
+    let initializedBuilds = 0
+    for (const { packageRoot, configs: packConfigs } of configs) {
+      for (const config of packConfigs) {
+        const configuredSuccess = config.onSuccess
+        const onSuccess: NonNullable<InlineConfig['onSuccess']> = async (...args) => {
+          if (typeof configuredSuccess === 'function') await configuredSuccess(...args)
+          initializedBuilds += 1
+          if (initializedBuilds >= buildCount) resolveInitialBuilds?.()
+        }
+        const watchConfig: InlineConfig = {
+          ...config,
+          cwd: packageRoot,
+          config: false,
+          watch: true,
+          env: { DSH_BUILD_FACE: 'client' },
+          onSuccess,
+          ...(pollInterval !== undefined ? { inputOptions: { watch: { watcher: { usePolling: true, pollInterval } } } } : {}),
+        }
+        handles.push(await build(watchConfig))
+      }
+    }
+    await initialBuilds
+    return {
+      watch: { close: async () => await Promise.all(handles.map((handle) => handle.watch.close())).then(() => undefined) },
+    }
+  } catch (error) {
+    await Promise.all(handles.map((handle) => handle.watch.close()))
+    throw error
+  } finally {
+    if (previousFace === undefined) delete process.env.DSH_BUILD_FACE
+    else process.env.DSH_BUILD_FACE = previousFace
+  }
 }
 
 /** One long-lived stage process as the supervisor observes it. */
@@ -269,14 +288,16 @@ export class StageSupervisor {
       await this.settled(stop.graceMs)
     }
     for (const stage of this.live) stage.kill('SIGKILL')
-    await Promise.all([...this.live].map(stage => stage.exited))
+    await Promise.all([...this.live].map((stage) => stage.exited))
   }
 
   private async settled(graceMs: number): Promise<void> {
     let timer: NodeJS.Timeout | undefined
     await Promise.race([
-      Promise.all([...this.live].map(stage => stage.exited)),
-      new Promise<void>((resolve) => { timer = setTimeout(resolve, graceMs) }),
+      Promise.all([...this.live].map((stage) => stage.exited)),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, graceMs)
+      }),
     ])
     clearTimeout(timer)
   }
@@ -297,13 +318,7 @@ const STOP_GRACE_MS = 6_000
  * @param args - command arguments.
  * @param local - whether to resolve `command` from the workspace's installed bins.
  */
-function spawnStage(
-  supervisor: StageSupervisor,
-  name: string,
-  command: string,
-  args: readonly string[],
-  local: boolean,
-): void {
+function spawnStage(supervisor: StageSupervisor, name: string, command: string, args: readonly string[], local: boolean): void {
   const child = execa(command, [...args], {
     cwd: repoRoot,
     stdio: 'inherit',
@@ -312,8 +327,10 @@ function spawnStage(
   })
   supervisor.add({
     name,
-    exited: child.then(result => result.exitCode ?? null),
-    kill(signal) { child.kill(signal) },
+    exited: child.then((result) => result.exitCode ?? null),
+    kill(signal) {
+      child.kill(signal)
+    },
   })
 }
 
@@ -359,8 +376,12 @@ if (isMain) {
   // Persistent listeners, not `once`: the tsdown watchers bundle signal-exit,
   // which re-raises a signal whenever it finds no other listener left and would
   // terminate this process in the middle of the teardown below.
-  process.on('SIGINT', () => { requestShutdown(130, undefined) })
-  process.on('SIGTERM', () => { requestShutdown(0, 'SIGTERM') })
+  process.on('SIGINT', () => {
+    requestShutdown(130, undefined)
+  })
+  process.on('SIGTERM', () => {
+    requestShutdown(0, 'SIGTERM')
+  })
 
   const buildExit = options.skipBuild ? 0 : await runBuild()
   if (shutdownRequested()) process.exit(await shutdown.promise)
@@ -386,7 +407,9 @@ if (isMain) {
     process.exit(1)
   }
   if (libraryDirs.length === 0) {
-    console.error('dev-web: no client-preset library packages found under packages/ — the compile shell links their lib products, so an empty set means the discovery predicate is stale')
+    console.error(
+      'dev-web: no client-preset library packages found under packages/ — the compile shell links their lib products, so an empty set means the discovery predicate is stale',
+    )
     process.exit(1)
   }
 
@@ -395,18 +418,25 @@ if (isMain) {
   // natively watching on a network mount where inotify never fires: it stops
   // re-emitting lib/types, and the two later stages then rebuild forever from
   // stale input without printing anything.
-  spawnStage(supervisor, `tsc -b ${CLIENT_TYPE_PROGRAM} --watch`, 'tsc', [
-    '-b', CLIENT_TYPE_PROGRAM, '--watch', '--preserveWatchOutput',
-    ...options.pollInterval !== undefined
-      ? ['--watchFile', 'fixedPollingInterval', '--watchDirectory', 'fixedPollingInterval']
-      : [],
-  ], true)
+  spawnStage(
+    supervisor,
+    `tsc -b ${CLIENT_TYPE_PROGRAM} --watch`,
+    'tsc',
+    [
+      '-b',
+      CLIENT_TYPE_PROGRAM,
+      '--watch',
+      '--preserveWatchOutput',
+      ...(options.pollInterval !== undefined ? ['--watchFile', 'fixedPollingInterval', '--watchDirectory', 'fixedPollingInterval'] : []),
+    ],
+    true,
+  )
 
-  // tsdown's initial builds are awaited before the dist watcher starts so vite's
+  // Pack's initial builds are awaited before the dist watcher starts so Vite's
   // first build reads current lib bundles rather than whatever the last full
   // build left. Its own watch then covers later lib rewrites — those files are
   // in its module graph.
-  const bundles = await watchClientPlugins(repoRoot, [...pluginDirs, ...libraryDirs], options.pollInterval)
+  const handle = await watchClientPlugins(repoRoot, [...pluginDirs, ...libraryDirs], options.pollInterval)
   if (!shutdownRequested()) {
     // Through the shell's own `watch` script rather than vite's API: vite is not a
     // repository-root dependency, and more importantly the vite root is its
@@ -417,23 +447,21 @@ if (isMain) {
     // The same launch vector as the root `dsh` script, so the served Host runs
     // from source exactly as `pnpm dsh web` would.
     if (options.serve) {
-      spawnStage(supervisor, 'dsh web', process.execPath, [
-        '--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', ...options.appArgs,
-      ], false)
+      spawnStage(supervisor, 'dsh web', process.execPath, ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', ...options.appArgs], false)
     }
     console.log(
-      `dev-web: watching ${String(pluginDirs.length)} dsh.client plugin packages`
-      + ` and ${String(libraryDirs.length)} statically linked library packages`
-      + (options.pollInterval !== undefined ? ` (polling ${String(options.pollInterval)}ms)` : '')
-      + `, plus tsc -b ${CLIENT_TYPE_PROGRAM} and the ${SHELL_PACKAGE} dist build`
-      + (options.serve ? ', serving through dsh web' : '')
-      + ':\n  '
-      + [...pluginDirs, ...libraryDirs].join('\n  '),
+      `dev-web: watching ${String(pluginDirs.length)} dsh.client plugin packages` +
+        ` and ${String(libraryDirs.length)} statically linked library packages` +
+        (options.pollInterval !== undefined ? ` (polling ${String(options.pollInterval)}ms)` : '') +
+        `, plus tsc -b ${CLIENT_TYPE_PROGRAM} and the ${SHELL_PACKAGE} dist build` +
+        (options.serve ? ', serving through dsh web' : '') +
+        ':\n  ' +
+        [...pluginDirs, ...libraryDirs].join('\n  '),
     )
   }
 
   const exitCode = await shutdown.promise
   await supervisor.stop({ signal: requested.signal, graceMs: STOP_GRACE_MS })
-  for (const bundle of bundles) await bundle[Symbol.asyncDispose]()
+  await handle.watch.close()
   process.exit(exitCode)
 }

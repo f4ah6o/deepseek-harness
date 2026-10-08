@@ -7,7 +7,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
  * and must not leak downstream.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, foldRequestHeader } from '@deepseek-ai/dsh-session'
@@ -25,7 +25,7 @@ async function harness(adapter: MockAdapter, toolOrder?: SystemPromptConfig['too
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { personaPrefix: 'stable base', ...toolOrder !== undefined ? { toolOrder } : {} })
+  await ctx.plugin(SystemPrompt, { personaPrefix: 'stable base', ...(toolOrder !== undefined ? { toolOrder } : {}) })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -45,14 +45,16 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 }
 
 function registerNamed(ctx: Context, name: string) {
-  ctx.tools.register(defineContentToolFixture({
-    name,
-    description: `the ${name} tool`,
-    parameters: {},
-    async execute() {
-      return [{ type: 'text', text: name }]
-    },
-  }))
+  ctx.tools.register(
+    defineContentToolFixture({
+      name,
+      description: `the ${name} tool`,
+      parameters: {},
+      async execute() {
+        return [{ type: 'text', text: name }]
+      },
+    }),
+  )
 }
 
 /** Run one text-only turn and return the harness context + agent. */
@@ -70,11 +72,11 @@ describe('loop-level canonical tool order', () => {
   it('logs the request/header with tools in canonical order, not registration order', async () => {
     const { agent, adapter } = await runTurn(['zulu', 'alpha', 'mike'])
     const header = foldRequestHeader(agent.session.snapshotEvents())
-    expect(header?.tools?.map(tool => tool.name)).toEqual(['alpha', 'mike', 'zulu'])
+    expect(header?.tools?.map((tool) => tool.name)).toEqual(['alpha', 'mike', 'zulu'])
     // The dispatched request is built FROM the logged header (whose tools the
     // assembly already canonicalized) and reaches the adapter deep-frozen —
     // the marker the reconstruction invariant keys on.
-    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['alpha', 'mike', 'zulu'])
+    expect(adapter.requests[0]?.tools?.map((tool) => tool.name)).toEqual(['alpha', 'mike', 'zulu'])
     expect(Object.isFrozen(adapter.requests[0])).toBe(true)
     expect(adapter.requests[0]?.sessionId).toBe(agent.session.id)
   })
@@ -82,7 +84,7 @@ describe('loop-level canonical tool order', () => {
   it('produces the same header order for any registration order', async () => {
     const first = await runTurn(['alpha', 'mike', 'zulu'])
     const second = await runTurn(['zulu', 'mike', 'alpha'])
-    const names = (run: typeof first) => foldRequestHeader(run.agent.session.snapshotEvents())?.tools?.map(tool => tool.name)
+    const names = (run: typeof first) => foldRequestHeader(run.agent.session.snapshotEvents())?.tools?.map((tool) => tool.name)
     expect(names(first)).toEqual(['alpha', 'mike', 'zulu'])
     expect(names(second)).toEqual(names(first))
   })
@@ -90,8 +92,8 @@ describe('loop-level canonical tool order', () => {
   it('honors a configured toolOrder in the logged header and the dispatched request', async () => {
     const { agent, adapter } = await runTurn(['alpha', 'zulu', 'mike'], ['zulu', TOOL_ORDER_REST])
     const header = foldRequestHeader(agent.session.snapshotEvents())
-    expect(header?.tools?.map(tool => tool.name)).toEqual(['zulu', 'alpha', 'mike'])
-    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['zulu', 'alpha', 'mike'])
+    expect(header?.tools?.map((tool) => tool.name)).toEqual(['zulu', 'alpha', 'mike'])
+    expect(adapter.requests[0]?.tools?.map((tool) => tool.name)).toEqual(['zulu', 'alpha', 'mike'])
     expect(Object.isFrozen(adapter.requests[0])).toBe(true)
   })
 
@@ -104,9 +106,9 @@ describe('loop-level canonical tool order', () => {
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(0)
     expect(foldRequestHeader(agent.session.snapshotEvents())).toBeUndefined()
-    expect(agent.session.snapshotEvents().some(e => e.type === 'turn/start')).toBe(true)
-    expect(agent.session.snapshotEvents().some(e => e.type === 'turn/end')).toBe(true)
-    expect(agent.session.snapshotEvents().some(e => e.type === 'step/start')).toBe(false)
-    expect(agent.session.snapshotEvents().some(e => e.type === 'step/end')).toBe(false)
+    expect(agent.session.snapshotEvents().some((e) => e.type === 'turn/start')).toBe(true)
+    expect(agent.session.snapshotEvents().some((e) => e.type === 'turn/end')).toBe(true)
+    expect(agent.session.snapshotEvents().some((e) => e.type === 'step/start')).toBe(false)
+    expect(agent.session.snapshotEvents().some((e) => e.type === 'step/end')).toBe(false)
   })
 })

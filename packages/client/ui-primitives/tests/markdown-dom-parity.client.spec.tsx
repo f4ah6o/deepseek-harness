@@ -6,7 +6,7 @@
 // incremental fence-highlight decision, so `*.streaming.txt` fixtures with
 // fenced code pin shiki span trees where react-markdown had the plain arm.
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { MarkdownText } from './markdown-test-components.tsx'
 
 afterEach(cleanup)
@@ -23,7 +23,7 @@ function serialize(node: Node, indent: string, inPre: boolean): string {
   if (node.nodeType !== Node.ELEMENT_NODE) return ''
   const element = node as Element
   const attrs = [...element.attributes]
-    .map(attr => `${attr.name}=${JSON.stringify(attr.value)}`)
+    .map((attr) => `${attr.name}=${JSON.stringify(attr.value)}`)
     .sort()
     .join(' ')
   const open = attrs === '' ? element.tagName.toLowerCase() : `${element.tagName.toLowerCase()} ${attrs}`
@@ -54,7 +54,7 @@ function serializeChildren(element: Element, indent: string, inPre: boolean): st
 
 function renderCase(text: string, streaming: boolean): string {
   const { container, unmount } = render(<MarkdownText text={text} streaming={streaming} />)
-  const out = [...container.childNodes].map(child => serialize(child, '', false)).join('')
+  const out = [...container.childNodes].map((child) => serialize(child, '', false)).join('')
   unmount()
   return out
 }
@@ -175,7 +175,7 @@ const CORPUS: Record<string, string> = {
     '',
     '[![linked badge](https://example.com/badge.png)](https://example.com/target) image-only anchors carry no leading glyph.',
   ].join('\n'),
-  'images': [
+  images: [
     '![https image](https://example.com/secure.png "img title")',
     '',
     '![http image](http://example.com/plain.png)',
@@ -196,7 +196,7 @@ const CORPUS: Record<string, string> = {
     '[shortcut]: https://example.com/shortcut',
     '[imgref]: https://example.com/ref.png',
   ].join('\n'),
-  'footnotes': [
+  footnotes: [
     'First use[^a] and reuse[^a] and another[^b].',
     '',
     '[^a]: Footnote a body with [link](https://example.com).',

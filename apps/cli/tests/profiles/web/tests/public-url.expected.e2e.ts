@@ -8,7 +8,7 @@ import { createInterface } from 'node:readline'
 import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { startPrefixProxy } from '../../../../../../apps/web/tests/prefix-proxy.ts'
 import { PROCESS_SHUTDOWN_TIMEOUT_MS } from '../../../../src/process-shutdown.ts'
 
@@ -27,14 +27,7 @@ type StoppedWeb = Awaited<WebChild>
 
 /** Start one keyless Web process with an outer lifetime deadline. */
 function spawnWeb(root: string, patch: string, interrupt: string, flags: string[]) {
-  return execa(process.execPath, [
-    dshBin,
-    '--profile', 'web',
-    '--patch', patch,
-    '--no-open',
-    '--port', '0',
-    ...flags,
-  ], {
+  return execa(process.execPath, [dshBin, '--profile', 'web', '--patch', patch, '--no-open', '--port', '0', ...flags], {
     cwd: root,
     env: {
       ...process.env,
@@ -69,21 +62,24 @@ interface RunningWeb {
 async function bootWeb(root: string, flags: string[]): Promise<RunningWeb> {
   const marker = join(root, 'listen-port.mjs')
   const interrupt = join(root, 'interrupt')
-  writeFileSync(marker, [
-    "import { existsSync } from 'node:fs'",
-    "export const name = 'public-url-listen-port'",
-    "export const inject = ['webServer']",
-    'export function apply(ctx) {',
-    "  console.log('public-url-listen-port: ' + ctx.webServer.port)",
-    '  const heartbeat = setInterval(() => {',
-    '    if (!existsSync(process.env.WEB_INTERRUPT_FILE)) return',
-    '    clearInterval(heartbeat)',
-    "    process.emit('SIGTERM')",
-    '  }, 20)',
-    '  ctx.effect(() => () => { clearInterval(heartbeat) })',
-    '}',
-    '',
-  ].join('\n'))
+  writeFileSync(
+    marker,
+    [
+      "import { existsSync } from 'node:fs'",
+      "export const name = 'public-url-listen-port'",
+      "export const inject = ['webServer']",
+      'export function apply(ctx) {',
+      "  console.log('public-url-listen-port: ' + ctx.webServer.port)",
+      '  const heartbeat = setInterval(() => {',
+      '    if (!existsSync(process.env.WEB_INTERRUPT_FILE)) return',
+      '    clearInterval(heartbeat)',
+      "    process.emit('SIGTERM')",
+      '  }, 20)',
+      '  ctx.effect(() => () => { clearInterval(heartbeat) })',
+      '}',
+      '',
+    ].join('\n'),
+  )
   const patch = join(root, 'extra.yml')
   writeFileSync(patch, `- insert:\n    - name: ${JSON.stringify(pathToFileURL(marker).href)}\n`)
   const child = spawnWeb(root, patch, interrupt, flags)
@@ -94,7 +90,7 @@ async function bootWeb(root: string, flags: string[]): Promise<RunningWeb> {
   let startup: URL | undefined
   const announced = (): void => {
     if (port === undefined || startup === undefined) return
-    ready.resolve({ child, port, startup, stop: () => stopping ??= stop(child, interrupt) })
+    ready.resolve({ child, port, startup, stop: () => (stopping ??= stop(child, interrupt)) })
   }
   lines.on('line', (line) => {
     if (line.startsWith('public-url-listen-port: ')) port = Number(line.slice('public-url-listen-port: '.length))
@@ -106,7 +102,9 @@ async function bootWeb(root: string, flags: string[]): Promise<RunningWeb> {
   })
   let deadline: NodeJS.Timeout | undefined
   const expired = new Promise<never>((_resolve, reject) => {
-    deadline = setTimeout(() => { reject(new Error('Web profile did not print its URL line and bound port')) }, 60_000)
+    deadline = setTimeout(() => {
+      reject(new Error('Web profile did not print its URL line and bound port'))
+    }, 60_000)
   })
   try {
     return await Promise.race([ready.promise, expired])
@@ -139,7 +137,9 @@ async function withWeb(flags: string[], scenario: (web: RunningWeb) => Promise<v
 /** Ask the child to shut down through its interrupt marker within a bounded grace period, then force-kill it. */
 async function stop(child: WebChild, interrupt: string) {
   writeFileSync(interrupt, '')
-  const deadline = setTimeout(() => { child.kill('SIGKILL') }, PROCESS_SHUTDOWN_TIMEOUT_MS * 2)
+  const deadline = setTimeout(() => {
+    child.kill('SIGKILL')
+  }, PROCESS_SHUTDOWN_TIMEOUT_MS * 2)
   try {
     return await child
   } finally {
@@ -158,19 +158,27 @@ function expectCleanExit(stopped: StoppedWeb): void {
  * One HTTP request that connects to an explicit transport address while
  * presenting an explicit browser-facing authority, as a proxy would.
  */
-async function request(
-  dial: string, port: number, path: string, host: string, method: 'GET' | 'POST', cookie?: string,
-): Promise<Response> {
+async function request(dial: string, port: number, path: string, host: string, method: 'GET' | 'POST', cookie?: string): Promise<Response> {
   const { promise, resolve, reject } = Promise.withResolvers<IncomingMessage>()
-  const req = httpRequest({
-    host: dial, port, path, method,
-    headers: { host, 'content-type': 'application/json', ...cookie === undefined ? {} : { cookie } },
-  }, resolve)
+  const req = httpRequest(
+    {
+      host: dial,
+      port,
+      path,
+      method,
+      headers: { host, 'content-type': 'application/json', ...(cookie === undefined ? {} : { cookie }) },
+    },
+    resolve,
+  )
   req.once('error', reject)
-  req.setTimeout(10_000, () => { req.destroy(new Error('HTTP request timed out')) })
-  req.end(method === 'POST'
-    ? JSON.stringify({ type: 'client-request', rpcId: 'public-url', method: 'session/create', payload: { args: { request: {} } } })
-    : undefined)
+  req.setTimeout(10_000, () => {
+    req.destroy(new Error('HTTP request timed out'))
+  })
+  req.end(
+    method === 'POST'
+      ? JSON.stringify({ type: 'client-request', rpcId: 'public-url', method: 'session/create', payload: { args: { request: {} } } })
+      : undefined,
+  )
   const response = await promise
   const headers = new Headers()
   for (let i = 0; i < response.rawHeaders.length; i += 2) {
@@ -180,9 +188,7 @@ async function request(
 }
 
 /** Establish the browser session needed by the protected API, keeping the minted cookie's own attributes. */
-async function exchange(
-  dial: string, port: number, path: string, host: string,
-): Promise<{ cookie: string; setCookie: string }> {
+async function exchange(dial: string, port: number, path: string, host: string): Promise<{ cookie: string; setCookie: string }> {
   const response = await request(dial, port, path, host, 'GET')
   const setCookie = response.headers.get('set-cookie')
   await response.arrayBuffer()

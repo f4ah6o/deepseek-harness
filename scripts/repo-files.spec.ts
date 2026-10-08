@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { uniqueRepoFiles } from './repo-files.ts'
 
 interface Tree {
@@ -22,7 +22,12 @@ function makeTree(): Tree {
   symlinkSync(outside, join(root, 'linked-dir'))
   mkdirSync(join(root, '.hidden'), { recursive: true })
   writeFileSync(join(root, '.hidden', 'snap.md'), 'hidden by dot\n')
-  return { root, clean: () => { rmSync(parent, { recursive: true, force: true }) } }
+  return {
+    root,
+    clean: () => {
+      rmSync(parent, { recursive: true, force: true })
+    },
+  }
 }
 
 describe('uniqueRepoFiles', () => {
@@ -35,7 +40,7 @@ describe('uniqueRepoFiles', () => {
       // target, without throwing on any node version.
       const files = uniqueRepoFiles(tree.root, ['**/snap.md'])
       const rootReal = realpathSync(tree.root)
-      const reals = files.map(file => relative(rootReal, file.real)).sort()
+      const reals = files.map((file) => relative(rootReal, file.real)).sort()
       expect(reals).toEqual([join('a', 'snap.md')])
     } finally {
       tree.clean()
@@ -46,7 +51,7 @@ describe('uniqueRepoFiles', () => {
     const tree = makeTree()
     try {
       const files = uniqueRepoFiles(tree.root, ['**/*.md'])
-      const paths = files.map(file => relative(tree.root, file.abs)).sort()
+      const paths = files.map((file) => relative(tree.root, file.abs)).sort()
       // The symlinked d/snap.md dedupes onto its a/snap.md target; the
       // linked-dir and .hidden targets must not appear at all.
       expect(paths).toEqual([join('a', 'snap.md')])
@@ -62,12 +67,12 @@ describe('uniqueRepoFiles', () => {
       // `linked-dir/*` enter the symlinked directory's target; `**` and
       // wildcard segments resolve with dirent types and do not.
       const files = uniqueRepoFiles(tree.root, ['linked-dir/**/*.md'])
-      expect(files.map(file => relative(tree.root, file.abs))).toEqual([join('linked-dir', 'snap.md')])
-      expect(uniqueRepoFiles(tree.root, ['linked-dir/*.md']).map(file => relative(tree.root, file.abs)))
-        .toEqual([join('linked-dir', 'snap.md')])
+      expect(files.map((file) => relative(tree.root, file.abs))).toEqual([join('linked-dir', 'snap.md')])
+      expect(uniqueRepoFiles(tree.root, ['linked-dir/*.md']).map((file) => relative(tree.root, file.abs))).toEqual([
+        join('linked-dir', 'snap.md'),
+      ])
       // A wildcard first segment never enters the symlinked directory.
-      expect(uniqueRepoFiles(tree.root, ['*/snap.md']).map(file => relative(tree.root, file.abs)))
-        .toEqual([join('a', 'snap.md')])
+      expect(uniqueRepoFiles(tree.root, ['*/snap.md']).map((file) => relative(tree.root, file.abs))).toEqual([join('a', 'snap.md')])
     } finally {
       tree.clean()
     }
@@ -84,12 +89,13 @@ describe('uniqueRepoFiles', () => {
       // symlinked directory again, exactly as node glob does for a repeated
       // literal; recursion stays bounded because each literal consumes one
       // pattern segment and `**` only enters real directories.
-      expect(uniqueRepoFiles(root, ['cyc/**/snap.md']).map(file => relative(root, file.abs)))
-        .toEqual([join('cyc', 'a', 'snap.md')])
-      expect(uniqueRepoFiles(root, ['cyc/cyc/**/snap.md']).map(file => relative(root, file.abs)))
-        .toEqual([join('cyc', 'cyc', 'a', 'snap.md')])
-      expect(uniqueRepoFiles(root, ['cyc/cyc/cyc/**/snap.md']).map(file => relative(root, file.abs)))
-        .toEqual([join('cyc', 'cyc', 'cyc', 'a', 'snap.md')])
+      expect(uniqueRepoFiles(root, ['cyc/**/snap.md']).map((file) => relative(root, file.abs))).toEqual([join('cyc', 'a', 'snap.md')])
+      expect(uniqueRepoFiles(root, ['cyc/cyc/**/snap.md']).map((file) => relative(root, file.abs))).toEqual([
+        join('cyc', 'cyc', 'a', 'snap.md'),
+      ])
+      expect(uniqueRepoFiles(root, ['cyc/cyc/cyc/**/snap.md']).map((file) => relative(root, file.abs))).toEqual([
+        join('cyc', 'cyc', 'cyc', 'a', 'snap.md'),
+      ])
     } finally {
       rmSync(parent, { recursive: true, force: true })
     }
@@ -162,10 +168,8 @@ describe('uniqueRepoFiles', () => {
     try {
       // Node glob normalizes a `.` segment away, so `./a/snap.md` matches
       // a/snap.md instead of looking for a directory named `.`.
-      expect(uniqueRepoFiles(tree.root, ['./a/snap.md']).map(file => relative(tree.root, file.abs)))
-        .toEqual([join('a', 'snap.md')])
-      expect(uniqueRepoFiles(tree.root, ['a/./snap.md']).map(file => relative(tree.root, file.abs)))
-        .toEqual([join('a', 'snap.md')])
+      expect(uniqueRepoFiles(tree.root, ['./a/snap.md']).map((file) => relative(tree.root, file.abs))).toEqual([join('a', 'snap.md')])
+      expect(uniqueRepoFiles(tree.root, ['a/./snap.md']).map((file) => relative(tree.root, file.abs))).toEqual([join('a', 'snap.md')])
       // A `..` segment escapes the scanned root; the walker must fail loudly
       // rather than silently match nothing.
       expect(() => uniqueRepoFiles(tree.root, ['a/../snap.md'])).toThrow(/does not model \.\. segments/)

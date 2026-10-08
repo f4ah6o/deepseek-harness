@@ -1,7 +1,10 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /** Build the frozen adjacent-migration library. */
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: ['lib/types/index.js'],
   outDir: 'lib',
   format: ['esm'],

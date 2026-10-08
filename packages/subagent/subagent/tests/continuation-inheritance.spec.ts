@@ -6,7 +6,7 @@
  * (the one-shot `subagent-inprocess/tests/inheritance.spec.ts` counterpart).
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -68,13 +68,16 @@ function startSpec(parent: Agent, provider = 'spawn') {
 
 /** Wait until a child's Activation is gone, i.e. its handle finished disposal. */
 async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void> {
-  await vi.waitFor(() => {
-    expect(ctx.agents.get(childId)).toBeUndefined()
-  }, { timeout: 15_000 })
+  await vi.waitFor(
+    () => {
+      expect(ctx.agents.get(childId)).toBeUndefined()
+    },
+    { timeout: 15_000 },
+  )
 }
 
 function policyEvents(events: readonly SessionEvent[]) {
-  return events.filter(event => event.type === 'sandbox/mode' || event.type === 'approval/policy')
+  return events.filter((event) => event.type === 'sandbox/mode' || event.type === 'approval/policy')
 }
 
 function foldedSandboxMode(ctx: Context, id: SessionId, events: readonly SessionEvent[]): unknown {
@@ -93,34 +96,38 @@ describe('continuable policy inheritance', () => {
       const { ctx, parent } = await setup([textResponse('child done'), textResponse('resumed child done')])
       parent.session.append('permission/preset', { preset })
       setSandboxMode(parent.session, 'danger-full-access')
-      const current = vi.fn((session: Session) => session === parent.session ? preset : 'custom')
+      const current = vi.fn((session: Session) => (session === parent.session ? preset : 'custom'))
       ctx.provide('permissionPresets', { current } as never)
 
       const started = await ctx.subagents.startContinuable(startSpec(parent))
       await waitNoActivation(ctx, started.childId)
 
       const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-      expect(loaded.events.filter(event =>
-        event.type === 'sandbox/mode'
-        || event.type === 'approval/policy'
-        || event.type === 'permission/preset',
-      )).toMatchObject([
+      expect(
+        loaded.events.filter(
+          (event) => event.type === 'sandbox/mode' || event.type === 'approval/policy' || event.type === 'permission/preset',
+        ),
+      ).toMatchObject([
         { type: 'sandbox/mode', data: { mode: 'danger-full-access', source: 'delegation' } },
         { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
         { type: 'permission/preset', data: { preset } },
       ])
       expect(current).toHaveBeenCalledExactlyOnceWith(parent.session)
       parent.session.append('permission/preset', { preset: preset === 'auto' ? 'danger-full-access' : 'auto' })
-      current.mockImplementation(() => { throw new Error('cold resume must not read parent permission') })
+      current.mockImplementation(() => {
+        throw new Error('cold resume must not read parent permission')
+      })
       await queueHostSubagentPrompt(
-        ctx.subagents, parent, started.childId,
-        [{ type: 'text', text: 'continue please' }], { kind: 'user' }, new AbortController().signal,
+        ctx.subagents,
+        parent,
+        started.childId,
+        [{ type: 'text', text: 'continue please' }],
+        { kind: 'user' },
+        new AbortController().signal,
       )
       await waitNoActivation(ctx, started.childId)
       const resumed = await loadStoredSession(ctx.sessionPersistence, started.childId)
-      expect(resumed.events.filter(event => event.type === 'permission/preset')).toMatchObject([
-        { data: { preset } },
-      ])
+      expect(resumed.events.filter((event) => event.type === 'permission/preset')).toMatchObject([{ data: { preset } }])
       expect(current).toHaveBeenCalledTimes(1)
     },
   )
@@ -128,32 +135,38 @@ describe('continuable policy inheritance', () => {
   it.each([
     { seedPreset: 'auto', preset: 'danger-full-access' },
     { seedPreset: 'danger-full-access', preset: 'auto' },
-  ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
-    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
-    parent.session.append('permission/preset', { preset: seedPreset })
-    setSandboxMode(parent.session, 'danger-full-access')
-    parent.followup(createUserMessage({
-      content: [{ type: 'text', text: 'parent work' }],
-      source: { kind: 'user' },
-    }))
-    await parent.whenIdle()
-    parent.session.append('permission/preset', { preset })
-    let currentPreset: 'auto' | 'danger-full-access' = preset
-    ctx.provide('permissionPresets', {
-      current: (session: Session) => session === parent.session ? currentPreset : 'custom',
-    } as never)
+  ] as const)(
+    'captures $preset before child creation and overrides the $seedPreset fork prefix',
+    { timeout: 20_000 },
+    async ({ seedPreset, preset }) => {
+      const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
+      parent.session.append('permission/preset', { preset: seedPreset })
+      setSandboxMode(parent.session, 'danger-full-access')
+      parent.followup(
+        createUserMessage({
+          content: [{ type: 'text', text: 'parent work' }],
+          source: { kind: 'user' },
+        }),
+      )
+      await parent.whenIdle()
+      parent.session.append('permission/preset', { preset })
+      let currentPreset: 'auto' | 'danger-full-access' = preset
+      ctx.provide('permissionPresets', {
+        current: (session: Session) => (session === parent.session ? currentPreset : 'custom'),
+      } as never)
 
-    const starting = ctx.subagents.startContinuable(startSpec(parent, 'fork'))
-    currentPreset = seedPreset
-    parent.session.append('permission/preset', { preset: seedPreset })
-    const started = await starting
-    await waitNoActivation(ctx, started.childId)
-    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.events.filter(event => event.type === 'permission/preset')).toMatchObject([
-      { data: { preset: seedPreset } },
-      { data: { preset } },
-    ])
-  })
+      const starting = ctx.subagents.startContinuable(startSpec(parent, 'fork'))
+      currentPreset = seedPreset
+      parent.session.append('permission/preset', { preset: seedPreset })
+      const started = await starting
+      await waitNoActivation(ctx, started.childId)
+      const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(loaded.events.filter((event) => event.type === 'permission/preset')).toMatchObject([
+        { data: { preset: seedPreset } },
+        { data: { preset } },
+      ])
+    },
+  )
 
   it('seeds the parent sandbox override and pins approval to never', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
@@ -183,12 +196,9 @@ describe('continuable policy inheritance', () => {
     expect(foldedApprovalPolicy(ctx, started.childId, loaded.events)).toBe('never')
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
     const runtimeContext = loaded.events.find(
-      (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
-        && event.data.source.kind === 'runtime-context',
+      (event): event is SessionEvent<'user/message'> => event.type === 'user/message' && event.data.source.kind === 'runtime-context',
     )
-    const contextText = runtimeContext?.data.content
-      .flatMap(block => block.type === 'text' ? [block.text] : [])
-      .join('\n')
+    const contextText = runtimeContext?.data.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
     expect(contextText).toContain('You are a delegated subagent')
   })
 
@@ -215,18 +225,18 @@ describe('continuable policy inheritance', () => {
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(policyEvents(loaded.events)).toMatchObject([
-      { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
-    ])
+    expect(policyEvents(loaded.events)).toMatchObject([{ type: 'approval/policy', data: { policy: 'never', source: 'delegation' } }])
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBeNull()
   })
 
   it('pins approval after the fork prefix of an unswitched fork child', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
-    parent.followup(createUserMessage({
-      content: [{ type: 'text', text: 'parent work' }],
-      source: { kind: 'user' },
-    }))
+    parent.followup(
+      createUserMessage({
+        content: [{ type: 'text', text: 'parent work' }],
+        source: { kind: 'user' },
+      }),
+    )
     await parent.whenIdle()
 
     const started = await ctx.subagents.startContinuable(startSpec(parent, 'fork'))
@@ -234,9 +244,7 @@ describe('continuable policy inheritance', () => {
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(loaded.inheritedEventCount).toBeGreaterThan(0)
-    expect(policyEvents(loaded.events)).toMatchObject([
-      { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
-    ])
+    expect(policyEvents(loaded.events)).toMatchObject([{ type: 'approval/policy', data: { policy: 'never', source: 'delegation' } }])
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBeNull()
   })
 
@@ -280,12 +288,12 @@ describe('continuable policy inheritance', () => {
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
+    expect(loaded.events.filter((event) => event.type === 'sandbox/mode')).toMatchObject([
       { data: { mode: 'read-only', source: 'delegation' } },
     ])
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')
     // The approval pin is seeded once at creation, never re-appended on resume.
-    expect(loaded.events.filter(event => event.type === 'approval/policy')).toMatchObject([
+    expect(loaded.events.filter((event) => event.type === 'approval/policy')).toMatchObject([
       { data: { policy: 'never', source: 'delegation' } },
     ])
   })
@@ -294,10 +302,12 @@ describe('continuable policy inheritance', () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
     // The stale mode lands inside the completed turn the fork seed replays.
     setSandboxMode(parent.session, 'workspace-write')
-    parent.followup(createUserMessage({
-      content: [{ type: 'text', text: 'parent work' }],
-      source: { kind: 'user' },
-    }))
+    parent.followup(
+      createUserMessage({
+        content: [{ type: 'text', text: 'parent work' }],
+        source: { kind: 'user' },
+      }),
+    )
     await parent.whenIdle()
     setSandboxMode(parent.session, 'read-only')
 
@@ -306,7 +316,7 @@ describe('continuable policy inheritance', () => {
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(loaded.inheritedEventCount).toBeGreaterThan(0)
-    expect(loaded.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
+    expect(loaded.events.filter((event) => event.type === 'sandbox/mode')).toMatchObject([
       { data: { mode: 'workspace-write' } },
       { data: { mode: 'read-only', source: 'delegation' } },
     ])

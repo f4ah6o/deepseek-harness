@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -36,7 +36,7 @@ async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
     id,
     createdAt: 0,
     isSeeded: false,
-    ...cwd === undefined ? {} : { cwd },
+    ...(cwd === undefined ? {} : { cwd }),
   })
   const value: Agent = {
     id,
@@ -50,7 +50,7 @@ async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
     steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
     inject: () => {},
     cancel() {},
-    runMaintenance: task => task(new AbortController().signal),
+    runMaintenance: (task) => task(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
   }
   await ctx.agents.register(value)
@@ -58,21 +58,19 @@ async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+  return result.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
 }
 
-function call(
-  ctx: Context,
-  owner: Agent | undefined,
-  command: string,
-  signal = new AbortController().signal,
-) {
+function call(ctx: Context, owner: Agent | undefined, command: string, signal = new AbortController().signal) {
   return ctx.tools.execute({
     signal,
     callId: ToolCallId(`persistent-pwsh-${++callNumber}`),
     name: 'pwsh',
     arguments: { command },
-    ...owner === undefined ? {} : { agent: owner },
+    ...(owner === undefined ? {} : { agent: owner }),
   })
 }
 
@@ -132,15 +130,17 @@ class StubTerminalSession implements TerminalBackendSession {
     if (this.throwOnSend) throw new Error('PTY session has exited')
     if (this.mode === 'wait-for-abort' || this.mode === 'end-on-abort') {
       const done = new Promise<ReturnType<StubTerminalSession['result']>>((resolve) => {
-        request.signal?.addEventListener('abort', () => {
-          const start = START_PATTERN.exec(request.text)?.[0]
-          const end = END_PATTERN.exec(request.text)?.[0]
-          const output = this.mode === 'end-on-abort'
-            ? `${start ?? ''}\ninterrupted\n${end ?? ''}130\n${this.motd}`
-            : 'partial output'
-          this.scrollback += output
-          resolve(this.result(output, 'stdin_read'))
-        }, { once: true })
+        request.signal?.addEventListener(
+          'abort',
+          () => {
+            const start = START_PATTERN.exec(request.text)?.[0]
+            const end = END_PATTERN.exec(request.text)?.[0]
+            const output = this.mode === 'end-on-abort' ? `${start ?? ''}\ninterrupted\n${end ?? ''}130\n${this.motd}` : 'partial output'
+            this.scrollback += output
+            resolve(this.result(output, 'stdin_read'))
+          },
+          { once: true },
+        )
       })
       return this.operation(done)
     }
@@ -218,22 +218,26 @@ class StubTerminalSession implements TerminalBackendSession {
       this.scrollback += output
       return this.operation(Promise.resolve(this.result(output, 'stdin_read')))
     }
-    const commandOutput = this.mode === 'large'
-      ? this.largeOutput
-      : this.mode === 'nonzero' ? ''
-        : this.mode === 'prompt-collision' ? this.motd
-          : 'hello from stub'
+    const commandOutput =
+      this.mode === 'large'
+        ? this.largeOutput
+        : this.mode === 'nonzero'
+          ? ''
+          : this.mode === 'prompt-collision'
+            ? this.motd
+            : 'hello from stub'
     const exitCode = this.mode === 'nonzero' ? 7 : 0
     const output = `${start ?? ''}\n${commandOutput}\n${end ?? ''}${exitCode}\n${this.motd}`
     this.scrollback += output
     if (this.mode === 'exit' || this.mode === 'signal-exit' || this.mode === 'unknown-exit') {
       const exitedOutput = `${start ?? ''}\nhello from stub\n`
       this.scrollback = this.scrollback.slice(0, -output.length) + exitedOutput
-      this.statusValue = this.mode === 'signal-exit'
-        ? { kind: 'exited', exitCode: null, signal: 'SIGTERM' }
-        : this.mode === 'exit'
-          ? { kind: 'exited', exitCode: 9, signal: null }
-          : { kind: 'exited', exitCode: null, signal: null }
+      this.statusValue =
+        this.mode === 'signal-exit'
+          ? { kind: 'exited', exitCode: null, signal: 'SIGTERM' }
+          : this.mode === 'exit'
+            ? { kind: 'exited', exitCode: 9, signal: null }
+            : { kind: 'exited', exitCode: null, signal: null }
       return this.operation(Promise.resolve(this.result(exitedOutput, 'session_exit')))
     }
     return this.operation(Promise.resolve(this.result(output, 'stdin_read')))
@@ -312,10 +316,7 @@ function stubBackend(initialMode: StubMode = 'normal') {
   return { backend, sessions }
 }
 
-async function setup(
-  config: ToolPwshPersistent.Config = { backendType: 'stub' },
-  initialMode: StubMode = 'normal',
-) {
+async function setup(config: ToolPwshPersistent.Config = { backendType: 'stub' }, initialMode: StubMode = 'normal') {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
@@ -335,14 +336,13 @@ describe('tool-pwsh-persistent', () => {
       description: 'deployment-specific persistent shell',
     })
     const schema = ctx.tools.schemas()[0]
-    expect(ctx.tools.schemas().map(item => item.name)).toEqual(['pwsh'])
+    expect(ctx.tools.schemas().map((item) => item.name)).toEqual(['pwsh'])
     expect(schema?.description).toBe('deployment-specific persistent shell')
     expect(schema?.parameters).toMatchObject({
       required: ['command'],
       properties: { command: { type: 'string' } },
     })
-    expect(ctx.tools.get('pwsh')?.presentCall?.({ command: 'pwd' }))
-      .toEqual({ card: 'terminal', title: 'pwd' })
+    expect(ctx.tools.get('pwsh')?.presentCall?.({ command: 'pwd' })).toEqual({ card: 'terminal', title: 'pwd' })
 
     expect(text(await call(ctx, owner, 'Write-Output one'))).toBe('hello from stub')
     expect(text(await call(ctx, owner, 'Write-Output two'))).toBe('hello from stub')
@@ -411,7 +411,8 @@ describe('tool-pwsh-persistent', () => {
   })
 
   it.each(['0\t\n', '0\u00a0\n', '0\v\n', '0  ', '0  \r', '0junk\n', ' 0\n', '-1\n', '+1\n', "' + $__s)\n"])(
-    'does not accept unsupported completion status %j', async (tail) => {
+    'does not accept unsupported completion status %j',
+    async (tail) => {
       const { ctx, owner, stub } = await setup({ backendType: 'stub' })
       await call(ctx, owner, 'warm up')
       const session = stub.sessions[0]!
@@ -495,8 +496,7 @@ describe('tool-pwsh-persistent', () => {
     expect(stub.sessions).toHaveLength(2)
     const replacement = stub.sessions[1]!
     replacement.mode = 'signal-exit'
-    expect(text(await call(ctx, owner, 'kill shell')))
-      .toContain('[shell killed by signal: SIGTERM]')
+    expect(text(await call(ctx, owner, 'kill shell'))).toContain('[shell killed by signal: SIGTERM]')
 
     await call(ctx, owner, 'another shell')
     expect(stub.sessions).toHaveLength(3)
@@ -545,8 +545,7 @@ describe('tool-pwsh-persistent', () => {
 
     session.mode = 'end-only'
     session.scrollback = ''
-    expect(text(await call(ctx, owner, 'missing start')))
-      .toContain('beginning of this command output was dropped')
+    expect(text(await call(ctx, owner, 'missing start'))).toContain('beginning of this command output was dropped')
 
     session.mode = 'empty-read'
     expect(text(await call(ctx, owner, 'empty page'))).toContain('hello from stub')
@@ -603,34 +602,31 @@ describe('tool-pwsh-persistent', () => {
     expect(stub.sessions[0]?.closed).toContain('persistent pwsh command timed out')
   })
 
-  it.each(['wait-for-abort', 'end-on-abort'] as const)(
-    'cancels %s work, resets the shell, and releases a queued call',
-    async (mode) => {
-      const { ctx, owner, stub } = await setup({ backendType: 'stub', timeoutMs: 5_000 })
-      await call(ctx, owner, 'warm up')
-      stub.sessions[0]!.mode = mode
-      const controller = new AbortController()
-      const cancelled = call(ctx, owner, 'hang', controller.signal)
-      const queued = call(ctx, owner, 'after cancellation')
-      try {
-        await expect.poll(() => stub.sessions[0]!.sends).toBe(2)
-        controller.abort({ kind: 'user' })
+  it.each(['wait-for-abort', 'end-on-abort'] as const)('cancels %s work, resets the shell, and releases a queued call', async (mode) => {
+    const { ctx, owner, stub } = await setup({ backendType: 'stub', timeoutMs: 5_000 })
+    await call(ctx, owner, 'warm up')
+    stub.sessions[0]!.mode = mode
+    const controller = new AbortController()
+    const cancelled = call(ctx, owner, 'hang', controller.signal)
+    const queued = call(ctx, owner, 'after cancellation')
+    try {
+      await expect.poll(() => stub.sessions[0]!.sends).toBe(2)
+      controller.abort({ kind: 'user' })
 
-        const result = await cancelled
-        expect(result).toMatchObject({
-          isError: true,
-          error: { message: 'tool call aborted', info: { name: 'AbortError', code: 'ABORTED' } },
-        })
-        expect(text(result)).toBe('Error: tool call aborted')
-        expect(text(await queued)).toBe('hello from stub')
-        expect(stub.sessions[0]?.closed).toContain('persistent pwsh command aborted')
-        expect(stub.sessions).toHaveLength(2)
-      } finally {
-        controller.abort({ kind: 'user' })
-        await Promise.all([cancelled, queued])
-      }
-    },
-  )
+      const result = await cancelled
+      expect(result).toMatchObject({
+        isError: true,
+        error: { message: 'tool call aborted', info: { name: 'AbortError', code: 'ABORTED' } },
+      })
+      expect(text(result)).toBe('Error: tool call aborted')
+      expect(text(await queued)).toBe('hello from stub')
+      expect(stub.sessions[0]?.closed).toContain('persistent pwsh command aborted')
+      expect(stub.sessions).toHaveLength(2)
+    } finally {
+      controller.abort({ kind: 'user' })
+      await Promise.all([cancelled, queued])
+    }
+  })
 
   it('settles an aborted queued call without sending it to a replacement shell', async () => {
     const { ctx, owner, stub } = await setup({ backendType: 'stub' })
@@ -660,7 +656,6 @@ describe('tool-pwsh-persistent', () => {
       await Promise.all([running, queued])
     }
   })
-
 
   it('settles cancellation during the first spawn and releases queued work', async () => {
     const { ctx, owner, stub } = await setup()
@@ -756,7 +751,15 @@ describe('tool-pwsh-persistent', () => {
     const { ctx, owner, stub } = await setup({ backendType: 'stub', timeoutMs: 10 })
     const spawn = stub.backend.spawn.bind(stub.backend)
     vi.spyOn(stub.backend, 'spawn').mockImplementationOnce(async (spec) => {
-      await new Promise<void>((resolve) => { spec.signal!.addEventListener('abort', () => { resolve() }, { once: true }) })
+      await new Promise<void>((resolve) => {
+        spec.signal!.addEventListener(
+          'abort',
+          () => {
+            resolve()
+          },
+          { once: true },
+        )
+      })
       spec.signal?.throwIfAborted()
       return spawn(spec)
     })
@@ -796,16 +799,19 @@ describe('tool-pwsh-persistent', () => {
     const spawnAborted = Promise.withResolvers<undefined>()
     ctx.terminals.registerBackend({
       type: 'slow',
-      spawn: spec => new Promise((_resolve, reject) => {
-        spawnStarted.resolve(undefined)
-        spec.signal?.addEventListener('abort', () => {
-          spawnAborted.resolve(undefined)
-          const reason: unknown = spec.signal?.reason
-          reject(reason instanceof Error
-            ? reason
-            : new Error('slow PTY spawn aborted', { cause: reason }))
-        }, { once: true })
-      }),
+      spawn: (spec) =>
+        new Promise((_resolve, reject) => {
+          spawnStarted.resolve(undefined)
+          spec.signal?.addEventListener(
+            'abort',
+            () => {
+              spawnAborted.resolve(undefined)
+              const reason: unknown = spec.signal?.reason
+              reject(reason instanceof Error ? reason : new Error('slow PTY spawn aborted', { cause: reason }))
+            },
+            { once: true },
+          )
+        }),
     })
     const fiber = await ctx.plugin(ToolPwshPersistent, { backendType: 'slow' })
     const owner = await agent(ctx, '/workspace')

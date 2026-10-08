@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Tab information refuses readers whose committed record and navigation binding disagree. */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { cleanup, renderHook } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { keyedObservableHook } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bindings.tsx'
@@ -27,7 +27,7 @@ function harness() {
   const navigationSources = new Map<string, TabOccurrence['navigation']>()
   const useStore = bindSnapshotSelector(instance)
   // The renderer erases the keyed snapshot type; this family contains only tab navigation sources.
-  const useTabNavigation = keyedObservableHook(key => navigationSources.get(key)) as TabHookContext['useTabNavigation']
+  const useTabNavigation = keyedObservableHook((key) => navigationSources.get(key)) as TabHookContext['useTabNavigation']
   // Only sessionId is read from the standard share by this internal factory.
   const standard = { sessionId: SESSION } as Parameters<typeof tabInfoFactory>[0]
   const layout = () => instance.getSnapshot().bySession[SESSION]?.layout
@@ -40,8 +40,15 @@ function harness() {
     const occurrence = domain.occurrence(SESSION, { id: tabId })
     navigationSources.set(tabId, occurrence.navigation)
     return tabInfoFactory(standard, {
-      tabId, title: false, fullscreen: false, active: true, shortcuts: [],
-      signal: occurrence.signal, actions: occurrence.tabActions, useStore, useTabNavigation,
+      tabId,
+      title: false,
+      fullscreen: false,
+      active: true,
+      shortcuts: [],
+      signal: occurrence.signal,
+      actions: occurrence.tabActions,
+      useStore,
+      useTabNavigation,
     })
   }
   const open = (beforeCommit?: (tabId: TabId) => void): TabId => {

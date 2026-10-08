@@ -1,4 +1,4 @@
-import type { Rolldown } from 'tsdown'
+import type { Rolldown } from 'vite-plus/pack'
 
 /** Bare specifiers one Desktop bundle may leave for the runtime to resolve. */
 export interface BundleImportPolicy {

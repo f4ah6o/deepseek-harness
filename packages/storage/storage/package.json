@@ -1,15 +1,17 @@
 {
   "name": "@deepseek-ai/dsh-storage",
-  "description": "Storage hub (ctx.storage): named backend registry plus mounted data-form facilities for the DeepSeek Harness",
   "version": "0.2.1-alpha.1",
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Storage hub (ctx.storage): named backend registry plus mounted data-form facilities for the DeepSeek Harness",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/storage/storage"
   },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -21,15 +23,13 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "files": [
-    "lib/index.js",
-    "lib/types/**/*.d.ts"
-  ],
-  "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   }
 }

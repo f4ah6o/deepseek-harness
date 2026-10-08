@@ -3,13 +3,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  CORDIS_CORE_API_PAGES,
-  renderCordisCoreApiPage,
-  renderCordisCoreApiPages,
-  type CordisCoreApiPage,
-} from './cordis-core-api.ts'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { CORDIS_CORE_API_PAGES, renderCordisCoreApiPage, renderCordisCoreApiPages, type CordisCoreApiPage } from './cordis-core-api.ts'
 
 const roots: string[] = []
 
@@ -20,7 +15,7 @@ afterEach(() => {
 describe('Cordis core API generation', () => {
   it('renders the five detailed pages from pinned vendor declarations', () => {
     const pages = renderCordisCoreApiPages()
-    expect([...pages.keys()]).toEqual(CORDIS_CORE_API_PAGES.map(page => page.out))
+    expect([...pages.keys()]).toEqual(CORDIS_CORE_API_PAGES.map((page) => page.out))
     expect(pages.get('docs/cordis-api/context.md')).toContain('### ctx.extend(meta?)')
     expect(pages.get('docs/cordis-api/events.md')).toContain('## DispatchMode')
     expect(pages.get('docs/cordis-api/fiber.md')).toContain('## EffectMeta')

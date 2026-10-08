@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -41,22 +41,25 @@ async function loadComposition(): Promise<Context> {
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
   await mkdir(join(dist, 'empty'))
   const configPath = join(root, 'cordis.yml')
-  await writeFile(configPath, [
-    "- name: '@deepseek-ai/dsh-credentials-local'",
-    '  config:',
-    `    path: '${join(root, '.credentials.yaml')}'`,
-    '    watch: false',
-    "- name: '@deepseek-ai/dsh-host-webserver'",
-    '  config:',
-    "    host: '127.0.0.1'",
-    '    port: 0',
-    "- name: '@deepseek-ai/dsh-client-connection'",
-    '- id: frontend',
-    "  name: '@deepseek-ai/dsh-host-frontend-static'",
-    '  config:',
-    `    distIndex: '${distIndex}'`,
-    '',
-  ].join('\n'))
+  await writeFile(
+    configPath,
+    [
+      "- name: '@deepseek-ai/dsh-credentials-local'",
+      '  config:',
+      `    path: '${join(root, '.credentials.yaml')}'`,
+      '    watch: false',
+      "- name: '@deepseek-ai/dsh-host-webserver'",
+      '  config:',
+      "    host: '127.0.0.1'",
+      '    port: 0',
+      "- name: '@deepseek-ai/dsh-client-connection'",
+      '- id: frontend',
+      "  name: '@deepseek-ai/dsh-host-frontend-static'",
+      '  config:',
+      `    distIndex: '${distIndex}'`,
+      '',
+    ].join('\n'),
+  )
 
   context = new Context()
   context.baseUrl = pathToFileURL(root).href + '/'
@@ -97,8 +100,8 @@ describe('real Loader composition', () => {
   it('serves explicit index entries and files while preserving HTTP error semantics', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const unloaded = [...loaded.loader.entries()]
-      .filter(entry => entry.fiber === undefined && !entry.disabled)
-      .map(entry => entry.options.name)
+      .filter((entry) => entry.fiber === undefined && !entry.disabled)
+      .map((entry) => entry.options.name)
     expect(unloaded).toEqual([])
     const server = loaded.webServer
     const port = server.port
@@ -140,7 +143,7 @@ describe('real Loader composition', () => {
     expect(await request(port, '/blob.bin')).toMatchObject({ status: 200, type: 'application/octet-stream', body: 'BLOB' })
 
     // Only the root and index path render index.html through registered taps.
-    const untap = server.tapIndex(html => html.replace('<head>', '<head><script>window.__T__=1</script>'))
+    const untap = server.tapIndex((html) => html.replace('<head>', '<head><script>window.__T__=1</script>'))
     // A plugin row stands in for the Host's plugin-resource rows: the base the
     // shell inserts must precede it, not merely exist.
     const offRows = loaded.on('webserver/index-inject', (rows) => {
@@ -182,14 +185,7 @@ describe('real Loader composition', () => {
     // Ordinary unknown paths and static-resource misses are empty 404s for
     // both GET and HEAD; neither class can be mistaken for the HTML shell.
     const ordinaryMisses = ['/no/such/route', '/empty', '/app.js/child']
-    const assetMisses = [
-      '/missing.js',
-      '/missing.css',
-      '/missing.mjs',
-      '/missing.js.map',
-      '/missing.webmanifest',
-      '/missing.manifest',
-    ]
+    const assetMisses = ['/missing.js', '/missing.css', '/missing.mjs', '/missing.js.map', '/missing.webmanifest', '/missing.manifest']
     for (const path of [...ordinaryMisses, ...assetMisses]) {
       const get = await request(port, path)
       const head = await request(port, path, { method: 'HEAD' })
@@ -210,7 +206,7 @@ describe('real Loader composition', () => {
 
     // HMR safety: disposing the frontend row releases the fallback seat (the
     // unclaimed webserver answers 404) and the seat is claimable again.
-    const frontendEntry = [...loaded.loader.entries()].find(e => e.options.id === 'frontend')
+    const frontendEntry = [...loaded.loader.entries()].find((e) => e.options.id === 'frontend')
     expect(frontendEntry).toBeDefined()
     await frontendEntry!.fiber?.dispose()
     expect((await request(port, '/no/such/route')).status).toBe(404)

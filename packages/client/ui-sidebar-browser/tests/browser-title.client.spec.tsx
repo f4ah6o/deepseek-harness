@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { render } from '@testing-library/react'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { BrowserNavigation } from '../src/client/browser/BrowserNavigation.ts'
@@ -11,14 +11,14 @@ const TAB = 'tab' as TabId
 function props(entry = false): BrowserTitleProps {
   const state = entry
     ? {
-      ...BrowserNavigation.empty(),
-      entries: [{ kind: 'https' as const, url: 'https://example.test/', title: 'Loaded page' }],
-      index: 0,
-    }
+        ...BrowserNavigation.empty(),
+        entries: [{ kind: 'https' as const, url: 'https://example.test/', title: 'Loaded page' }],
+        index: 0,
+      }
     : BrowserNavigation.empty()
   return {
     useTabInfo: () => ({ tab: { id: TAB, title: 'Browser' } }),
-    useStore: selector => selector({ byTab: { [TAB]: state } }),
+    useStore: (selector) => selector({ byTab: { [TAB]: state } }),
   } as BrowserTitleProps
 }
 

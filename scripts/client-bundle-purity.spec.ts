@@ -6,8 +6,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build, type TsdownBundle, type UserConfig } from 'tsdown'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { build, type TsdownBundle, type UserConfig } from 'vite-plus/pack'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { clientBundle, requestedExternals, staticLinked } from '../packages/client/tsdown.client.ts'
 
 type ResolveId = (source: string) => null | { id: string; external: boolean }
@@ -25,31 +25,35 @@ interface SourceMapPlugin {
 
 interface InputIsolationPlugin {
   name: string
-  generateBundle: (this: {
-    getModuleInfo(id: string): { importedIds: string[]; dynamicallyImportedIds: string[] } | null
-  }, options: unknown, bundle: Record<string, {
-      type: 'chunk'
-      modules: Record<string, object>
-      imports: string[]
-      dynamicImports: string[]
-    }>) => void
+  generateBundle: (
+    this: {
+      getModuleInfo(id: string): { importedIds: string[]; dynamicallyImportedIds: string[] } | null
+    },
+    options: unknown,
+    bundle: Record<
+      string,
+      {
+        type: 'chunk'
+        modules: Record<string, object>
+        imports: string[]
+        dynamicImports: string[]
+      }
+    >,
+  ) => void
 }
 
 /** A representative dynamic bundle using the shared client baseline. */
 const REQUESTING_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
 
 function clientConfigs(id = REQUESTING_PACKAGE) {
-  return clientBundle(id, ['lib/types/index.js'])(
-    { env: { DSH_BUILD_FACE: 'client' } },
-  ).filter(config => config.platform === 'browser')
+  return clientBundle(id, ['lib/types/index.js'])({ env: { DSH_BUILD_FACE: 'client' } }).filter((config) => config.platform === 'browser')
 }
 
 describe('client bundle build faces', () => {
   it('watches source in development and consumes emitted JavaScript in the Client build', () => {
     const bundle = clientBundle('@deepseek-ai/dsh-client-test', ['lib/types/index.js'])
-    const development = bundle({ env: {} }).find(config => config.platform === 'browser')
-    const artifact = bundle({ env: { DSH_BUILD_FACE: 'client' } })
-      .find(config => config.platform === 'browser')
+    const development = bundle({ env: {} }).find((config) => config.platform === 'browser')
+    const artifact = bundle({ env: { DSH_BUILD_FACE: 'client' } }).find((config) => config.platform === 'browser')
 
     expect(development?.entry).toEqual({ client: 'src/client/index.ts' })
     expect(artifact?.entry).toEqual({ client: 'lib/types/client/index.js' })
@@ -59,7 +63,9 @@ describe('client bundle build faces', () => {
 describe('client bundle dynamic imports', () => {
   it('compiles import() to the module loader asynchronous operation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-dynamic-import-'))
-    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    onTestFinished(() => {
+      rmSync(root, { recursive: true, force: true })
+    })
     const entry = join(root, 'lib/types/client/index.js')
     mkdirSync(dirname(entry), { recursive: true })
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
@@ -70,12 +76,20 @@ describe('client bundle dynamic imports', () => {
 
     let builds: TsdownBundle[] = []
     try {
-      builds = await build({
-        ...config, cwd: root, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      const handle = await build({
+        ...config,
+        cwd: root,
+        config: false,
+        tsconfig: false,
+        write: false,
+        clean: false,
+        exports: false,
+        report: false,
+        logLevel: 'silent',
       })
-      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
+      builds = handle.bundles
+      const chunks = builds.flatMap((bundle) => bundle.chunks).filter((chunk) => chunk.type === 'chunk')
+      const output = chunks.find((chunk) => chunk.fileName === 'client.js')?.code
       expect(output).toContain('require.async("./client.terminal.js")')
       expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
     } finally {
@@ -91,7 +105,7 @@ function clientSourceMapPath(packagePath: string): string {
 function purityResolveId(id = REQUESTING_PACKAGE): ResolveId {
   const configs = clientConfigs(id)
   const plugins = (configs[0] as { plugins: { name: string; resolveId?: unknown }[] }).plugins
-  const gate = plugins.find(p => p.name === 'dsh-client-bundle-purity')
+  const gate = plugins.find((p) => p.name === 'dsh-client-bundle-purity')
   if (gate?.resolveId === undefined) throw new Error('purity plugin missing from client config')
   return gate.resolveId as ResolveId
 }
@@ -99,7 +113,7 @@ function purityResolveId(id = REQUESTING_PACKAGE): ResolveId {
 function cssModulePlugin(): CssModulePlugin {
   const configs = clientConfigs()
   const plugins = (configs[0] as { plugins: CssModulePlugin[] }).plugins
-  const plugin = plugins.find(candidate => candidate.name === 'dsh-css-modules-inline')
+  const plugin = plugins.find((candidate) => candidate.name === 'dsh-css-modules-inline')
   if (plugin?.resolveId === undefined || plugin.load === undefined) {
     throw new Error('CSS Modules plugin missing from client config')
   }
@@ -109,7 +123,7 @@ function cssModulePlugin(): CssModulePlugin {
 function sourceMapPlugin(): SourceMapPlugin {
   const configs = clientConfigs()
   const plugins = (configs[0] as { plugins: SourceMapPlugin[] }).plugins
-  const plugin = plugins.find(candidate => candidate.name === 'dsh-tsc-sourcemap')
+  const plugin = plugins.find((candidate) => candidate.name === 'dsh-tsc-sourcemap')
   if (plugin?.load === undefined) throw new Error('tsc sourcemap plugin missing from client config')
   return plugin
 }
@@ -196,7 +210,9 @@ describe('client bundle experimental input isolation', () => {
 
   function fixture() {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-inputs-'))
-    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    onTestFinished(() => {
+      rmSync(root, { recursive: true, force: true })
+    })
     const owner = join(root, 'client')
     const entry = join(owner, 'lib/types/client/index.js')
     const prototype = join(root, 'prototype/src/index.js')
@@ -208,10 +224,9 @@ describe('client bundle experimental input isolation', () => {
   }
 
   function config(kind: 'static' | 'dynamic', id = REQUESTING_PACKAGE): UserConfig {
-    const configs = kind === 'static'
-      ? staticLinked(id, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
-      : clientConfigs(id)
-    const browser = configs.find(config => config.platform === 'browser')
+    const configs =
+      kind === 'static' ? staticLinked(id, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } }) : clientConfigs(id)
+    const browser = configs.find((config) => config.platform === 'browser')
     if (browser === undefined) throw new Error('client config missing')
     return browser
   }
@@ -219,11 +234,19 @@ describe('client bundle experimental input isolation', () => {
   async function bundle(owner: string, config: UserConfig): Promise<string> {
     let builds: TsdownBundle[] = []
     try {
-      builds = await build({
-        ...config, cwd: owner, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      const handle = await build({
+        ...config,
+        cwd: owner,
+        config: false,
+        tsconfig: false,
+        write: false,
+        clean: false,
+        exports: false,
+        report: false,
+        logLevel: 'silent',
       })
-      return builds.flatMap(build => build.chunks.filter(chunk => chunk.type === 'chunk').map(chunk => chunk.code)).join('\n')
+      builds = handle.bundles
+      return builds.flatMap((build) => build.chunks.filter((chunk) => chunk.type === 'chunk').map((chunk) => chunk.code)).join('\n')
     } finally {
       for (const build of builds) await build[Symbol.asyncDispose]()
     }
@@ -235,29 +258,35 @@ describe('client bundle experimental input isolation', () => {
 
   function checkCompilerModule(module: string, imports?: string[]): void {
     const plugins = config('dynamic').plugins as InputIsolationPlugin[]
-    const plugin = plugins.find(plugin => plugin.name === 'dsh-client-input-isolation')
+    const plugin = plugins.find((plugin) => plugin.name === 'dsh-client-input-isolation')
     if (plugin === undefined) throw new Error('client input isolation plugin missing')
-    plugin.generateBundle.call({
-      getModuleInfo: () => imports === undefined ? null : { importedIds: imports, dynamicallyImportedIds: [] },
-    }, {}, {
-      'client.js': { type: 'chunk', modules: { [module]: {} }, imports: [], dynamicImports: [] },
-    })
+    plugin.generateBundle.call(
+      {
+        getModuleInfo: () => (imports === undefined ? null : { importedIds: imports, dynamicallyImportedIds: [] }),
+      },
+      {},
+      {
+        'client.js': { type: 'chunk', modules: { [module]: {} }, imports: [], dynamicImports: [] },
+      },
+    )
   }
 
   it('accepts the exact compiler runtime helper without a source module record', () => {
-    expect(() => { checkCompilerModule('\0rolldown/runtime.js') }).not.toThrow()
+    expect(() => {
+      checkCompilerModule('\0rolldown/runtime.js')
+    }).not.toThrow()
   })
 
-  it.each(['\0rolldown/other.js', '\0rolldown/runtime.js?user', '\0other/runtime.js'])(
-    'rejects the unrecorded module %j',
-    (module) => {
-      expect(() => { checkCompilerModule(module) }).toThrow(/has no bundler module record/)
-    },
-  )
+  it.each(['\0rolldown/other.js', '\0rolldown/runtime.js?user', '\0other/runtime.js'])('rejects the unrecorded module %j', (module) => {
+    expect(() => {
+      checkCompilerModule(module)
+    }).toThrow(/has no bundler module record/)
+  })
 
   it('checks runtime helper dependencies when the compiler supplies a module record', () => {
-    expect(() => { checkCompilerModule('\0rolldown/runtime.js', [experimental]) })
-      .toThrow(/client bundle isolation.*experimental/)
+    expect(() => {
+      checkCompilerModule('\0rolldown/runtime.js', [experimental])
+    }).toThrow(/client bundle isolation.*experimental/)
   })
 
   it.each(['static', 'dynamic'] as const)('rejects experimental files folded into a %s client artifact', async (kind) => {
@@ -276,7 +305,7 @@ describe('client bundle experimental input isolation', () => {
     const plugins = guarded.plugins as Array<{ name: string }>
     const unguarded: UserConfig = {
       ...guarded,
-      plugins: plugins.filter(plugin => plugin.name !== 'dsh-client-input-isolation'),
+      plugins: plugins.filter((plugin) => plugin.name !== 'dsh-client-input-isolation'),
       outputOptions: { sourcemapExcludeSources: false },
     }
 
@@ -294,10 +323,16 @@ describe('client bundle experimental input isolation', () => {
   it('rejects experimental ownership preserved only by an emitted compiler source map', async () => {
     const { owner, entry, prototype } = fixture()
     writeFileSync(entry, 'export const marker = "experimental sentinel"\n//# sourceMappingURL=index.js.map\n')
-    writeFileSync(`${entry}.map`, JSON.stringify({
-      version: 3, names: [], mappings: 'AAAA', sources: [importPath(entry, prototype)],
-      sourcesContent: ['export const marker = "experimental sentinel"\n'],
-    }))
+    writeFileSync(
+      `${entry}.map`,
+      JSON.stringify({
+        version: 3,
+        names: [],
+        mappings: 'AAAA',
+        sources: [importPath(entry, prototype)],
+        sourcesContent: ['export const marker = "experimental sentinel"\n'],
+      }),
+    )
 
     await expect(bundle(owner, config('static'))).rejects.toThrow(/client bundle isolation.*experimental/)
   })
@@ -306,8 +341,9 @@ describe('client bundle experimental input isolation', () => {
     const { owner, entry, prototype } = fixture()
     writeFileSync(entry, 'export { marker } from "./ordinary.js"\n')
 
-    await expect(bundle(owner, { ...config('static'), alias: { './ordinary.js': prototype } }))
-      .rejects.toThrow(/client bundle isolation.*experimental/)
+    await expect(bundle(owner, { ...config('static'), alias: { './ordinary.js': prototype } })).rejects.toThrow(
+      /client bundle isolation.*experimental/,
+    )
   })
 
   it('rejects an experimental runtime import left external by a static client library', async () => {
@@ -323,10 +359,17 @@ describe('client bundle experimental input isolation', () => {
     mkdirSync(dependency)
     writeFileSync(join(dependency, 'package.json'), JSON.stringify({ name: experimentalSource ? experimental : 'ordinary-library' }))
     writeFileSync(entry, 'export const marker = "mapped sentinel"\n//# sourceMappingURL=index.js.map\n')
-    writeFileSync(`${entry}.map`, JSON.stringify({
-      version: 3, names: [], mappings: 'AAAA', sourceRoot: importPath(entry, dependency),
-      sources: ['unshipped.ts'], sourcesContent: ['export const marker = "mapped sentinel"\n'],
-    }))
+    writeFileSync(
+      `${entry}.map`,
+      JSON.stringify({
+        version: 3,
+        names: [],
+        mappings: 'AAAA',
+        sourceRoot: importPath(entry, dependency),
+        sources: ['unshipped.ts'],
+        sourcesContent: ['export const marker = "mapped sentinel"\n'],
+      }),
+    )
 
     const result = bundle(owner, config('static'))
     if (experimentalSource) await expect(result).rejects.toThrow(/client bundle isolation.*experimental/)
@@ -338,9 +381,12 @@ describe('client bundle experimental input isolation', () => {
     const css = join(dirname(prototype), `style${extension.replace('?inline', '')}`)
     writeFileSync(css, 'body { color: red; }\n')
     const specifier = `${importPath(entry, css)}${extension.endsWith('?inline') ? '?inline' : ''}`
-    writeFileSync(entry, extension === '.css'
-      ? `import ${JSON.stringify(specifier)}\nexport const marker = true\n`
-      : `export { default as style } from ${JSON.stringify(specifier)}\n`)
+    writeFileSync(
+      entry,
+      extension === '.css'
+        ? `import ${JSON.stringify(specifier)}\nexport const marker = true\n`
+        : `export { default as style } from ${JSON.stringify(specifier)}\n`,
+    )
 
     await expect(bundle(owner, config('dynamic'))).rejects.toThrow(/client bundle isolation.*experimental/)
   })
@@ -351,10 +397,16 @@ describe('client bundle experimental input isolation', () => {
     mkdirSync(dirname(source), { recursive: true })
     writeFileSync(source, 'export const marker = "stable sentinel"\n')
     writeFileSync(entry, 'export const marker = "stable sentinel"\n//# sourceMappingURL=index.js.map\n')
-    writeFileSync(`${entry}.map`, JSON.stringify({
-      version: 3, names: [], mappings: 'AAAA', sources: [importPath(entry, source)],
-      sourcesContent: ['export const marker = "stable sentinel"\n'],
-    }))
+    writeFileSync(
+      `${entry}.map`,
+      JSON.stringify({
+        version: 3,
+        names: [],
+        mappings: 'AAAA',
+        sources: [importPath(entry, source)],
+        sourcesContent: ['export const marker = "stable sentinel"\n'],
+      }),
+    )
 
     await expect(bundle(owner, config(kind))).resolves.toContain('stable sentinel')
   })
@@ -366,9 +418,7 @@ describe('client bundle module requests', () => {
       external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-slots'],
     })
 
-    expect([...requests].sort()).toEqual([
-      '@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime',
-    ])
+    expect([...requests].sort()).toEqual(['@deepseek-ai/dsh-client-ui-slots', 'react', 'react/jsx-runtime'])
   })
 
   it('requests nothing when the declaration is absent', () => {
@@ -376,8 +426,9 @@ describe('client bundle module requests', () => {
   })
 
   it('rejects a malformed declaration instead of reading past it', () => {
-    expect(() => requestedExternals('@deepseek-ai/dsh-client-fixture', { external: 'react' }))
-      .toThrow(/dsh\.client\.external must be a string array/)
+    expect(() => requestedExternals('@deepseek-ai/dsh-client-fixture', { external: 'react' })).toThrow(
+      /dsh\.client\.external must be a string array/,
+    )
   })
 })
 
@@ -454,14 +505,8 @@ describe('client bundle debug artifacts', () => {
 describe('client bundle CSS Modules watch graph', () => {
   it('registers the physical stylesheet read behind a virtual module', async () => {
     const plugin = cssModulePlugin()
-    const importer = fileURLToPath(new URL(
-      '../packages/client/ui-conversation/src/client/queue/QueueDock.tsx',
-      import.meta.url,
-    ))
-    const stylesheet = fileURLToPath(new URL(
-      '../packages/client/ui-conversation/src/client/queue/QueueDock.module.css',
-      import.meta.url,
-    ))
+    const importer = fileURLToPath(new URL('../packages/client/ui-conversation/src/client/queue/QueueDock.tsx', import.meta.url))
+    const stylesheet = fileURLToPath(new URL('../packages/client/ui-conversation/src/client/queue/QueueDock.module.css', import.meta.url))
     const virtualId = plugin.resolveId?.('./QueueDock.module.css', importer)
     if (virtualId === null || virtualId === undefined) throw new Error('CSS Modules import was not resolved')
     const addWatchFile = vi.fn()

@@ -1,5 +1,5 @@
 import { once } from 'node:events'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import WebSocket, { type RawData } from 'ws'
 import { Context } from '@deepseek-ai/cordis'
 import { apply as applyConnection, inject as connectionInject } from '@deepseek-ai/dsh-client-connection'
@@ -29,14 +29,17 @@ class EchoService extends TypertRemoteService {
 const roots: Context[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(roots.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 describe('the echo stream on each carrier', () => {
   it('echoes uplink items through the in-process carrier', async () => {
     const ctx = await setup(false)
     const replies = await ctx.typertGateway.stream({
-      namespace: 'echo', method: 'echo', args: { prefix: '> ' }, uplink: items(['a', 'b']),
+      namespace: 'echo',
+      method: 'echo',
+      args: { prefix: '> ' },
+      uplink: items(['a', 'b']),
     })
     await expect(collect(replies)).resolves.toEqual(['> a', '> b'])
   })
@@ -48,7 +51,9 @@ describe('the echo stream on each carrier', () => {
     })
     await once(socket, 'open')
     const frames: unknown[] = []
-    socket.on('message', (data) => { frames.push(JSON.parse(rawText(data))) })
+    socket.on('message', (data) => {
+      frames.push(JSON.parse(rawText(data)))
+    })
     socket.send(JSON.stringify({ type: 'open', streamId: 'echo', endpoint: 'echo/echo', payload: { args: { prefix: '> ' } } }))
     socket.send(JSON.stringify({ type: 'item', streamId: 'echo', value: 'a' }))
     socket.send(JSON.stringify({ type: 'item', streamId: 'echo', value: 'b' }))
@@ -79,7 +84,7 @@ async function setup(transport: boolean): Promise<Context> {
   return ctx
 }
 
-async function *items<T>(values: readonly T[]): AsyncIterable<T> {
+async function* items<T>(values: readonly T[]): AsyncIterable<T> {
   for (const value of values) yield value
 }
 

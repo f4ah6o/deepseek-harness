@@ -10,11 +10,14 @@
  * injected face fails with `no filesystem is mounted` — a suite that mounted a
  * VFS as well would pass either way.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { runShellCommand } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/shell/interpret.ts'
 import { filesystemError } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/shell/fs-access.ts'
 import type {
-  ShellDirent, ShellFileSystem, ShellRunOutcome, ShellStats,
+  ShellDirent,
+  ShellFileSystem,
+  ShellRunOutcome,
+  ShellStats,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/shell/types.ts'
 
 const WORKSPACE = '/dsh/workspace'
@@ -65,7 +68,7 @@ function recordingFileSystem(files: Record<string, string>): {
         if (!candidate.startsWith(prefix)) continue
         names.add(candidate.slice(prefix.length).split('/')[0] as string)
       }
-      return [...names].sort().map(name => ({ name, directory: directories().has(`${prefix}${name}`) }))
+      return [...names].sort().map((name) => ({ name, directory: directories().has(`${prefix}${name}`) }))
     },
     readText: async (path: string): Promise<string> => {
       calls.push({ op: 'readText', path })
@@ -101,7 +104,7 @@ describe('injected filesystem', () => {
     const result = await runShellCommand('cat notes.txt', { cwd: WORKSPACE, env: {}, fs })
     expect(result).toEqual({ exitCode: 0, stdout: 'alpha\nbeta\n', stderr: '' })
     // Programs receive the word as written; the absolute path is the shell's work.
-    expect(calls.filter(call => call.op === 'readText').map(call => call.path)).toEqual([`${WORKSPACE}/notes.txt`])
+    expect(calls.filter((call) => call.op === 'readText').map((call) => call.path)).toEqual([`${WORKSPACE}/notes.txt`])
   })
 
   it('performs a redirection as a truncating write followed by appends', async () => {
@@ -109,7 +112,7 @@ describe('injected filesystem', () => {
     const result = await runShellCommand('echo one > out.txt; echo two >> out.txt', { cwd: WORKSPACE, env: {}, fs })
     expect(result.exitCode).toBe(0)
     expect(contents.get(`${WORKSPACE}/out.txt`)).toBe('one\ntwo\n')
-    expect(calls.filter(call => call.op === 'writeText').map(call => [call.text, call.append])).toEqual([
+    expect(calls.filter((call) => call.op === 'writeText').map((call) => [call.text, call.append])).toEqual([
       // `> file` empties the file when the redirection is set up, so a command
       // that writes nothing still leaves it empty.
       ['', false],
@@ -135,14 +138,19 @@ describe('incremental output', () => {
       cwd: WORKSPACE,
       env: {},
       fs,
-      onOutput: (stream, text) => { seen.push([stream, text]) },
+      onOutput: (stream, text) => {
+        seen.push([stream, text])
+      },
     })
     return { seen, outcome }
   }
 
   it('reports each write as it happens and still returns the complete text', async () => {
     const { seen, outcome } = await reported('echo one; echo two')
-    expect(seen).toEqual([['stdout', 'one\n'], ['stdout', 'two\n']])
+    expect(seen).toEqual([
+      ['stdout', 'one\n'],
+      ['stdout', 'two\n'],
+    ])
     expect(outcome.stdout).toBe('one\ntwo\n')
   })
 

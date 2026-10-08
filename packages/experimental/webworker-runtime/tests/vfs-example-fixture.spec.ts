@@ -1,13 +1,10 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { SESSION_FORMAT_VERSION, Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'
-import {
-  generationLogFilename,
-  scanLog,
-} from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
+import { generationLogFilename, scanLog } from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
 import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import {
@@ -41,7 +38,10 @@ function readSession(id: string): ReturnType<typeof scanLog> {
 }
 
 function restoreSession(content: string, version: number) {
-  const [header, ...events] = content.trimEnd().split('\n').map(line => JSON.parse(line) as unknown)
+  const [header, ...events] = content
+    .trimEnd()
+    .split('\n')
+    .map((line) => JSON.parse(line) as unknown)
   expect(header).toMatchObject({ type: 'session', version })
   const restore = createSessionFormatCatalogWithChildren([]).createRestore(header, { recovery: 'strict', validation: 'current' })
   for (const event of events) restore.decodeRow(event)
@@ -50,10 +50,10 @@ function restoreSession(content: string, version: number) {
 
 function textOf(event: SessionEvent): string {
   if (event.type === 'user/message') {
-    return event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+    return event.data.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
   }
   if (event.type === 'assistant/message') {
-    return event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+    return event.data.message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
   }
   return ''
 }
@@ -62,11 +62,9 @@ describe('WebWorker preview VFS example', () => {
   it('retains V3 inputs that strictly restore to the deterministic current output', () => {
     const expected = buildVfsExampleFiles()
     const currentName = generationLogFilename(SESSION_FORMAT_VERSION, 'none')
-    const committedPath = (path: string): string => path.endsWith(`/${currentName}`)
-      ? `${path.slice(0, -currentName.length)}session.v3.jsonl`
-      : path
-    const predecessors = Object.values(VFS_EXAMPLE_SESSION_IDS)
-      .map(id => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
+    const committedPath = (path: string): string =>
+      path.endsWith(`/${currentName}`) ? `${path.slice(0, -currentName.length)}session.v3.jsonl` : path
+    const predecessors = Object.values(VFS_EXAMPLE_SESSION_IDS).map((id) => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
     expect(filesUnder(VFS_EXAMPLE_ROOT)).toEqual([...expected.keys()].map(committedPath).concat(predecessors).sort())
     for (const [path, content] of expected) {
       if (path === 'home/storages/session_projcache.json') continue
@@ -80,22 +78,22 @@ describe('WebWorker preview VFS example', () => {
   })
 
   it('retains V3 cache identity while the generated cache uses the current writer', () => {
-    const committed = JSON.parse(readFileSync(
-      join(VFS_EXAMPLE_ROOT, 'home/storages/session_projcache.json'),
-      'utf8',
-    )) as {
+    const committed = JSON.parse(readFileSync(join(VFS_EXAMPLE_ROOT, 'home/storages/session_projcache.json'), 'utf8')) as {
       unit: { name: string; version: number }
       tables: {
-        sessions: Record<string, {
-          identity: {
-            formatVersion: number
-            createdAt: number
-            cwd: string
-            isSeeded: boolean
-            inheritedEventCount: number
+        sessions: Record<
+          string,
+          {
+            identity: {
+              formatVersion: number
+              createdAt: number
+              cwd: string
+              isSeeded: boolean
+              inheritedEventCount: number
+            }
+            rows: { title: unknown }
           }
-          rows: { title: unknown }
-        }>
+        >
       }
     }
     const generatedText = buildVfsExampleFiles().get('home/storages/session_projcache.json')
@@ -154,30 +152,26 @@ describe('WebWorker preview VFS example', () => {
       delegationDepth: 0,
       agentPreset: 'standard',
     })
-    expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
+    expect(events.map((event) => event.seq)).toEqual(events.map((_, index) => index))
     expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
-    expect(() => Session.fromRestore(
-      SessionId(meta.id),
-      events,
-      meta,
-      inheritedEventCount,
-      'detached',
-    )).not.toThrow()
+    expect(() => Session.fromRestore(SessionId(meta.id), events, meta, inheritedEventCount, 'detached')).not.toThrow()
 
-    const messages = events.filter(event =>
-      (event.type === 'user/message' || event.type === 'assistant/message') && event.surfaceOp === 'append')
+    const messages = events.filter(
+      (event) => (event.type === 'user/message' || event.type === 'assistant/message') && event.surfaceOp === 'append',
+    )
     expect(messages.length).toBeGreaterThan(50)
-    expect(messages.some(event => textOf(event).includes(VFS_EXAMPLE_OLDEST_MESSAGE))).toBe(true)
-    expect(messages.some(event => textOf(event).includes(VFS_EXAMPLE_TAIL_MESSAGE))).toBe(true)
-    expect(events.some(event => event.type === 'session/title'
-      && (event.data as { title?: unknown }).title === VFS_EXAMPLE_TITLE)).toBe(true)
+    expect(messages.some((event) => textOf(event).includes(VFS_EXAMPLE_OLDEST_MESSAGE))).toBe(true)
+    expect(messages.some((event) => textOf(event).includes(VFS_EXAMPLE_TAIL_MESSAGE))).toBe(true)
+    expect(events.some((event) => event.type === 'session/title' && (event.data as { title?: unknown }).title === VFS_EXAMPLE_TITLE)).toBe(
+      true,
+    )
 
-    const tools = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
-    expect(new Set(tools)).toEqual(new Set([
-      'read', 'write', 'bash', 'glob', 'grep', 'web_search', 'todo_write', 'subagent', 'subagent_fork',
-    ]))
-    expect(events.some(event => event.type === 'todo/write')).toBe(true)
-    expect(events.some(event => event.type === 'tool/result' && event.data.message.isError === true)).toBe(true)
+    const tools = events.flatMap((event) => (event.type === 'tool/call' ? [event.data.name] : []))
+    expect(new Set(tools)).toEqual(
+      new Set(['read', 'write', 'bash', 'glob', 'grep', 'web_search', 'todo_write', 'subagent', 'subagent_fork']),
+    )
+    expect(events.some((event) => event.type === 'todo/write')).toBe(true)
+    expect(events.some((event) => event.type === 'tool/result' && event.data.message.isError === true)).toBe(true)
   })
 
   it('restores one-shot and continuable child Sessions with durable descriptors', () => {
@@ -195,16 +189,10 @@ describe('WebWorker preview VFS example', () => {
         delegationDepth: 1,
         agentPreset: 'standard',
       })
-      expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
+      expect(events.map((event) => event.seq)).toEqual(events.map((_, index) => index))
       expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
       expect(foldSubagentDescriptor(events.slice(inheritedEventCount))).toMatchObject({ mode })
-      expect(() => Session.fromRestore(
-        SessionId(meta.id),
-        events,
-        meta,
-        inheritedEventCount,
-        'detached',
-      )).not.toThrow()
+      expect(() => Session.fromRestore(SessionId(meta.id), events, meta, inheritedEventCount, 'detached')).not.toThrow()
     }
   })
 })

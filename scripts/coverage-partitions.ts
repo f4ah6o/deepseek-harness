@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process'
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { lstat, mkdir, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import type { TestUserConfig } from 'vitest/config'
+import type { TestUserConfig } from 'vite-plus/test/config'
 import { coverageExemptHeavySuites } from './coverage-exempt.ts'
 import { pnpmInvocation } from './pnpm-invocation.ts'
 
@@ -202,12 +202,12 @@ async function collectInstrumentedFiles(
   pnpmEntrypoint: string,
   filters: readonly string[] = [],
 ): Promise<InstrumentedInventory> {
-  const invocation = pnpmInvocation(['exec', 'vitest', 'list', '--filesOnly', ...filters], { npm_execpath: pnpmEntrypoint })
+  const invocation = pnpmInvocation(['exec', 'vp', 'test', 'list', '--filesOnly', ...filters], { npm_execpath: pnpmEntrypoint })
   const output = await runListCommand(invocation.command, invocation.args, root)
   return parseListOutput(output, root)
 }
 
-/** Run `vitest list` and return its stdout, or throw with exit code and stderr. */
+/** Run `vp test list` and return its stdout, or throw with exit code and stderr. */
 function runListCommand(command: string, args: string[], root: string): Promise<string> {
   return new Promise((resolveList, rejectList) => {
     const child = spawn(command, args, { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -215,12 +215,23 @@ function runListCommand(command: string, args: string[], root: string): Promise<
     let errorOutput = ''
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => { output += chunk })
-    child.stderr.on('data', (chunk: string) => { errorOutput += chunk })
-    child.once('error', (error: Error) => { rejectList(error) })
+    child.stdout.on('data', (chunk: string) => {
+      output += chunk
+    })
+    child.stderr.on('data', (chunk: string) => {
+      errorOutput += chunk
+    })
+    child.once('error', (error: Error) => {
+      rejectList(error)
+    })
     child.once('close', (code) => {
       if (code === 0) resolveList(output)
-      else rejectList(new Error(`vitest list exited with ${String(code ?? 'signal')}${errorOutput === '' ? '' : `: ${errorOutput.trim().slice(0, 300)}`}`))
+      else
+        rejectList(
+          new Error(
+            `vp test list exited with ${String(code ?? 'signal')}${errorOutput === '' ? '' : `: ${errorOutput.trim().slice(0, 300)}`}`,
+          ),
+        )
     })
   })
 }
@@ -281,11 +292,7 @@ function readPersistedDurations(root: string): Map<string, number> {
  * inventory are dropped, so deleted or renamed specs never linger with stale
  * weights.
  */
-export function writeFileDurations(
-  root: string,
-  durations: ReadonlyMap<string, number>,
-  currentFiles?: readonly string[],
-): void {
+export function writeFileDurations(root: string, durations: ReadonlyMap<string, number>, currentFiles?: readonly string[]): void {
   if (durations.size === 0) return
   const merged = new Map(readPersistedDurations(root))
   for (const [file, duration] of durations) merged.set(file, duration)
@@ -329,14 +336,10 @@ export function collectPartitionDurations(reportFiles: readonly string[], root: 
  * min-heap over the buckets keeps each placement at O(log partitions).
  * @returns one file list per partition, every partition non-empty.
  */
-export function assignWeightedPartitions(
-  files: readonly string[],
-  weights: ReadonlyMap<string, number>,
-  partitions: number,
-): string[][] {
+export function assignWeightedPartitions(files: readonly string[], weights: ReadonlyMap<string, number>, partitions: number): string[][] {
   if (files.length === 0) return Array.from({ length: partitions }, () => [])
   const weighted = files
-    .map(file => ({ file, weight: weights.get(file) ?? UNKNOWN_FILE_WEIGHT }))
+    .map((file) => ({ file, weight: weights.get(file) ?? UNKNOWN_FILE_WEIGHT }))
     .sort((a, b) => b.weight - a.weight || a.file.localeCompare(b.file))
   const buckets = Array.from({ length: partitions }, () => ({ sum: 0, files: [] as string[] }))
   // Min-heap of bucket indices ordered by (sum, file count); equal sums pick
@@ -351,15 +354,11 @@ export function assignWeightedPartitions(
     bucket.files.push(file)
     siftDown(buckets, heap, 0)
   }
-  return buckets.map(bucket => bucket.files)
+  return buckets.map((bucket) => bucket.files)
 }
 
 /** Restore the min-heap property after the root bucket grew heavier. */
-function siftDown(
-  buckets: Array<{ sum: number; files: string[] }>,
-  heap: number[],
-  index: number,
-): void {
+function siftDown(buckets: Array<{ sum: number; files: string[] }>, heap: number[], index: number): void {
   const size = heap.length
   for (;;) {
     const left = 2 * index + 1
@@ -396,10 +395,7 @@ function bucketAt(
 }
 
 /** Order buckets by total weight, then by file count, then by nothing (stable). */
-function bucketLess(
-  left: { sum: number; files: string[] } | undefined,
-  right: { sum: number; files: string[] } | undefined,
-): boolean {
+function bucketLess(left: { sum: number; files: string[] } | undefined, right: { sum: number; files: string[] } | undefined): boolean {
   if (left === undefined || right === undefined) return left !== undefined
   if (left.sum !== right.sum) return left.sum < right.sum
   return left.files.length < right.files.length
@@ -420,12 +416,13 @@ function partitionWeight(files: readonly string[], weights: ReadonlyMap<string, 
  * mutually exclusive, so handing the whole partition list to every project
  * would run plain files twice (once per project).
  */
-function partitionConfigSource(
-  files: readonly string[],
-  projectOf: ReadonlyMap<string, string>,
-): string {
-  const threadSafe = JSON.stringify(files.filter(file => projectOf.get(file) !== 'process-bound').map(file => file.split('\\').join('/')))
-  const processBound = JSON.stringify(files.filter(file => projectOf.get(file) === 'process-bound').map(file => file.split('\\').join('/')))
+function partitionConfigSource(files: readonly string[], projectOf: ReadonlyMap<string, string>): string {
+  const threadSafe = JSON.stringify(
+    files.filter((file) => projectOf.get(file) !== 'process-bound').map((file) => file.split('\\').join('/')),
+  )
+  const processBound = JSON.stringify(
+    files.filter((file) => projectOf.get(file) === 'process-bound').map((file) => file.split('\\').join('/')),
+  )
   return [
     "import base from '../../vitest.config.ts'",
     'export default {',
@@ -436,7 +433,7 @@ function partitionConfigSource(
     '      ...project,',
     '      test: {',
     '        ...project.test,',
-    '        include: project.test.name === \'process-bound\' ? ' + processBound + ' : ' + threadSafe + ',',
+    "        include: project.test.name === 'process-bound' ? " + processBound + ' : ' + threadSafe + ',',
     '      },',
     '    })),',
     '  },',
@@ -488,17 +485,19 @@ export class CoveragePartitionCoordinator {
       this.assertNonEmptyAssignments(assignments)
       const configPaths = await this.writePartitionConfigs(assignments)
       const commands = assignments.map((_, index) => this.partitionCommand(index + 1, configPaths[index] ?? ''))
-      const results = await Promise.all(commands.map(async (command) => {
-        console.log(`coverage-partitions: start ${command.label}`)
-        const result = await this.runCommand(command)
-        if (commandFailed(result)) {
-          console.error(`coverage-partitions: FAIL ${command.label} (${commandFailureReason(result)})`)
-          if (result.outputTail !== undefined && result.outputTail !== '') {
-            console.error(`coverage-partitions: output tail for ${command.label}:\n${result.outputTail}`)
+      const results = await Promise.all(
+        commands.map(async (command) => {
+          console.log(`coverage-partitions: start ${command.label}`)
+          const result = await this.runCommand(command)
+          if (commandFailed(result)) {
+            console.error(`coverage-partitions: FAIL ${command.label} (${commandFailureReason(result)})`)
+            if (result.outputTail !== undefined && result.outputTail !== '') {
+              console.error(`coverage-partitions: output tail for ${command.label}:\n${result.outputTail}`)
+            }
           }
-        }
-        return result
-      }))
+          return result
+        }),
+      )
       // Persist durations before blob validation: a missing blob aborts the
       // run, but the completed partitions' timings are still worth keeping.
       this.persistDurations(this.partitions)
@@ -519,21 +518,18 @@ export class CoveragePartitionCoordinator {
    * suite once per empty partition.
    */
   private assertNonEmptyAssignments(assignments: readonly (readonly string[])[]): void {
-    const empty = assignments.findIndex(files => files.length === 0)
+    const empty = assignments.findIndex((files) => files.length === 0)
     if (empty >= 0) {
       throw new Error(
-        `coverage partitions: partition ${empty + 1}/${this.partitions} has no files; `
-        + 'the instrumented inventory is empty or smaller than the partition count.',
+        `coverage partitions: partition ${empty + 1}/${this.partitions} has no files; ` +
+          'the instrumented inventory is empty or smaller than the partition count.',
       )
     }
   }
 
   /** Persist measured per-file durations so the next run can weight by them. */
   private persistDurations(partitionCount: number): void {
-    const reportFiles = Array.from(
-      { length: partitionCount },
-      (_, index) => join(this.temporaryRoot, `partition-${index + 1}.report.json`),
-    )
+    const reportFiles = Array.from({ length: partitionCount }, (_, index) => join(this.temporaryRoot, `partition-${index + 1}.report.json`))
     const currentFiles = this.projectOf.size > 0 ? [...this.projectOf.keys()] : undefined
     writeFileDurations(this.root, collectPartitionDurations(reportFiles, this.root), currentFiles)
   }
@@ -574,34 +570,40 @@ export class CoveragePartitionCoordinator {
    * short `--config` path.
    */
   private async writePartitionConfigs(assignments: readonly (readonly string[])[]): Promise<string[]> {
-    return await Promise.all(assignments.map(async (files, index) => {
-      const configPath = join(this.temporaryRoot, `vitest-partition-${index + 1}.config.ts`)
-      await writeFile(configPath, partitionConfigSource(files, this.projectOf), 'utf8')
-      return configPath
-    }))
+    return await Promise.all(
+      assignments.map(async (files, index) => {
+        const configPath = join(this.temporaryRoot, `vitest-partition-${index + 1}.config.ts`)
+        await writeFile(configPath, partitionConfigSource(files, this.projectOf), 'utf8')
+        return configPath
+      }),
+    )
   }
 
   private partitionCommand(index: number, configPath: string): CoverageCommand {
     const blobPath = join(this.blobsRoot, `partition-${index}.json`)
     const reportsDirectory = join(this.temporaryRoot, `coverage-${index}`)
     const jsonReportPath = join(this.temporaryRoot, `partition-${index}.report.json`)
-    const invocation = pnpmInvocation([
-      'exec',
-      'vitest',
-      'run',
-      '--coverage',
-      '--coverage.reportOnFailure',
-      '--maxWorkers=1',
-      `--config=${this.relativePath(configPath)}`,
-      '--reporter=default',
-      '--reporter=blob',
-      '--reporter=json',
-      `--reporter=${CANONICAL_LOCATIONS_REPORTER}`,
-      `--outputFile.blob=${this.relativePath(blobPath)}`,
-      `--outputFile.json=${this.relativePath(jsonReportPath)}`,
-      `--coverage.reportsDirectory=${this.relativePath(reportsDirectory)}`,
-      ...this.vitestArgs,
-    ], { npm_execpath: this.pnpmEntrypoint })
+    const invocation = pnpmInvocation(
+      [
+        'exec',
+        'vp',
+        'test',
+        'run',
+        '--coverage',
+        '--coverage.reportOnFailure',
+        '--maxWorkers=1',
+        `--config=${this.relativePath(configPath)}`,
+        '--reporter=default',
+        '--reporter=blob',
+        '--reporter=json',
+        `--reporter=${CANONICAL_LOCATIONS_REPORTER}`,
+        `--outputFile.blob=${this.relativePath(blobPath)}`,
+        `--outputFile.json=${this.relativePath(jsonReportPath)}`,
+        `--coverage.reportsDirectory=${this.relativePath(reportsDirectory)}`,
+        ...this.vitestArgs,
+      ],
+      { npm_execpath: this.pnpmEntrypoint },
+    )
     return {
       label: `partition ${index}/${this.partitions}`,
       ...invocation,
@@ -615,12 +617,9 @@ export class CoveragePartitionCoordinator {
   }
 
   private mergeCommand(): CoverageCommand {
-    const invocation = pnpmInvocation([
-      'exec',
-      'vitest',
-      `--merge-reports=${this.relativePath(this.blobsRoot)}`,
-      '--coverage',
-    ], { npm_execpath: this.pnpmEntrypoint })
+    const invocation = pnpmInvocation(['exec', 'vp', 'test', 'run', `--merge-reports=${this.relativePath(this.blobsRoot)}`, '--coverage'], {
+      npm_execpath: this.pnpmEntrypoint,
+    })
     return {
       label: 'merged coverage report',
       ...invocation,
@@ -637,13 +636,13 @@ export class CoveragePartitionCoordinator {
   }
 
   private async assertCompleteBlobSet(commands: CoverageCommand[]): Promise<void> {
-    const expected = commands.map((command) => {
-      if (command.blobPath === undefined) throw new Error(`${command.label} has no blob path.`)
-      return this.relativePath(command.blobPath)
-    }).sort()
-    const actual = (await readdir(this.blobsRoot))
-      .map(name => this.relativePath(join(this.blobsRoot, name)))
+    const expected = commands
+      .map((command) => {
+        if (command.blobPath === undefined) throw new Error(`${command.label} has no blob path.`)
+        return this.relativePath(command.blobPath)
+      })
       .sort()
+    const actual = (await readdir(this.blobsRoot)).map((name) => this.relativePath(join(this.blobsRoot, name))).sort()
     if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
       throw new Error(`coverage partitions produced ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`)
     }

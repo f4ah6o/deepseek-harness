@@ -1,7 +1,7 @@
 /** Browser geometry for settings, expanded plugin dialogs, and their menus under Windows caption markers. */
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
 import { openSettings, ZH_BROWSER_LOCALE } from './support.ts'
 
@@ -27,7 +27,7 @@ it('keeps settings and expanded plugin dialogs clear of the Windows caption acro
       const settings = page.getByRole('dialog', { name: '设置', exact: true })
       const settingsMask = settings.locator('..').locator(':scope > [aria-hidden="true"]')
       for (const fullscreen of [false, true, false]) {
-        await page.evaluate(value => document.documentElement.toggleAttribute('data-fullscreen', value), fullscreen)
+        await page.evaluate((value) => document.documentElement.toggleAttribute('data-fullscreen', value), fullscreen)
         const margin = fullscreen ? 24 : 60
         await expect.poll(async () => (await settings.boundingBox())?.y).toBe(margin)
         expect((await settings.boundingBox())?.height).toBe(600 - 2 * margin)
@@ -54,14 +54,19 @@ it('keeps settings and expanded plugin dialogs clear of the Windows caption acro
       await plugin.getByRole('button', { name: '插件安装引导和示例', exact: true }).click()
       await expect.poll(() => plugin.locator('button[aria-expanded="true"]').count()).toBe(1)
       for (const fullscreen of [false, true, false]) {
-        await page.evaluate(value => document.documentElement.toggleAttribute('data-fullscreen', value), fullscreen)
+        await page.evaluate((value) => document.documentElement.toggleAttribute('data-fullscreen', value), fullscreen)
         const margin = fullscreen ? 24 : 60
         // The dialog is content-sized: it fills the available height only while its content needs it,
         // and otherwise stays centered inside the same clearances.
-        await expect.poll(async () => {
-          const box = await plugin.boundingBox()
-          return box !== null && box.y >= margin && box.y + box.height <= 600 - margin
-        }, { timeout: 5_000 }).toBe(true)
+        await expect
+          .poll(
+            async () => {
+              const box = await plugin.boundingBox()
+              return box !== null && box.y >= margin && box.y + box.height <= 600 - margin
+            },
+            { timeout: 5_000 },
+          )
+          .toBe(true)
         expect((await plugin.locator('..').locator(':scope > [aria-hidden="true"]').boundingBox())?.y).toBe(fullscreen ? 0 : 40)
         expect(await plugin.getByRole('button', { name: '关闭', exact: true }).isVisible()).toBe(true)
         expect(await plugin.getByRole('button', { name: '安装', exact: true }).isVisible()).toBe(true)
@@ -93,6 +98,10 @@ it('keeps settings and expanded plugin dialogs clear of the Windows caption acro
       }
       expect(console.pageErrors).toEqual([])
       expect(console.warnings).toEqual([])
-    } finally { await browser.close() }
-  } finally { await scaffold.close() }
+    } finally {
+      await browser.close()
+    }
+  } finally {
+    await scaffold.close()
+  }
 })

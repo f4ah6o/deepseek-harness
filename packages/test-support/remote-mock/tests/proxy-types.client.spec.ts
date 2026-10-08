@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import type { MaybeMockedDeep } from '@vitest/spy'
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vite-plus/test'
 import type { TypertRemoteNamespace, TypertRemoteNamespaceMap } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
 import type { RemoteMock } from '../src/index.ts'
@@ -27,7 +27,7 @@ function virtualKey(path: string): string {
 }
 
 function compile(source: string, artifact?: string) {
-  const config = ts.readConfigFile(resolve(root, 'tsconfig.base.client.json'), filename => ts.sys.readFile(filename))
+  const config = ts.readConfigFile(resolve(root, 'tsconfig.base.client.json'), (filename) => ts.sys.readFile(filename))
   if (config.error !== undefined) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root)
   const options: ts.CompilerOptions = {
@@ -49,7 +49,10 @@ function compile(source: string, artifact?: string) {
   // The real protocol and Mock alias are compiled; only unrelated Cordis/runtime assembly is excluded.
   const virtual = new Map([
     [virtualKey(probePath), source],
-    [virtualKey(protocolEntry), `export * from ${modulePath(protocolPath)}\nexport { RemoteError } from ${modulePath(resolve(root, 'packages/typert/protocol/src/remote-error.ts'))}`],
+    [
+      virtualKey(protocolEntry),
+      `export * from ${modulePath(protocolPath)}\nexport { RemoteError } from ${modulePath(resolve(root, 'packages/typert/protocol/src/remote-error.ts'))}`,
+    ],
     [virtualKey(cordisEntry), 'export interface Context {}\nexport interface Events {}'],
   ])
   if (artifact !== undefined) virtual.set(virtualKey(artifactPath), artifact)
@@ -57,8 +60,8 @@ function compile(source: string, artifact?: string) {
   const read = host.readFile.bind(host)
   const exists = host.fileExists.bind(host)
   const hidden = (path: string): boolean => path.replaceAll('\\', '/').includes('/typert.remote-client.')
-  host.fileExists = path => virtual.has(virtualKey(path)) || !hidden(path) && exists(path)
-  host.readFile = path => virtual.get(virtualKey(path)) ?? (hidden(path) ? undefined : read(path))
+  host.fileExists = (path) => virtual.has(virtualKey(path)) || (!hidden(path) && exists(path))
+  host.readFile = (path) => virtual.get(virtualKey(path)) ?? (hidden(path) ? undefined : read(path))
   host.getSourceFile = (path, languageVersion) => {
     const text = host.readFile(path)
     return text === undefined ? undefined : ts.createSourceFile(path, text, languageVersion, true)
@@ -66,11 +69,11 @@ function compile(source: string, artifact?: string) {
   const program = ts.createProgram([probePath], options, host)
   expect(program.getSourceFile(protocolPath)).toBeDefined()
   expect(program.getSourceFile(proxyPath)).toBeDefined()
-  expect(program.getSourceFiles().some(file => hidden(file.fileName))).toBe(false)
+  expect(program.getSourceFiles().some((file) => hidden(file.fileName))).toBe(false)
   expect(program.getSourceFile(artifactPath) !== undefined).toBe(artifact !== undefined)
   const diagnostics = ts.getPreEmitDiagnostics(program)
   const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, {
-    getCanonicalFileName: path => path,
+    getCanonicalFileName: (path) => path,
     getCurrentDirectory: () => root,
     getNewLine: () => '\n',
   })
@@ -99,7 +102,8 @@ void loose
   })
 
   it('preserves generated arguments, results and native spy overrides', () => {
-    compile(`
+    compile(
+      `
 import type { MockedRemote } from '../src/remote-proxy.ts'
 import type {} from '@deepseek-ai/fixture/remote'
 type IsAny<T> = 0 extends (1 & T) ? true : false
@@ -119,11 +123,14 @@ local.fixture.missing()
 // @ts-expect-error -- A non-empty map does not gain arbitrary namespaces.
 local.missing.echo('wrong')
 void [argumentIsTyped, resultIsTyped, result]
-`, fixtureDeclaration)
+`,
+      fixtureDeclaration,
+    )
   })
 
   it('keeps partial and empty namespaces closed inside a non-empty map', () => {
-    compile(`
+    compile(
+      `
 import type { TypertClientRemote, TypertRemoteNamespace } from '@deepseek-ai/dsh-typert-protocol'
 import type { MockedRemote } from '../src/remote-proxy.ts'
 import type {} from '@deepseek-ai/fixture/remote'
@@ -138,7 +145,9 @@ local.empty.echo()
 // @ts-expect-error -- Local Mock types cannot open production namespace lookup.
 production.notANamespace.echo()
 void known
-`, fixtureDeclaration)
+`,
+      fixtureDeclaration,
+    )
   })
 
   // Ordinary built Client tsc checks these generated business types; Vitest itself remains build-free.

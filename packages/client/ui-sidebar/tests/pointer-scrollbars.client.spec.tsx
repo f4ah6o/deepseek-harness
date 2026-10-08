@@ -6,26 +6,33 @@
  * has no file: module URL to read the sheet through).
  */
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type { SidebarRootComponentProps, SidebarSectionOwnerProps } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
-const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
-const usePanelInfo: GlobalStandardProps['usePanelInfo'] = selector => selector({ activePanelId: null })
+const useResource = (() => ({
+  status: 'none' as const,
+  value: undefined,
+  failure: undefined,
+  reload: () => {},
+})) as GlobalStandardProps['useResource']
+const usePanelInfo: GlobalStandardProps['usePanelInfo'] = (selector) => selector({ activePanelId: null })
 
 /** Pinned column box; the shell compares pointer coordinates against it. */
 const COLUMN_WIDTH = 280
 const COLUMN_HEIGHT = 600
 
-const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: SidebarRootComponentProps['t'] = (key) => (en as Record<string, string>)[key] ?? key
 /** The shell never reads the global hooks; the props share carries them regardless. */
-const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+const neverHook = (() => {
+  throw new Error('shell must not read global hooks')
+}) as never
 type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = selector => selector(noAttention)
+const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = (selector) => selector(noAttention)
 
 afterEach(() => {
   cleanup()
@@ -39,13 +46,25 @@ afterEach(() => {
 function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
-      collapsed={false} width={300}
-      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
-      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useShortcuts={selector => selector([])}
-      useResource={useResource} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
-      renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>
-        <div data-testid="region" data-wide={owner.wide} />) as SidebarRootComponentProps['renderSlot']}
+      collapsed={false}
+      width={300}
+      useSessions={neverHook}
+      useSessionStatus={useSessionStatus}
+      useSessionRetainInfo={neverHook}
+      usePanelInfo={usePanelInfo}
+      selectPanel={() => {}}
+      usePanels={(selector) => selector([])}
+      useShortcuts={(selector) => selector([])}
+      useResource={useResource}
+      useWorkspaces={neverHook}
+      startSession={vi.fn()}
+      toggleSidebar={vi.fn()}
+      t={t}
+      renderSlot={
+        ((_key: string, owner: SidebarSectionOwnerProps) => (
+          <div data-testid="region" data-wide={owner.wide} />
+        )) as SidebarRootComponentProps['renderSlot']
+      }
     />,
   )
   const column = view.container.firstElementChild
@@ -54,13 +73,20 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   // the shell reads so a coordinate can be inside or outside it.
   Object.defineProperty(column, 'getBoundingClientRect', {
     value: () => ({
-      left: 0, top: 0, right: COLUMN_WIDTH, bottom: COLUMN_HEIGHT,
-      x: 0, y: 0, width: COLUMN_WIDTH, height: COLUMN_HEIGHT, toJSON: () => ({}),
+      left: 0,
+      top: 0,
+      right: COLUMN_WIDTH,
+      bottom: COLUMN_HEIGHT,
+      x: 0,
+      y: 0,
+      width: COLUMN_WIDTH,
+      height: COLUMN_HEIGHT,
+      toJSON: () => ({}),
     }),
   })
   // CSS-module locals are hashed in this bench, so the state is read as a
   // substring of the class list rather than as an exact local name.
-  return { column, quiet: () => [...column.classList].some(name => name.includes('quietBars')) }
+  return { column, quiet: () => [...column.classList].some((name) => name.includes('quietBars')) }
 }
 
 /**
@@ -96,9 +122,13 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     expect(quiet()).toBe(false)
     movePointer(column, 'out')
     // The linger: still drawn just before the window closes, gone just after.
-    act(() => { vi.advanceTimersByTime(1999) })
+    act(() => {
+      vi.advanceTimersByTime(1999)
+    })
     expect(quiet()).toBe(false)
-    act(() => { vi.advanceTimersByTime(1) })
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
     expect(quiet()).toBe(true)
   })
 
@@ -107,11 +137,15 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     const { column, quiet } = mountColumn()
     movePointer(column, 'in')
     movePointer(column, 'out')
-    act(() => { vi.advanceTimersByTime(1000) })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
     movePointer(column, 'in')
     // The first leave's timer would fire here; a cancelled one leaves the bars
     // drawn, which is what keeps a pointer skirting the edge from blinking them.
-    act(() => { vi.advanceTimersByTime(5000) })
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
     expect(quiet()).toBe(false)
   })
 
@@ -124,7 +158,9 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     movePointer(column, 'in')
     expect(quiet()).toBe(false)
     movePointerOverDocument(COLUMN_WIDTH + 400, 300)
-    act(() => { vi.advanceTimersByTime(2000) })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
     expect(quiet()).toBe(true)
   })
 
@@ -133,12 +169,16 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     const { column, quiet } = mountColumn()
     movePointer(column, 'in')
     movePointer(column, 'out')
-    act(() => { vi.advanceTimersByTime(1500) })
+    act(() => {
+      vi.advanceTimersByTime(1500)
+    })
     // A pending hide is left alone rather than re-armed: otherwise a pointer
     // resting outside the column would keep pushing the bars' disappearance
     // out, one move at a time.
     movePointerOverDocument(COLUMN_WIDTH + 400, 300)
-    act(() => { vi.advanceTimersByTime(600) })
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(quiet()).toBe(true)
   })
 
@@ -150,7 +190,9 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     // A move landing back inside the box cancels the pending hide, the same
     // way re-entering the element does.
     movePointerOverDocument(COLUMN_WIDTH - 10, 300)
-    act(() => { vi.advanceTimersByTime(5000) })
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
     expect(quiet()).toBe(false)
   })
 
@@ -161,7 +203,9 @@ describe('SidebarRoot pointer-revealed scrollbars', () => {
     movePointer(column, 'out')
     cleanup()
     // A timer surviving the unmount would call setState on a dead component.
-    expect(() => { vi.advanceTimersByTime(5000) }).not.toThrow()
+    expect(() => {
+      vi.advanceTimersByTime(5000)
+    }).not.toThrow()
     expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { MarkdownDelegateProvider } from '../src/index.ts'
 import { MarkdownText } from './markdown-test-components.tsx'
 
@@ -33,10 +33,7 @@ describe('Markdown file links', () => {
     const openFile = vi.fn()
     const view = render(
       <MarkdownDelegateProvider openFile={openFile}>
-        <MarkdownText
-          text={`![Preview](${path}) [Open image](${path})`}
-          pathImages={{ resolve: () => undefined }}
-        />
+        <MarkdownText text={`![Preview](${path}) [Open image](${path})`} pathImages={{ resolve: () => undefined }} />
       </MarkdownDelegateProvider>,
     )
     expect(view.container.querySelector('img')).toBeNull()
@@ -67,10 +64,7 @@ describe('Markdown file links', () => {
     const resolve = vi.fn()
     const view = render(
       <MarkdownDelegateProvider openFile={openFile}>
-        <MarkdownText
-          text={'[see `index.ts`][source]\n\n[source]: src/index.ts#L3-L3'}
-          fileMentions={{ resolve }}
-        />
+        <MarkdownText text={'[see `index.ts`][source]\n\n[source]: src/index.ts#L3-L3'} fileMentions={{ resolve }} />
       </MarkdownDelegateProvider>,
     )
     fireEvent.click(view.getByRole('button', { name: 'see index.ts' }))
@@ -80,11 +74,23 @@ describe('Markdown file links', () => {
   })
 
   it.each([
-    '//example.com/file', '%2F%2Fexample.com/file', '%5C%5Cserver%5Cfile',
-    'javascript:alert', 'data:text/plain,hi', 'file:///etc/passwd', 'vscode:open',
-    '%6Aavascript:alert', '#L2', 'file.ts?raw=1', 'file%ZZ.ts', 'file%00.ts',
-    'file.ts#heading', 'file.ts#L0', 'file.ts#L3-L2',
-    'file.ts#L9007199254740992', 'file.ts#L1-L9007199254740992',
+    '//example.com/file',
+    '%2F%2Fexample.com/file',
+    '%5C%5Cserver%5Cfile',
+    'javascript:alert',
+    'data:text/plain,hi',
+    'file:///etc/passwd',
+    'vscode:open',
+    '%6Aavascript:alert',
+    '#L2',
+    'file.ts?raw=1',
+    'file%ZZ.ts',
+    'file%00.ts',
+    'file.ts#heading',
+    'file.ts#L0',
+    'file.ts#L3-L2',
+    'file.ts#L9007199254740992',
+    'file.ts#L1-L9007199254740992',
   ])('keeps unsupported destination %s inert', (target) => {
     const openFile = vi.fn()
     const view = render(

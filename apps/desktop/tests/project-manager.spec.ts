@@ -1,7 +1,18 @@
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { resolveDesktopPaths } from '../src/paths.ts'
 import { DesktopProjectManager } from '../src/project-manager.ts'
 import { readProfilePlugins } from '@deepseek-ai/dsh-app-boot'
@@ -24,13 +35,18 @@ function seedPlugin(manager: DesktopProjectManager): void {
   writeFileSync(path, JSON.stringify(manifest))
   const directory = join(manager.paths.profile, 'node_modules/plugin')
   mkdirSync(directory, { recursive: true })
-  writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: 'plugin', version: '1.0.0', dsh: { bundle: { patch: 'bundle.yml' } } }))
+  writeFileSync(
+    join(directory, 'package.json'),
+    JSON.stringify({ name: 'plugin', version: '1.0.0', dsh: { bundle: { patch: 'bundle.yml' } } }),
+  )
   writeFileSync(join(directory, 'bundle.yml'), '[]\n')
 }
 function plugins(manager: DesktopProjectManager) {
-  return readProfilePlugins({ binName: 'dsh', profileDir: manager.paths.profile,
-    installAnchor: join(manager.runtime.dsh, 'node_modules/@deepseek-ai/dsh/package.json') }).dependencies
-    .map(({ name, version, enabled }) => ({ name, version, enabled }))
+  return readProfilePlugins({
+    binName: 'dsh',
+    profileDir: manager.paths.profile,
+    installAnchor: join(manager.runtime.dsh, 'node_modules/@deepseek-ai/dsh/package.json'),
+  }).dependencies.map(({ name, version, enabled }) => ({ name, version, enabled }))
 }
 function setup(): { root: string; manager: DesktopProjectManager } {
   const root = temporaryRoot()
@@ -67,11 +83,11 @@ describe('desktop external plugin profile', () => {
       'node_modules/plugin/package.json',
       'node_modules/plugin/bundle.yml',
     ]
-    const before = files.map(file => readFileSync(join(profile, file), 'utf8'))
+    const before = files.map((file) => readFileSync(join(profile, file), 'utf8'))
 
     await expect(manager.applyRelease()).resolves.toBeUndefined()
 
-    expect(files.map(file => readFileSync(join(profile, file), 'utf8'))).toEqual(before)
+    expect(files.map((file) => readFileSync(join(profile, file), 'utf8'))).toEqual(before)
     expect(lstatSync(path).isDirectory()).toBe(true)
     expect(lstatSync(join(profile, 'node_modules/plugin')).isDirectory()).toBe(true)
   })
@@ -94,9 +110,13 @@ describe('desktop external plugin profile', () => {
     const patch = join(manager.paths.profile, 'node_modules/plugin/bundle.yml')
     unlinkSync(patch)
     await manager.disableAllPlugins()
-    expect((JSON.parse(readFileSync(join(manager.paths.profile, 'package.json'), 'utf8')) as {
-      dsh: { profile: { bundles: string[] } }
-    }).dsh.profile.bundles).not.toContain('plugin')
+    expect(
+      (
+        JSON.parse(readFileSync(join(manager.paths.profile, 'package.json'), 'utf8')) as {
+          dsh: { profile: { bundles: string[] } }
+        }
+      ).dsh.profile.bundles,
+    ).not.toContain('plugin')
     expect(existsSync(join(manager.paths.profile, 'node_modules/plugin/package.json'))).toBe(true)
     await expect(manager.applyRelease()).resolves.toBeUndefined()
   })
@@ -110,7 +130,7 @@ describe('desktop external plugin profile', () => {
     const uninitialized = new DesktopProjectManager(manager.paths, { ...manager.runtime, dsh: 'missing-runtime' })
     const backupPath = await uninitialized.disableAllPlugins()
     expect(existsSync(patch)).toBe(false)
-    const backups = readdirSync(manager.paths.profile).filter(name => name.startsWith('cordis.patch.yml.bak-'))
+    const backups = readdirSync(manager.paths.profile).filter((name) => name.startsWith('cordis.patch.yml.bak-'))
     expect(backups).toHaveLength(1)
     expect(backupPath).toBe(join(manager.paths.profile, backups[0]!))
     expect(readFileSync(join(manager.paths.profile, backups[0]!), 'utf8')).toBe(': broken')
@@ -146,8 +166,9 @@ describe('desktop external plugin profile', () => {
   it('initializes the same pnpm settings as a Web profile without a Desktop build allowlist', async () => {
     const { manager } = setup()
     await manager.applyRelease()
-    expect(readFileSync(join(manager.paths.profile, 'pnpm-workspace.yaml'), 'utf8'))
-      .toBe('packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n')
+    expect(readFileSync(join(manager.paths.profile, 'pnpm-workspace.yaml'), 'utf8')).toBe(
+      'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n',
+    )
   })
 
   it('opens a linked profile and migrates only the generated pnpm defaults', async () => {
@@ -159,7 +180,10 @@ describe('desktop external plugin profile', () => {
     await manager.applyRelease()
     const path = join(target, 'pnpm-workspace.yaml')
     const defaults = readFileSync(path, 'utf8')
-    writeFileSync(path, `${defaults}strictDepBuilds: true\nallowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  "@deepseek-ai/dsh-subprocess-local": true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`)
+    writeFileSync(
+      path,
+      `${defaults}strictDepBuilds: true\nallowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  "@deepseek-ai/dsh-subprocess-local": true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`,
+    )
     await manager.applyRelease()
     expect(readFileSync(path, 'utf8')).toBe(defaults)
     const custom = `${defaults}allowBuilds:\n  my-plugin: true\n`
@@ -201,17 +225,20 @@ describe('desktop external plugin profile', () => {
     await expect(relaunched.applyRelease()).resolves.toBeUndefined()
   })
 
-  it.each(['changed', 'same-size', 'extra', 'missing'])('starts and reuses a profile without checking %s runtime bytes', async (operation) => {
-    const { manager } = setup()
-    if (operation === 'changed') writeFileSync(join(manager.runtime.dsh, 'package.json'), '{}')
-    if (operation === 'same-size') writeFileSync(join(manager.runtime.dsh, 'package.json'), '{"type":"Module"}\n')
-    if (operation === 'extra') writeFileSync(join(manager.runtime.dsh, 'extra'), '')
-    if (operation === 'missing') unlinkSync(join(manager.runtime.dsh, 'package.json'))
-    await expect(manager.applyRelease()).resolves.toBeUndefined()
-    const relaunched = new DesktopProjectManager(manager.paths, manager.runtime)
-    await expect(relaunched.applyRelease()).resolves.toBeUndefined()
-    expect(existsSync(manager.paths.profile)).toBe(true)
-  })
+  it.each(['changed', 'same-size', 'extra', 'missing'])(
+    'starts and reuses a profile without checking %s runtime bytes',
+    async (operation) => {
+      const { manager } = setup()
+      if (operation === 'changed') writeFileSync(join(manager.runtime.dsh, 'package.json'), '{}')
+      if (operation === 'same-size') writeFileSync(join(manager.runtime.dsh, 'package.json'), '{"type":"Module"}\n')
+      if (operation === 'extra') writeFileSync(join(manager.runtime.dsh, 'extra'), '')
+      if (operation === 'missing') unlinkSync(join(manager.runtime.dsh, 'package.json'))
+      await expect(manager.applyRelease()).resolves.toBeUndefined()
+      const relaunched = new DesktopProjectManager(manager.paths, manager.runtime)
+      await expect(relaunched.applyRelease()).resolves.toBeUndefined()
+      expect(existsSync(manager.paths.profile)).toBe(true)
+    },
+  )
 
   it('keeps plugin files and patches through a compatible release and application relocation', async () => {
     const { root, manager } = setup()

@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -58,7 +58,10 @@ function call(ctx: Context, args: Record<string, unknown>) {
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
-  return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+  return result.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
 }
 
 async function until<T>(read: () => T | undefined, timeoutMs = 5_000): Promise<T> {
@@ -66,13 +69,16 @@ async function until<T>(read: () => T | undefined, timeoutMs = 5_000): Promise<T
   while (Date.now() < deadline) {
     const value = read()
     if (value !== undefined) return value
-    await new Promise(resolve => pollingTimeout(resolve, 20))
+    await new Promise((resolve) => pollingTimeout(resolve, 20))
   }
   throw new Error('condition not reached before timeout')
 }
 
 function retainedText(ctx: Context, id: JobId, caller?: Agent): string {
-  return ctx.jobs.readAt(id, 0, caller?.id).chunks.map(chunk => chunk.text).join('')
+  return ctx.jobs
+    .readAt(id, 0, caller?.id)
+    .chunks.map((chunk) => chunk.text)
+    .join('')
 }
 
 describe('background bash output', () => {
@@ -89,16 +95,19 @@ describe('background bash output', () => {
     expect(job).toBeDefined()
 
     // Live output appears in the ring while the command is still running.
-    await until(() => retainedText(ctx, job!.id).includes('line-1') ? true : undefined)
+    await until(() => (retainedText(ctx, job!.id).includes('line-1') ? true : undefined))
     expect(jobs.get(job!.id).status).toBe('running')
 
     // Settlement ends the ring with the job; the trailing bytes are drained first.
-    await until(() => jobs.get(job!.id).status === 'completed' ? true : undefined)
+    await until(() => (jobs.get(job!.id).status === 'completed' ? true : undefined))
     expect(jobs.get(job!.id).detail).toBe('exit code: 0')
     expect(retainedText(ctx, job!.id)).toContain('line-2')
 
     // The model-facing consuming cursor reads the same bytes: observation stole nothing.
-    const consumed = jobs.read(job!.id).chunks.map(chunk => chunk.text).join('')
+    const consumed = jobs
+      .read(job!.id)
+      .chunks.map((chunk) => chunk.text)
+      .join('')
     expect(consumed).toContain('line-1')
     expect(consumed).toContain('line-2')
   })
@@ -109,7 +118,7 @@ describe('background bash output', () => {
     const jobs = ctx.jobs
     const job = jobs.list()[0]
     jobs.kill(job!.id, undefined, 'test cleanup')
-    await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
+    await until(() => (jobs.get(job!.id).status === 'killed' ? true : undefined))
     expect(jobs.get(job!.id).detail).toMatch(/(signal|killed before exit).*; test cleanup$/)
   })
 
@@ -124,13 +133,15 @@ describe('background bash output', () => {
     expect(text(started)).toMatch(/^started background job bash-\d+$/)
     const jobs = ctx.jobs
     const job = jobs.list()[0]
-    await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
-    const read = text(await ctx.tools.execute({
-      signal: testToolSignal,
-      callId: ToolCallId('background-spawn-failure-read'),
-      name: 'job_output',
-      arguments: { job_id: String(job!.id) },
-    }))
+    await until(() => (jobs.get(job!.id).status === 'killed' ? true : undefined))
+    const read = text(
+      await ctx.tools.execute({
+        signal: testToolSignal,
+        callId: ToolCallId('background-spawn-failure-read'),
+        name: 'job_output',
+        arguments: { job_id: String(job!.id) },
+      }),
+    )
     expect(read).toMatch(/^\[stderr\]\nsubprocess failed before reporting an outcome: .*\n\[status: killed, killed before exit\]$/s)
   })
 
@@ -143,10 +154,10 @@ describe('background bash output', () => {
     })
     const jobs = ctx.jobs
     const job = jobs.list()[0]
-    await until(() => jobs.get(job!.id).status === 'completed' ? true : undefined)
+    await until(() => (jobs.get(job!.id).status === 'completed' ? true : undefined))
     const chunks = jobs.readAt(job!.id, 0).chunks
-    expect(chunks.find(chunk => chunk.text.includes('out-line'))?.channel).toBe('stdout')
-    expect(chunks.find(chunk => chunk.text.includes('err-line'))?.channel).toBe('stderr')
+    expect(chunks.find((chunk) => chunk.text.includes('out-line'))?.channel).toBe('stdout')
+    expect(chunks.find((chunk) => chunk.text.includes('err-line'))?.channel).toBe('stderr')
   })
 })
 
@@ -162,13 +173,19 @@ describe('processSources', () => {
   it('forwards each read to the matching stream reader at its own offset once the process exists', () => {
     const reads: { channel: string; from: number }[] = []
     const reader = (channel: string, text: string): ShellProcess['observed']['stdout'] => ({
-      readFrom: (from: number) => { reads.push({ channel, from }); return { text, nextOffset: from + text.length, lossy: false } },
+      readFrom: (from: number) => {
+        reads.push({ channel, from })
+        return { text, nextOffset: from + text.length, lossy: false }
+      },
     })
     const proc: Pick<ShellProcess, 'observed'> = { observed: { stdout: reader('stdout', 'out'), stderr: reader('stderr', 'err!') } }
     const [stdout, stderr] = processSources(() => proc)
     expect(stdout!.read(2)).toEqual({ text: 'out', nextOffset: 5, lossy: false })
     expect(stderr!.read(7)).toEqual({ text: 'err!', nextOffset: 11, lossy: false })
-    expect(reads).toEqual([{ channel: 'stdout', from: 2 }, { channel: 'stderr', from: 7 }])
+    expect(reads).toEqual([
+      { channel: 'stdout', from: 2 },
+      { channel: 'stderr', from: 7 },
+    ])
   })
 
   it("passes a lossy read's spill file through, so the model's notice can name it", () => {
@@ -181,17 +198,18 @@ describe('processSources', () => {
     const [, stderr] = processSources(() => proc)
     expect(stderr!.read(0)).toEqual({ text: 'tail', nextOffset: 4, lossy: true, spillPath: '/spill/err.log' })
   })
-
 })
 
 describe('ringDelta', () => {
   it('renders stdout chunks in order and every stderr chunk in one trailing section', () => {
     expect(ringDelta([])).toBe('')
-    expect(ringDelta([
-      { at: 0, text: 'a\n', channel: 'stdout' },
-      { at: 2, text: 'warn\n', channel: 'stderr' },
-      { at: 7, text: 'b', channel: 'stdout' },
-    ])).toBe('a\nb\n[stderr]\nwarn\n')
+    expect(
+      ringDelta([
+        { at: 0, text: 'a\n', channel: 'stdout' },
+        { at: 2, text: 'warn\n', channel: 'stderr' },
+        { at: 7, text: 'b', channel: 'stdout' },
+      ]),
+    ).toBe('a\nb\n[stderr]\nwarn\n')
     expect(ringDelta([{ at: 0, text: 'only\n', channel: 'stderr' }])).toBe('[stderr]\nonly\n')
   })
 })
@@ -214,9 +232,14 @@ describe('foreground commands as jobs', () => {
         description: 'test command',
         timeoutMs: 250,
       })
-      await until(() => execution?.observed.stdout.readFrom(0).text.includes('early-output') ? true : undefined, task.timeout)
+      await until(() => (execution?.observed.stdout.readFrom(0).text.includes('early-output') ? true : undefined), task.timeout)
       // The job exists from the start: the command is listed while the call still waits.
-      expect(ctx.jobs.list()[0]).toMatchObject({ id: 'bash-1', kind: 'bash', status: 'running', label: 'printf "early-output\\n"; sleep 30' })
+      expect(ctx.jobs.list()[0]).toMatchObject({
+        id: 'bash-1',
+        kind: 'bash',
+        status: 'running',
+        label: 'printf "early-output\\n"; sleep 30',
+      })
       await vi.advanceTimersByTimeAsync(250)
       const result = await pending
       vi.useRealTimers()
@@ -232,7 +255,7 @@ describe('foreground commands as jobs', () => {
       // The hand-over was one consuming read: the next read repeats nothing.
       expect(jobs.read(job!.id).chunks).toEqual([])
       expect(jobs.kill(job!.id, undefined, 'test cleanup')).toBe('requested')
-      await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
+      await until(() => (jobs.get(job!.id).status === 'killed' ? true : undefined))
       // Observers still see the whole stream from offset 0.
       expect(retainedText(ctx, job!.id)).toContain('early-output')
     } finally {
@@ -245,7 +268,9 @@ describe('foreground commands as jobs', () => {
   it('a command that finishes within the wait returns the foreground result and leaves no job behind', async () => {
     const ctx = await setup()
     const seen: string[] = []
-    ctx.jobs.events.subscribe({ owners: 'all' }, (event) => { seen.push(event.type === 'settled' ? `settled:${String(event.awaited)}` : event.type) })
+    ctx.jobs.events.subscribe({ owners: 'all' }, (event) => {
+      seen.push(event.type === 'settled' ? `settled:${String(event.awaited)}` : event.type)
+    })
     const result = await call(ctx, { command: 'printf "done\\n"; printf "warn\\n" >&2', description: 'test command' })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected a foreground result')
@@ -253,7 +278,7 @@ describe('foreground commands as jobs', () => {
     expect(text(result)).toBe('done\n[stderr]\nwarn\n')
     expect(ctx.jobs.list()).toEqual([])
     // Registered at the start, settled while awaited, removed with the result.
-    expect(seen.filter(type => type !== 'output')).toEqual(['registered', 'settled:true', 'removed'])
+    expect(seen.filter((type) => type !== 'output')).toEqual(['registered', 'settled:true', 'removed'])
   })
 
   it('a foreground command stopped from outside the call reports the reason instead of failing', async ({ task }) => {
@@ -310,7 +335,13 @@ describe('foreground commands as jobs', () => {
       status: 'running',
       exitCode: null,
       signal: null,
-      done: new Promise<void>((resolve) => { finish = () => { stubborn.status = 'killed'; stubborn.signal = 'SIGKILL'; resolve() } }),
+      done: new Promise<void>((resolve) => {
+        finish = () => {
+          stubborn.status = 'killed'
+          stubborn.signal = 'SIGKILL'
+          resolve()
+        }
+      }),
       readOutput: () => ({ delta: '', lossy: false }),
       observed: { stdout: silentReader, stderr: silentReader },
       kill: () => true, // acknowledges the request but takes its time
@@ -330,15 +361,24 @@ describe('foreground commands as jobs', () => {
     expect(result.isError).toBe(true)
     expect(ctx.jobs.get(job.id).status).toBe('stopping')
     finish()
-    await until(() => ctx.jobs.get(job.id).status === 'killed' ? true : undefined)
+    await until(() => (ctx.jobs.get(job.id).status === 'killed' ? true : undefined))
   })
 
   it('a wait that expires before the process spawned ends as the preparation timeout, not a hand-over', async () => {
     const ctx = await setup()
     // Preparation that only ends with the job's own cancellation.
-    vi.spyOn(ctx.shell, 'execute').mockImplementation(spec => new Promise((_resolve, reject) => {
-      spec.signal?.addEventListener('abort', () => { reject(new Error('fixture preparation aborted')) }, { once: true })
-    }))
+    vi.spyOn(ctx.shell, 'execute').mockImplementation(
+      (spec) =>
+        new Promise((_resolve, reject) => {
+          spec.signal?.addEventListener(
+            'abort',
+            () => {
+              reject(new Error('fixture preparation aborted'))
+            },
+            { once: true },
+          )
+        }),
+    )
     const result = await call(ctx, { command: 'sleep 30', description: 'test command', timeoutMs: 250 })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected a foreground result')
@@ -354,7 +394,11 @@ describe('foreground commands as jobs', () => {
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
-        version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
+        version: SESSION_FORMAT_VERSION,
+        id: ownerId,
+        createdAt: 0,
+        cwd: process.cwd(),
+        isSeeded: false,
       }),
       inbox: unsupportedInbox(),
       status: 'idle',
@@ -364,7 +408,7 @@ describe('foreground commands as jobs', () => {
       steer: () => {},
       inject: () => {},
       cancel: () => {},
-      runMaintenance: task => task(new AbortController().signal),
+      runMaintenance: (task) => task(new AbortController().signal),
       whenIdle: () => Promise.resolve(),
     }
     ctx.agents.register(owner)
@@ -382,7 +426,7 @@ describe('foreground commands as jobs', () => {
     expect(job!.owner).toBe(owner.id)
     expect(() => ctx.jobs.readAt(job!.id, 0)).toThrow(/belongs to another session/)
     expect(owned.kill(job!.id, owner.id, 'test cleanup')).toBe('requested')
-    await until(() => owned.get(job!.id, owner.id).status === 'killed' ? true : undefined)
+    await until(() => (owned.get(job!.id, owner.id).status === 'killed' ? true : undefined))
   })
 
   it('runs under the deadline kill when the registry refuses the job at its start', async () => {
@@ -397,9 +441,16 @@ describe('foreground commands as jobs', () => {
         label: `filler-${i}`,
         run: () => {
           let settle!: (outcome: { status: 'killed' }) => void
-          const done = new Promise<{ status: 'killed' }>((resolve) => { settle = resolve })
+          const done = new Promise<{ status: 'killed' }>((resolve) => {
+            settle = resolve
+          })
           settlers.push(settle)
-          return { cancel: () => { settle({ status: 'killed' }) }, done }
+          return {
+            cancel: () => {
+              settle({ status: 'killed' })
+            },
+            done,
+          }
         },
       })
     }
@@ -411,7 +462,7 @@ describe('foreground commands as jobs', () => {
     const body = text(result)
     expect(body).toContain('[timed out after 250ms]')
     expect(body).not.toContain('moved to background job')
-    expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('job registration refused')
+    expect(warn.mock.calls.map((args) => String(args[0])).join('\n')).toContain('job registration refused')
     expect(ctx.jobs.list()).toHaveLength(limit)
     for (const settle of settlers) settle({ status: 'killed' })
   })
@@ -429,7 +480,9 @@ describe('foreground commands as jobs', () => {
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, graceMs: 200 })
     await ctx.plugin(ToolBash, { promoteOnTimeout: false })
     const seen: string[] = []
-    ctx.jobs.events.subscribe({ owners: 'all' }, (event) => { seen.push(event.type) })
+    ctx.jobs.events.subscribe({ owners: 'all' }, (event) => {
+      seen.push(event.type)
+    })
     const result = await call(ctx, { command: 'sleep 30', description: 'test command', timeoutMs: 250 })
     expect(text(result)).toContain('[timed out after 250ms]')
     expect(ctx.jobs.list()).toEqual([])
@@ -449,15 +502,15 @@ describe('foreground commands as jobs', () => {
 describe('renderPromoted', () => {
   it('pins the promoted text with and without pre-promotion output', () => {
     expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 120_000, output: '' })).toBe(
-      '[still running after 120000ms; moved to background job bash-7]\n'
-      + 'The command keeps running in the background. You will be notified when it finishes; '
-      + 'read newer output with job_output, stop it with job_kill.',
+      '[still running after 120000ms; moved to background job bash-7]\n' +
+        'The command keeps running in the background. You will be notified when it finishes; ' +
+        'read newer output with job_output, stop it with job_kill.',
     )
     // A partial line gains the separating newline exactly once.
-    expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'partial' }))
-      .toContain('partial\n[still running after 250ms; moved to background job bash-7]')
-    expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'line\n' }))
-      .toContain('line\n[still running after 250ms')
+    expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'partial' })).toContain(
+      'partial\n[still running after 250ms; moved to background job bash-7]',
+    )
+    expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'line\n' })).toContain('line\n[still running after 250ms')
   })
 })
 
@@ -469,7 +522,11 @@ describe('owned background output', () => {
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
-        version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
+        version: SESSION_FORMAT_VERSION,
+        id: ownerId,
+        createdAt: 0,
+        cwd: process.cwd(),
+        isSeeded: false,
       }),
       inbox: unsupportedInbox(),
       status: 'idle',
@@ -479,7 +536,7 @@ describe('owned background output', () => {
       steer: () => {},
       inject: () => {},
       cancel: () => {},
-      runMaintenance: task => task(new AbortController().signal),
+      runMaintenance: (task) => task(new AbortController().signal),
       whenIdle: () => Promise.resolve(),
     }
     ctx.agents.register(owner)
@@ -494,8 +551,8 @@ describe('owned background output', () => {
     const job = owned.list(owner.id)[0]
     expect(job).toBeDefined()
     expect(job!.owner).toBe(owner.id)
-    await until(() => owned.get(job!.id, owner.id).status === 'completed' ? true : undefined)
+    await until(() => (owned.get(job!.id, owner.id).status === 'completed' ? true : undefined))
     expect(() => retainedText(ctx, job!.id)).toThrow(/belongs to another session/)
-    await until(() => retainedText(ctx, job!.id, owner).includes('owned') ? true : undefined)
+    await until(() => (retainedText(ctx, job!.id, owner).includes('owned') ? true : undefined))
   })
 })

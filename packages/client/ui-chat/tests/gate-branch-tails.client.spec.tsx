@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { cleanup, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -19,14 +19,17 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-
 describe('render branch tails', () => {
   it('AssistantMarkdown reasoning row is ok-state when not the streaming tail', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
-        blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
+        blocks={[
+          { kind: 'reasoning', text: 'done thinking' },
+          { kind: 'text', text: 'answer' },
+        ]}
         streaming
         renderMessageImages={renderMessageImages}
       />,
@@ -48,7 +51,7 @@ describe('render branch tails', () => {
     const snap = chatSnapshotFixture({ nodes })
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
     const pillProps: StatPillProps = {
-      usePerformanceUsage: selector => selector('detailed'),
+      usePerformanceUsage: (selector) => selector('detailed'),
       t,
       useChat: bindSnapshotSelector(source),
       useProjection: () => undefined,
@@ -66,7 +69,8 @@ describe('render branch tails', () => {
 
   it('AssistantMarkdown reasoning as the streaming tail renders the running ring', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'still thinking' }]}
@@ -76,5 +80,4 @@ describe('render branch tails', () => {
     )
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()
   })
-
 })

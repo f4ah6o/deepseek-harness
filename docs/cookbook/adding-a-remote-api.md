@@ -152,7 +152,7 @@ On the owner side, assert the code that was thrown: recover the failure with `re
 
 ```ts
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 
 declare function rename(noteId: string, title: string): Promise<void>
 
@@ -171,7 +171,7 @@ A Client-side double returns real instances: take the `RemoteError` and `TestRem
 ```ts ignore-check
 import { Context } from '@deepseek-ai/cordis'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 
 it('renders the failure code the Host reported', async () => {
   const ctx = new Context()
@@ -193,5 +193,5 @@ it('renders the failure code the Host reported', async () => {
 
 1. `pnpm run build:lib`: mandatory once a signature, the code table, the namespace, or an export name changed, because it produces the Client declarations and codecs.
 2. `pnpm run typecheck`: both the Host and the Client program, where a code merged into an unreachable package turns red.
-3. Run both sides' specs by name: `npx vitest run <owner spec> <client spec>`.
+3. Run both sides' specs by name: `pnpm exec vp test run <owner spec> <client spec>`.
 4. Add a recorded-session snapshot when the endpoint reaches a product-visible surface, per the [testing policy](../testing.md).

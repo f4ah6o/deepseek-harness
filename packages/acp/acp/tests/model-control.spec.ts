@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { ReasoningEffortId, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { AcpModelControl } from '../src/model-control.ts'
 
@@ -7,25 +7,27 @@ function llmRuntime(overrides: Partial<LlmRuntime> = {}): LlmRuntime {
   return {
     listProviders: () => [{ id: 'mock', name: 'Mock' }],
     listModels: () => Promise.resolve([{ provider: 'mock', id: 'mock', name: 'Mock' }]),
-    resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) => Promise.resolve({
-      provider: selection.provider ?? 'mock',
-      model: selection.model ?? 'mock',
-      ...selection.reasoningEffort === undefined
-        ? { reasoningEffort: ReasoningEffortId('high') }
-        : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) },
-    }),
-    resolveModelInfo: (provider: string, model: string) => Promise.resolve({
-      provider,
-      id: model,
-      name: model,
-      reasoning: {
-        efforts: [
-          { id: ReasoningEffortId('low'), name: 'Low', description: 'Less thought.' },
-          { id: ReasoningEffortId('high'), name: 'High' },
-        ],
-        defaultEffort: ReasoningEffortId('high'),
-      },
-    }),
+    resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) =>
+      Promise.resolve({
+        provider: selection.provider ?? 'mock',
+        model: selection.model ?? 'mock',
+        ...(selection.reasoningEffort === undefined
+          ? { reasoningEffort: ReasoningEffortId('high') }
+          : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) }),
+      }),
+    resolveModelInfo: (provider: string, model: string) =>
+      Promise.resolve({
+        provider,
+        id: model,
+        name: model,
+        reasoning: {
+          efforts: [
+            { id: ReasoningEffortId('low'), name: 'Low', description: 'Less thought.' },
+            { id: ReasoningEffortId('high'), name: 'High' },
+          ],
+          defaultEffort: ReasoningEffortId('high'),
+        },
+      }),
     ...overrides,
   } as unknown as LlmRuntime
 }
@@ -51,8 +53,8 @@ describe('ACP model configuration control', () => {
 
     const options = await control.options()
 
-    const model = options.find(option => option.id === 'model')
-    const reasoning = options.find(option => option.id === 'reasoning_effort')
+    const model = options.find((option) => option.id === 'model')
+    const reasoning = options.find((option) => option.id === 'reasoning_effort')
     expect(model).toMatchObject({
       type: 'select',
       currentValue: '["private","unlisted"]',
@@ -91,41 +93,41 @@ describe('ACP model configuration control', () => {
     await expect(control.set('reasoning_effort', 'extreme')).rejects.toThrow(/unknown reasoning effort/)
     const options = await control.set('reasoning_effort', 'low')
 
-    expect(options.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: 'low' })
+    expect(options.find((option) => option.id === 'reasoning_effort')).toMatchObject({ currentValue: 'low' })
   })
 
   it('exposes and restores a provider-owned reasoning default', async () => {
     const runtime = llmRuntime({
-      resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) => Promise.resolve({
-        provider: selection.provider ?? 'mock',
-        model: selection.model ?? 'mock',
-        ...selection.reasoningEffort === undefined
-          ? {}
-          : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) },
-      }),
-      resolveModelInfo: (provider: string, model: string) => Promise.resolve({
-        provider,
-        id: model,
-        name: model,
-        reasoning: {
-          efforts: [
-            { id: ReasoningEffortId('low'), name: 'Low' },
-            { id: ReasoningEffortId('high'), name: 'High' },
-          ],
-        },
-      }),
+      resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) =>
+        Promise.resolve({
+          provider: selection.provider ?? 'mock',
+          model: selection.model ?? 'mock',
+          ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) }),
+        }),
+      resolveModelInfo: (provider: string, model: string) =>
+        Promise.resolve({
+          provider,
+          id: model,
+          name: model,
+          reasoning: {
+            efforts: [
+              { id: ReasoningEffortId('low'), name: 'Low' },
+              { id: ReasoningEffortId('high'), name: 'High' },
+            ],
+          },
+        }),
     })
     const control = new AcpModelControl(runtime, { provider: 'mock', model: 'mock' })
 
     const initial = await control.options()
-    expect(initial.find(option => option.id === 'reasoning_effort')).toMatchObject({
+    expect(initial.find((option) => option.id === 'reasoning_effort')).toMatchObject({
       currentValue: '',
       options: [{ value: '', name: 'Provider default' }, { value: 'low' }, { value: 'high' }],
     })
     await control.set('reasoning_effort', 'low')
     const restored = await control.set('reasoning_effort', '')
 
-    expect(restored.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: '' })
+    expect(restored.find((option) => option.id === 'reasoning_effort')).toMatchObject({ currentValue: '' })
     expect(control.selection.current).toEqual({ provider: 'mock', model: 'mock' })
   })
 })

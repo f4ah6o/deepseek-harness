@@ -12,8 +12,8 @@ export interface WebOutputChunk {
   modules: Record<string, unknown>
   imports: string[]
   dynamicImports: string[]
-  implicitlyLoadedBefore: string[]
-  referencedFiles: string[]
+  implicitlyLoadedBefore?: string[]
+  referencedFiles?: string[]
   viteMetadata?: { importedCss: Set<string>; importedAssets: Set<string> }
 }
 
@@ -65,7 +65,9 @@ export class WebProductBundleIsolation {
   }
 
   /** Replace dependency observations whenever Vite transforms a module again. */
-  cssTransform(module: string): void { this.cssInputs.set(module, new Set<string>()) }
+  cssTransform(module: string): void {
+    this.cssInputs.set(module, new Set<string>())
+  }
 
   /** Record the files the actual CSS transform asks Rollup to watch. */
   cssDependency(module: string, file: string): void {
@@ -88,12 +90,16 @@ export class WebProductBundleIsolation {
         modules: { ...item.modules },
         imports: [...item.imports],
         dynamicImports: [...item.dynamicImports],
-        implicitlyLoadedBefore: [...item.implicitlyLoadedBefore],
-        referencedFiles: [...item.referencedFiles],
-        ...(item.viteMetadata === undefined ? {} : { viteMetadata: {
-          importedCss: new Set(item.viteMetadata.importedCss),
-          importedAssets: new Set(item.viteMetadata.importedAssets),
-        } }),
+        implicitlyLoadedBefore: [...(item.implicitlyLoadedBefore ?? [])],
+        referencedFiles: [...(item.referencedFiles ?? [])],
+        ...(item.viteMetadata === undefined
+          ? {}
+          : {
+              viteMetadata: {
+                importedCss: new Set(item.viteMetadata.importedCss),
+                importedAssets: new Set(item.viteMetadata.importedAssets),
+              },
+            }),
       })
     }
   }
@@ -109,15 +115,17 @@ export class WebProductBundleIsolation {
       }
     }
     for (const file of [...Object.keys(bundle), ...entries]) {
-      this.workerInputs.set(file, new Set([...this.workerInputs.get(file) ?? [], ...inputs]))
+      this.workerInputs.set(file, new Set([...(this.workerInputs.get(file) ?? []), ...inputs]))
     }
   }
 
   /** Reject experimental ownership in everything the emitted index page can load. */
   verify(bundle: WebOutputBundle, moduleInfo: (id: string) => WebModuleInfo | null): void {
     const html = bundle['index.html']
-    if (html?.type !== 'asset' || !html.originalFileNames.some(file =>
-      resolve(this.webRoot, file) === resolve(this.webRoot, 'index.html'))) {
+    if (
+      html?.type !== 'asset' ||
+      !html.originalFileNames.some((file) => resolve(this.webRoot, file) === resolve(this.webRoot, 'index.html'))
+    ) {
       throw new Error('Web product isolation: emitted index.html is missing its original HTML input')
     }
     const outputs = new Map(Object.entries(bundle))
@@ -136,12 +144,19 @@ export class WebProductBundleIsolation {
         for (const name of item.names) aliases.set(name, item.fileName)
       }
     }
-    const outputName = (name: string): string => outputs.has(name) ? name
-      : aliases.get(name) ?? aliases.get(basename(name)) ?? name
+    const outputName = (name: string): string => (outputs.has(name) ? name : (aliases.get(name) ?? aliases.get(basename(name)) ?? name))
+    const externalImports = new Set<string>()
+    for (const item of Object.values(bundle)) {
+      if (item.type !== 'chunk') continue
+      for (const name of [...item.imports, ...item.dynamicImports]) {
+        const target = outputName(name)
+        if (!outputs.has(target)) externalImports.add(target)
+      }
+    }
     const references = new Map<string, AssetReference[]>()
     for (const reference of this.references) {
       const host = outputName(reference.host)
-      references.set(host, [...references.get(host) ?? [], reference])
+      references.set(host, [...(references.get(host) ?? []), reference])
     }
     const visitedOutputs = new Set<string>()
     const visitedModules = new Set<string>()
@@ -152,12 +167,15 @@ export class WebProductBundleIsolation {
       for (const input of inputs) this.inputs.assertInput(input)
     }
     const checkModule = (id: string): void => {
+      if (id === '\0rolldown/runtime.js') return
       if (visitedModules.has(id)) return
       visitedModules.add(id)
-      this.inputs.assertInput(id)
       const info = moduleInfo(id)
+      if (info?.isExternal || externalImports.has(outputName(id))) {
+        throw new Error(`Web product isolation: external module ${id} has no bundled input proof`)
+      }
       if (info === null) throw new Error(`Web product isolation: module ${id} has no Rollup module record`)
-      if (info.isExternal) throw new Error(`Web product isolation: external module ${id} has no bundled input proof`)
+      this.inputs.assertInput(id)
       if (/\.(?:css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/i.test(id) && !this.cssInputs.has(id)) {
         throw new Error(`Web product isolation: stylesheet ${id} has no recorded transform inputs`)
       }
@@ -165,6 +183,9 @@ export class WebProductBundleIsolation {
       for (const file of this.cssInputs.get(id) ?? []) this.inputs.assertInput(file)
       for (const child of [...info.importedIds, ...info.dynamicallyImportedIds]) {
         const childInfo = moduleInfo(child)
+        if (childInfo?.isExternal || externalImports.has(outputName(child))) {
+          throw new Error(`Web product isolation: external module ${child} has no bundled input proof`)
+        }
         if (childInfo === null) throw new Error(`Web product isolation: module ${child} has no Rollup module record`)
         if (childInfo.isIncluded || childInfo.isExternal) checkModule(child)
       }
@@ -174,12 +195,17 @@ export class WebProductBundleIsolation {
       if (visitedOutputs.has(file)) continue
       visitedOutputs.add(file)
       const item = outputs.get(file)
-      if (item === undefined) throw new Error(`Web product isolation: referenced output ${file} is missing`)
+      if (item === undefined) {
+        if (moduleInfo(file)?.isExternal || externalImports.has(file)) {
+          throw new Error(`Web product isolation: external module ${file} has no bundled input proof`)
+        }
+        throw new Error(`Web product isolation: referenced output ${file} is missing`)
+      }
       if (this.workerInputs.has(file)) checkWorker(file)
       else if (item.type === 'chunk') {
         for (const id of Object.keys(item.modules)) checkModule(id)
-        queue.push(...item.imports, ...item.dynamicImports, ...item.implicitlyLoadedBefore, ...item.referencedFiles)
-        queue.push(...item.viteMetadata?.importedCss ?? [], ...item.viteMetadata?.importedAssets ?? [])
+        queue.push(...item.imports, ...item.dynamicImports, ...(item.implicitlyLoadedBefore ?? []), ...(item.referencedFiles ?? []))
+        queue.push(...(item.viteMetadata?.importedCss ?? []), ...(item.viteMetadata?.importedAssets ?? []))
       } else if (cssOwners.has(file)) {
         for (const id of cssOwners.get(file) ?? []) checkModule(id)
       } else {
@@ -195,5 +221,4 @@ export class WebProductBundleIsolation {
     }
     if (visitedModules.size === 0) throw new Error('Web product isolation: index.html has no recorded reachable modules')
   }
-
 }

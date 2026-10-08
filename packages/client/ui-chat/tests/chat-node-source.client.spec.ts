@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import type {
-  ChatConversationViewNode, ChatNodeSource,
-} from '@deepseek-ai/dsh-client-ui-chat/client'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import type { ChatConversationViewNode, ChatNodeSource } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ChatSnapshotBuilder } from '../src/client/conversation-nodes/chat-snapshot-builder.ts'
 
@@ -39,10 +37,18 @@ describe('Chat Node keyed sources', () => {
     expect(initial.readPosition(initial.order[0]!)).toEqual({ turn: undefined, previous: undefined, next: undefined })
     expect(initial.readTurn(7)).toEqual([])
     const context: ChatConversationViewNode = {
-      key: 'context:2', kind: 'context', id: '2', target: 'chat', anchorSeq: 2,
-      location: { kind: 'session' }, visibility: 'visible',
+      key: 'context:2',
+      kind: 'context',
+      id: '2',
+      target: 'chat',
+      anchorSeq: 2,
+      location: { kind: 'session' },
+      visibility: 'visible',
       data: {
-        kind: 'context', seq: 2, time: 2, content: [],
+        kind: 'context',
+        seq: 2,
+        time: 2,
+        content: [],
         source: { kind: 'skill-invocation', name: 'demo', form: 'instructions' },
       },
     }
@@ -52,13 +58,14 @@ describe('Chat Node keyed sources', () => {
     expect(input.order).toBe(next.order)
     expect(input.changedTurns).toEqual([7])
     expect(input.changedTurnOrders).toEqual([])
-    expect(input.readPosition(context.key as typeof input.order[number])).toBeUndefined()
-    expect(input.readPosition('missing' as typeof input.order[number])).toBeUndefined()
-    expect(input.changes.find(change => change.current.key === user.key)).toEqual({
-      previous: user, current: next.nodes.get(user.key),
+    expect(input.readPosition(context.key as (typeof input.order)[number])).toBeUndefined()
+    expect(input.readPosition('missing' as (typeof input.order)[number])).toBeUndefined()
+    expect(input.changes.find((change) => change.current.key === user.key)).toEqual({
+      previous: user,
+      current: next.nodes.get(user.key),
     })
     expect(next.nodes.get(user.key)?.data).toMatchObject({ skillNames: ['demo'] })
-    expect(input.changes.find(change => change.current.key === context.key)).toEqual({ previous: undefined, current: context })
+    expect(input.changes.find((change) => change.current.key === context.key)).toEqual({ previous: undefined, current: context })
     builder.apply({ upserts: [], timeline })
     expect(builder.groupInput()).toMatchObject({ kind: 'apply', changes: [], changedTurns: [], changedTurnOrders: [] })
     expect(builder.groupInput().order).toBe(next.order)

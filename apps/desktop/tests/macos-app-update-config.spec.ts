@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import {
   createMacOSAppUpdateConfig,
   resolveMacOSAppUpdateFeed,
@@ -22,15 +22,18 @@ async function fixture(): Promise<{ appPath: string; resourcesDir: string }> {
 }
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
 describe('macOS packaged updater configuration', () => {
   it('uses the final generic Nightly provider configured for the build', () => {
-    expect(resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }]))
-      .toEqual(update)
-    for (const publish of [undefined, [], [{ provider: 'github', channel: 'nightly', url: update.publicUrl }],
-      [{ provider: 'generic', channel: 'latest', url: update.publicUrl }]]) {
+    expect(resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }])).toEqual(update)
+    for (const publish of [
+      undefined,
+      [],
+      [{ provider: 'github', channel: 'nightly', url: update.publicUrl }],
+      [{ provider: 'generic', channel: 'latest', url: update.publicUrl }],
+    ]) {
       expect(() => resolveMacOSAppUpdateFeed(publish)).toThrow(/macOS update config/u)
     }
   })
@@ -60,7 +63,8 @@ describe('macOS packaged updater configuration', () => {
   it('rejects another updater cache directory when the signed value is known', async () => {
     const paths = await fixture()
     await writeMacOSAppUpdateConfig(paths.resourcesDir, update, 'wrong-updater')
-    await expect(verifyMacOSAppUpdateConfig(paths.appPath, update, 'deepseek-harness-updater'))
-      .rejects.toThrow(/expected deepseek-harness-updater/u)
+    await expect(verifyMacOSAppUpdateConfig(paths.appPath, update, 'deepseek-harness-updater')).rejects.toThrow(
+      /expected deepseek-harness-updater/u,
+    )
   })
 })

@@ -1,6 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
-const socket = vi.hoisted(() => vi.fn(function () { return {} }))
+const socket = vi.hoisted(() =>
+  vi.fn(function () {
+    return {}
+  }),
+)
 vi.mock('node:net', () => ({ Socket: socket }))
 
 import { openInheritedControlChannel, SUBPROCESS_CONTROL_ENV } from '../src/control.ts'

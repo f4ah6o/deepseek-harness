@@ -3,8 +3,15 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
+import {
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
+} from './scaffold.ts'
 import { openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
 
 const EXPECTED = fileURLToPath(new URL('./expected/agent-preset-authoring', import.meta.url))
@@ -25,7 +32,10 @@ describe('web e2e: preset roster guidance', () => {
     await page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: 'Agent 预设' }).click()
     await page.getByRole('heading', { name: 'Agent 预设' }).waitFor()
   }, 120_000)
-  afterAll(async () => { await browser?.close(); await scaffold?.close() })
+  afterAll(async () => {
+    await browser?.close()
+    await scaffold?.close()
+  })
 
   it('shows the shipped roster with mode help and a read-only view, and no editing actions', async () => {
     onTestFailed(() => saveFailureShot(page, 'preset-roster-section'))
@@ -51,7 +61,7 @@ describe('web e2e: preset roster guidance', () => {
     await guide.getByRole('heading', { name: '批量检查配置文件', exact: true }).waitFor()
     await guide.getByRole('tab', { name: '如何使用', exact: true }).press('Escape')
     await guide.waitFor({ state: 'detached' })
-    expect(await trigger.evaluate(element => document.activeElement === element)).toBe(true)
+    expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
     expect(await settings.getByRole('button', { name: '新任务默认: 标准模式', exact: true }).getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -87,23 +97,33 @@ describe('web e2e: preset roster guidance', () => {
     await settings.getByRole('button', { name: 'Agent 预设' }).click()
     await settings.getByRole('button', { name: '让 Agent 帮我创建预设模式', exact: true }).click()
     await settings.waitFor({ state: 'detached', timeout: 10_000 })
-    await expect.poll(async () => {
-      const response = await scaffold.hostFetch('/api/session/list', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'client-request', rpcId: 'creator-draft-stage', method: 'session/list',
-          payload: { args: { _request: {} } },
-        }),
-      })
-      const body = await response.json() as {
-        result: { value?: { items: { projections?: { values: { agentPreset?: string | null } } }[] } }
-      }
-      return body.result.value?.items
-        .map(item => item.projections?.values.agentPreset)
-        .filter(preset => typeof preset === 'string') ?? []
-    }, { timeout: 15_000 }).toContain('cordis')
+    await expect
+      .poll(
+        async () => {
+          const response = await scaffold.hostFetch('/api/session/list', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              type: 'client-request',
+              rpcId: 'creator-draft-stage',
+              method: 'session/list',
+              payload: { args: { _request: {} } },
+            }),
+          })
+          const body = (await response.json()) as {
+            result: { value?: { items: { projections?: { values: { agentPreset?: string | null } } }[] } }
+          }
+          return (
+            body.result.value?.items.map((item) => item.projections?.values.agentPreset).filter((preset) => typeof preset === 'string') ??
+            []
+          )
+        },
+        { timeout: 15_000 },
+      )
+      .toContain('cordis')
   })
 
-  it('runs without page errors or model calls', () => { expect(tripwire.pageErrors).toEqual([]) })
+  it('runs without page errors or model calls', () => {
+    expect(tripwire.pageErrors).toEqual([])
+  })
 })

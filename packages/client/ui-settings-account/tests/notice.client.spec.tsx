@@ -7,7 +7,7 @@
 import { createRef } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { act } from 'react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
 import type { AccountBonusOrderId } from '@deepseek-ai/dsh-deepseek-account/types'
 import { AccountNoticeCard } from '../src/client/AccountNotice.tsx'
 
@@ -26,20 +26,43 @@ beforeEach(() => {
   frames = []
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
   // jsdom drives requestAnimationFrame from its own clock, so the test presents frames explicitly.
-  vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { frames.push(callback); return frames.length })
+  vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+    frames.push(callback)
+    return frames.length
+  })
   vi.stubGlobal('cancelAnimationFrame', () => {})
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.restoreAllMocks(); disconnect.mockClear() })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  disconnect.mockClear()
+})
 
 function mount(id: string, onShown = vi.fn(), onDismiss = vi.fn()) {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect = disconnect })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect = disconnect
+    },
+  )
   const anchor = createRef<HTMLDivElement>()
-  const view = render(<>
-    <div ref={anchor} style={{ position: 'absolute', left: 40, top: 200 }} />
-    <AccountNoticeCard key={id} anchor={anchor} title="Bonus credited" closeLabel="Close"
-      notice={{ orderId: id as AccountBonusOrderId, message: 'Server copy 5.00', expiresAt: '2099-01-01T00:00:00Z' }}
-      onShown={onShown} onDismiss={onDismiss} />
-  </>)
+  const view = render(
+    <>
+      <div ref={anchor} style={{ position: 'absolute', left: 40, top: 200 }} />
+      <AccountNoticeCard
+        key={id}
+        anchor={anchor}
+        title="Bonus credited"
+        closeLabel="Close"
+        notice={{ orderId: id as AccountBonusOrderId, message: 'Server copy 5.00', expiresAt: '2099-01-01T00:00:00Z' }}
+        onShown={onShown}
+        onDismiss={onDismiss}
+      />
+    </>,
+  )
   return { view, onShown, onDismiss }
 }
 
@@ -51,7 +74,9 @@ async function presentFrames(after?: () => void): Promise<void> {
   await act(async () => {
     for (const frame of frames.splice(0)) frame()
     after?.()
-    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
   })
 }
 
@@ -81,7 +106,9 @@ it('waits for another visible frame when the document hides before the follow-up
   const onShown = vi.fn()
   mount('order-1', onShown)
   // The frame presents, then the window hides before the after-paint task runs.
-  await presentFrames(() => { setVisibility('hidden') })
+  await presentFrames(() => {
+    setVisibility('hidden')
+  })
   expect(onShown).not.toHaveBeenCalled()
   setVisibility('visible')
   expect(onShown).not.toHaveBeenCalled()
@@ -121,20 +148,29 @@ it('reports display from the following task when the host has no frame clock', (
   vi.stubGlobal('requestAnimationFrame', undefined)
   const { onShown } = mount('order-1')
   expect(onShown).not.toHaveBeenCalled()
-  act(() => { vi.runAllTimers() })
+  act(() => {
+    vi.runAllTimers()
+  })
   expect(onShown).toHaveBeenCalledExactlyOnceWith('order-1')
 })
 
 it.each([true, false])('cancels the presentation task when the card unmounts first (frame clock: %s)', (frameClock) => {
   vi.useFakeTimers()
   if (frameClock) {
-    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { frames.push(callback); return frames.length })
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
+      frames.push(callback)
+      return frames.length
+    })
     vi.stubGlobal('cancelAnimationFrame', () => {})
   } else vi.stubGlobal('requestAnimationFrame', undefined)
   const onShown = vi.fn()
   const { view } = mount('order-1', onShown)
-  act(() => { for (const frame of frames.splice(0)) frame() })
+  act(() => {
+    for (const frame of frames.splice(0)) frame()
+  })
   view.unmount()
-  act(() => { vi.runAllTimers() })
+  act(() => {
+    vi.runAllTimers()
+  })
   expect(onShown).not.toHaveBeenCalled()
 })

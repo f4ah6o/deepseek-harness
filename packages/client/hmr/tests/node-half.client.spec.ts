@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { ClientArtifactBaseline, ClientModuleRegistry, WebBootGraph } from '@deepseek-ai/dsh-client-modules'
 import type { WebRoute, WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { apply, Config, EVENTS_ENDPOINT, inject } from '../src/index.ts'
@@ -18,8 +18,12 @@ const POLL_MS = 20
 
 let dir: string
 
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 /**
  * Controllable clientModuleHost fake over a mutable id → bundle-path table.
@@ -41,14 +45,19 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
   const graphListeners = new Set<() => void>()
   const rebuiltCalls: string[] = []
   const baselines = new Map([...rows].map(([id, path]) => [id, artifactBaseline(path)]))
-  const fake: Pick<FakeHost, 'graph' | 'artifactBaseline' | 'rebuilt' | 'onRebuilt' | 'onGraphChanged' | 'rebuiltCalls' | 'fireGraphChanged'> = {
+  const fake: Pick<
+    FakeHost,
+    'graph' | 'artifactBaseline' | 'rebuilt' | 'onRebuilt' | 'onGraphChanged' | 'rebuiltCalls' | 'fireGraphChanged'
+  > = {
     rebuiltCalls,
-    fireGraphChanged: () => { for (const l of graphListeners) l() },
+    fireGraphChanged: () => {
+      for (const l of graphListeners) l()
+    },
     graph: (): WebBootGraph => {
       options.beforeGraphRead?.()
       return {
         rev: 'r',
-        entries: [...rows.keys()].map(id => ({ id, url: `plugins/??${id}/client.js&rev=r`, rev: 'r' })),
+        entries: [...rows.keys()].map((id) => ({ id, url: `plugins/??${id}/client.js&rev=r`, rev: 'r' })),
         batches: [],
       }
     },
@@ -69,7 +78,9 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
     onRebuilt: () => () => {},
     onGraphChanged: (listener) => {
       graphListeners.add(listener)
-      return () => { graphListeners.delete(listener) }
+      return () => {
+        graphListeners.delete(listener)
+      }
     },
   }
   return fake as FakeHost
@@ -81,7 +92,9 @@ function fakeHttpServer(routes: WebRoute[]): WebServer {
   const fake: Pick<WebServer, 'register' | 'tapIndex' | 'port'> = {
     register(route) {
       routes.push(route)
-      return () => { routes.splice(routes.indexOf(route), 1) }
+      return () => {
+        routes.splice(routes.indexOf(route), 1)
+      }
     },
     tapIndex: () => () => {},
     port: 0,
@@ -93,10 +106,7 @@ async function mount(clientModuleHost: FakeHost, webServer: WebServer) {
   const ctx = new Context()
   ctx.provide('clientModules', clientModuleHost)
   ctx.provide('webServer', webServer)
-  const fiber = ctx.plugin(
-    { inject: [...inject], Config, apply },
-    { pollIntervalMs: POLL_MS },
-  )
+  const fiber = ctx.plugin({ inject: [...inject], Config, apply }, { pollIntervalMs: POLL_MS })
   await fiber.await()
   return fiber
 }
@@ -114,25 +124,35 @@ describe('hmr node half', () => {
     expect(clientModuleHost.rebuiltCalls).toEqual([])
 
     // Nudge mtime past stat granularity so the poller sees a content signal.
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 2))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
     writeFileSync(bundle, 'v2-longer')
-    await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toContain('pkg-a') }, { timeout: 3_000 })
+    await vi.waitFor(
+      () => {
+        expect(clientModuleHost.rebuiltCalls).toContain('pkg-a')
+      },
+      { timeout: 3_000 },
+    )
 
     clientModuleHost.rebuiltCalls.length = 0
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 2))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
     writeFileSync(`${bundle}.map`, '{"version":3}')
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 3))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 3))
     expect(clientModuleHost.rebuiltCalls).toEqual([])
 
     writeFileSync(bundle, 'v3-even-longer')
-    await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toContain('pkg-a') }, { timeout: 3_000 })
+    await vi.waitFor(
+      () => {
+        expect(clientModuleHost.rebuiltCalls).toContain('pkg-a')
+      },
+      { timeout: 3_000 },
+    )
 
     await fiber.dispose()
     expect(routes).toHaveLength(0)
     // Watcher gone: further file changes report nothing.
     clientModuleHost.rebuiltCalls.length = 0
     writeFileSync(bundle, 'v4-after-dispose')
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 4))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
     expect(clientModuleHost.rebuiltCalls).toHaveLength(0)
   })
 
@@ -150,15 +170,20 @@ describe('hmr node half', () => {
     clientModuleHost.fireGraphChanged()
     expect(clientModuleHost.rebuiltCalls).toEqual([])
 
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 2))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
     writeFileSync(late, 'v2-longer')
-    await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toContain('pkg-late') }, { timeout: 3_000 })
+    await vi.waitFor(
+      () => {
+        expect(clientModuleHost.rebuiltCalls).toContain('pkg-late')
+      },
+      { timeout: 3_000 },
+    )
 
     rows.delete('pkg-late')
     clientModuleHost.fireGraphChanged()
     clientModuleHost.rebuiltCalls.length = 0
     writeFileSync(late, 'v3-even-longer')
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 3))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 3))
     expect(clientModuleHost.rebuiltCalls).toHaveLength(0)
     await fiber.dispose()
   })
@@ -179,7 +204,7 @@ describe('hmr node half', () => {
 
     expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
     clientModuleHost.rebuiltCalls.length = 0
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 3))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 3))
     expect(clientModuleHost.rebuiltCalls).toHaveLength(0)
     await fiber.dispose()
   })
@@ -195,13 +220,20 @@ describe('hmr node half', () => {
     try {
       expect(clientModuleHost.rebuiltCalls).toEqual([])
       // Filesystem ctime can advance more coarsely than Date.now(); the fixture needs a distinct value.
-      await expect.poll(() => {
-        writeFileSync(bundle, 'next')
-        utimesSync(bundle, fixedTime, fixedTime)
-        return statSync(bundle).ctimeMs
-      }).not.toBe(baseline.ctimeMs)
+      await expect
+        .poll(() => {
+          writeFileSync(bundle, 'next')
+          utimesSync(bundle, fixedTime, fixedTime)
+          return statSync(bundle).ctimeMs
+        })
+        .not.toBe(baseline.ctimeMs)
       expect(statSync(bundle)).toMatchObject({ mtimeMs: baseline.mtimeMs, size: baseline.size })
-      await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a']) }, { timeout: 3_000 })
+      await vi.waitFor(
+        () => {
+          expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
+        },
+        { timeout: 3_000 },
+      )
     } finally {
       await fiber.dispose()
     }
@@ -218,7 +250,7 @@ describe('hmr node half', () => {
     clientModuleHost.rebuiltCalls.length = 0
 
     unlinkSync(bundle)
-    await new Promise(resolve => setTimeout(resolve, POLL_MS * 2))
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
     writeFileSync(bundle, 'x'.repeat(baseline.size))
     utimesSync(bundle, fixedTime, fixedTime)
     const restored = statSync(bundle)
@@ -226,7 +258,12 @@ describe('hmr node half', () => {
       mtimeMs: baseline.mtimeMs,
       size: baseline.size,
     })
-    await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a']) }, { timeout: 3_000 })
+    await vi.waitFor(
+      () => {
+        expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a'])
+      },
+      { timeout: 3_000 },
+    )
     await fiber.dispose()
   })
 
@@ -248,11 +285,15 @@ describe('hmr node half', () => {
 
     const fiber = await mount(clientModuleHost, fakeHttpServer([]))
 
-    await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a']) }, { timeout: 3_000 })
+    await vi.waitFor(
+      () => {
+        expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a'])
+      },
+      { timeout: 3_000 },
+    )
     await fiber.dispose()
   })
 })
-
 
 it('broadcasts the desired graph without waiting for Host activation or cleanup', async () => {
   const ctx = new Context()
@@ -267,17 +308,29 @@ it('broadcasts the desired graph without waiting for Host activation or cleanup'
   let release!: () => void
   let cleaned!: () => void
   let started!: () => void
-  const starting = new Promise<void>((resolve) => { started = resolve })
-  const activation = new Promise<void>((resolve) => { release = resolve })
-  const cleanup = new Promise<void>((resolve) => { cleaned = resolve })
+  const starting = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const activation = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const cleanup = new Promise<void>((resolve) => {
+    cleaned = resolve
+  })
   let disposed = false
-  ctx.loader.internal = { version: 'client', import: async () => ({
-    apply: async (pluginCtx: Context) => {
-      pluginCtx.effect(() => async () => { await cleanup; disposed = true })
-      started()
-      await activation
-    },
-  }) } as never
+  ctx.loader.internal = {
+    version: 'client',
+    import: async () => ({
+      apply: async (pluginCtx: Context) => {
+        pluginCtx.effect(() => async () => {
+          await cleanup
+          disposed = true
+        })
+        started()
+        await activation
+      },
+    }),
+  } as never
   const entryId = await ctx.loader.create({ name: 'owned' })
   await starting
   const fiber = ctx.plugin({ inject, Config, apply }, { pollIntervalMs: POLL_MS })
@@ -286,8 +339,12 @@ it('broadcasts the desired graph without waiting for Host activation or cleanup'
   const connect = async () => {
     const lines: string[] = []
     const response = Object.assign(new EventEmitter(), {
-      writeHead: vi.fn(), write: (line: string) => { lines.push(line) },
-      destroy: vi.fn(), end: vi.fn(),
+      writeHead: vi.fn(),
+      write: (line: string) => {
+        lines.push(line)
+      },
+      destroy: vi.fn(),
+      end: vi.fn(),
     })
     await route.handler({ method: 'GET' } as IncomingMessage, response as unknown as ServerResponse)
     return { lines, response }
@@ -296,7 +353,7 @@ it('broadcasts the desired graph without waiting for Host activation or cleanup'
     const first = await connect()
     expect(first.lines).toHaveLength(2)
     const frame = JSON.parse(first.lines[1]!.slice(6)) as { graph: WebBootGraph }
-    expect(frame.graph.entries.map(row => row.id)).toEqual(['a'])
+    expect(frame.graph.entries.map((row) => row.id)).toEqual(['a'])
     const second = await connect()
     expect(second.lines[1]).toBe(first.lines[1])
     expect(first.lines).toHaveLength(2)
@@ -309,7 +366,7 @@ it('broadcasts the desired graph without waiting for Host activation or cleanup'
     await child.dispose()
     await child.await()
     await ctx.loader.await()
-    await new Promise<void>(resolve => setImmediate(resolve))
+    await new Promise<void>((resolve) => setImmediate(resolve))
     expect(second.lines).toHaveLength(2)
     first.response.emit('close')
     ctx.loader.remove(entryId)

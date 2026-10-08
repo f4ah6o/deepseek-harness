@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { lowerModuleSource } from '../../src/compile/transform.ts'
 import { WorkerModuleLoader } from '../../src/module-system/module-loader.ts'
 import { createNodeBuiltins } from '../../src/node/builtins.ts'
@@ -38,7 +38,7 @@ const CHOKIDAR_FIXTURES: readonly ChokidarFixture[] = [
 
 /** Copy one installed JavaScript package into the VFS exactly as the packer does. */
 function packageRoot(name: string, entry: string): string {
-  for (let directory = dirname(entry);;) {
+  for (let directory = dirname(entry); ;) {
     const manifest = join(directory, 'package.json')
     if (existsSync(manifest)) {
       const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as { name?: unknown }
@@ -77,13 +77,19 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await Promise.all(openWatchers.splice(0).map(async (watcher) => { await watcher.close() }))
+  await Promise.all(
+    openWatchers.splice(0).map(async (watcher) => {
+      await watcher.close()
+    }),
+  )
 })
 
 /** Await one emitter event while rejecting hangs deterministically. */
 function onceEvent<T>(watcher: import('chokidar').FSWatcher, event: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timeout = setTimeout(() => { reject(new Error(`timed out waiting for chokidar ${event}`)) }, 2_000)
+    const timeout = setTimeout(() => {
+      reject(new Error(`timed out waiting for chokidar ${event}`))
+    }, 2_000)
     const emitter = watcher as {
       once(name: string, listener: (...args: unknown[]) => void): void
     }
@@ -96,7 +102,9 @@ function onceEvent<T>(watcher: import('chokidar').FSWatcher, event: string): Pro
 
 /** Let watcher timers and promise-based stats reach a stable point. */
 async function delay(ms: number): Promise<void> {
-  await new Promise<void>((resolve) => { setTimeout(resolve, ms) })
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 /** Construct one tracked watcher with deterministic event normalization. */
@@ -133,7 +141,9 @@ describe.each(CHOKIDAR_FIXTURES)('$label running unchanged', (fixture) => {
     vfs.writeFileSync(file, '# changed\n')
     await expect(changed).resolves.toBe(file)
 
-    await new Promise((resolve) => { setTimeout(resolve, 10) })
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10)
+    })
     const removed = onceEvent<string>(watcher, 'unlink')
     vfs.rmSync(file)
     await expect(removed).resolves.toBe(file)
@@ -169,7 +179,9 @@ describe.each(CHOKIDAR_FIXTURES)('$label running unchanged', (fixture) => {
     const watcher = watchPath(path, { atomic: 40 })
     await onceEvent(watcher, 'ready')
     const events: string[] = []
-    watcher.on('all', (event) => { events.push(event) })
+    watcher.on('all', (event) => {
+      events.push(event)
+    })
     const changed = onceEvent<string>(watcher, 'change')
     vfs.rmSync(path)
     await delay(5)
@@ -186,7 +198,9 @@ describe.each(CHOKIDAR_FIXTURES)('$label running unchanged', (fixture) => {
     })
     await onceEvent(watcher, 'ready')
     const events: string[] = []
-    watcher.on('all', (event) => { events.push(event) })
+    watcher.on('all', (event) => {
+      events.push(event)
+    })
     const added = onceEvent<string>(watcher, 'add')
     vfs.writeFileSync(path, 'a')
     await delay(10)
@@ -200,7 +214,9 @@ describe.each(CHOKIDAR_FIXTURES)('$label running unchanged', (fixture) => {
   it('emits nothing after close has reached quiescence', async () => {
     const watcher = watchPath(ROOT)
     const events: string[] = []
-    watcher.on('all', (event) => { events.push(event) })
+    watcher.on('all', (event) => {
+      events.push(event)
+    })
     await onceEvent(watcher, 'ready')
     await watcher.close()
     vfs.writeFileSync(`${ROOT}/after.md`, '# after\n')

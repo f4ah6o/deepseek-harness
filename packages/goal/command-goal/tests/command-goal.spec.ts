@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -30,14 +30,22 @@ function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session }
     session,
     inbox,
     ctx: new Context(),
-    get status() { return status },
+    get status() {
+      return status
+    },
     send: () => {},
     followup: () => {},
     steer: () => {},
-    inject(input) { this.inbox.append('next-step', input) },
-    cancel() { status = 'idle' },
-    runMaintenance: task => task(new AbortController().signal),
-    whenIdle() { return Promise.resolve() },
+    inject(input) {
+      this.inbox.append('next-step', input)
+    },
+    cancel() {
+      status = 'idle'
+    },
+    runMaintenance: (task) => task(new AbortController().signal),
+    whenIdle() {
+      return Promise.resolve()
+    },
   }
   return { agent, session }
 }
@@ -68,17 +76,12 @@ function domainEvents(session: Session): readonly SessionEvent[] {
     if (before?.type === 'turn/start') lifecycle.add(before.seq)
     if (after?.type === 'turn/end') lifecycle.add(after.seq)
   }
-  return session.snapshotEvents().filter(event => !lifecycle.has(event.seq))
+  return session.snapshotEvents().filter((event) => !lifecycle.has(event.seq))
 }
 
 /** Execute `/goal` through the same registry boundary as a UI adapter. */
 async function run(test: Harness, suffix = ''): Promise<NonNullable<Awaited<ReturnType<CommandRuntime['execute']>>>['result']> {
-  const execution = await test.ctx.commands.execute(
-    test.agent,
-    `/goal${suffix}`,
-    [],
-    new AbortController().signal,
-  )
+  const execution = await test.ctx.commands.execute(test.agent, `/goal${suffix}`, [], new AbortController().signal)
   if (execution === undefined) throw new Error('goal command was not registered')
   return execution.result
 }
@@ -129,7 +132,7 @@ describe('/goal human command', () => {
     expect(created.text).toContain('Rounds: 0/256')
     expect(created.text).toContain('Activation: armed')
     expect(test.ctx.goals.get(test.agent)?.objective).toBe('finish the release')
-    expect(domainEvents(test.session).map(event => event.type)).toEqual(['goal/change'])
+    expect(domainEvents(test.session).map((event) => event.type)).toEqual(['goal/change'])
 
     const count = domainEvents(test.session).length
     await expect(run(test, ' replacement')).resolves.toEqual({
@@ -206,8 +209,7 @@ describe('/goal human command', () => {
     const test = await harness()
     test.ctx.goals.create(test.agent, { objective: 'state matrix', maxGoalRounds: 1 })
     test.ctx.goals.disarm(test.agent)
-    expect((await run(test)).text)
-      .toContain('Status: active\nObjective: state matrix\nRounds: 0/1\nActivation: disarmed')
+    expect((await run(test)).text).toContain('Status: active\nObjective: state matrix\nRounds: 0/1\nActivation: disarmed')
     expect((await run(test)).text).toContain('/goal resume')
 
     let goal = test.ctx.goals.get(test.agent)!
@@ -233,7 +235,9 @@ describe('/goal human command', () => {
 
   it('does not turn unexpected implementation failures into expected command results', async () => {
     const test = await harness()
-    vi.spyOn(test.ctx.goals, 'get').mockImplementationOnce(() => { throw new Error('unexpected failure') })
+    vi.spyOn(test.ctx.goals, 'get').mockImplementationOnce(() => {
+      throw new Error('unexpected failure')
+    })
     await expect(run(test)).rejects.toThrow('unexpected failure')
   })
 })
@@ -247,14 +251,21 @@ describe('/goal attachments', () => {
     const saveImage = (input: { mediaType: string; name?: string }) => {
       saved += 1
       return Promise.resolve({
-        attachmentId: `att-${saved}`, mediaType: input.mediaType, bytes: 3, width: 1, height: 1,
-        ...input.name === undefined ? {} : { name: input.name },
+        attachmentId: `att-${saved}`,
+        mediaType: input.mediaType,
+        bytes: 3,
+        width: 1,
+        height: 1,
+        ...(input.name === undefined ? {} : { name: input.name }),
       })
     }
     test.ctx.provide('attachments', {
       imageLimits: {
-        maxImageBytes: 1024, maxImagesPerMessage: 4, maxMessageImageBytes: 1024,
-        maxImagePixels: 1_000_000, mediaTypes: ['image/png'],
+        maxImageBytes: 1024,
+        maxImagesPerMessage: 4,
+        maxMessageImageBytes: 1024,
+        maxImagePixels: 1_000_000,
+        mediaTypes: ['image/png'],
       },
       validateImage: () => Promise.resolve(),
       saveImage,
@@ -266,13 +277,15 @@ describe('/goal attachments', () => {
       saveFile(input: { data: Uint8Array; name?: string }) {
         saved += 1
         return Promise.resolve({
-          attachmentId: `att-${saved}`, bytes: input.data.byteLength, name: input.name ?? 'attachment',
+          attachmentId: `att-${saved}`,
+          bytes: input.data.byteLength,
+          name: input.name ?? 'attachment',
         })
       },
     })
-    test.ctx.commands.registerFileReceiptResolver((_agent, receiptId) => receiptId === 'receipt-notes'
-      ? { attachmentId: 'file-notes' as never, bytes: 5, name: 'notes.txt' }
-      : undefined)
+    test.ctx.commands.registerFileReceiptResolver((_agent, receiptId) =>
+      receiptId === 'receipt-notes' ? { attachmentId: 'file-notes' as never, bytes: 5, name: 'notes.txt' } : undefined,
+    )
   }
 
   /** Run /goal with a mixed composer batch through the executor boundary. */
@@ -299,7 +312,7 @@ describe('/goal attachments', () => {
       source: { kind: string }
     }
     expect(message.source).toEqual({ kind: 'user' })
-    expect(message.content.map(block => block.type)).toEqual(['image', 'file', 'text'])
+    expect(message.content.map((block) => block.type)).toEqual(['image', 'file', 'text'])
     expect(message.content.at(-1)).toEqual({ type: 'text', text: 'Reference attachments for the goal objective.' })
     expect((message.content[0] as { attachment: { name: string } }).attachment.name).toBe('ref.png')
     expect((message.content[1] as { attachment: { name: string } }).attachment.name).toBe('notes.txt')

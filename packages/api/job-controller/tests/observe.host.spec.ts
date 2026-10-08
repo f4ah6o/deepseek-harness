@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -42,11 +42,11 @@ describe('observeJobOutput', () => {
       from: 0,
       job: { id: job.id, status: 'running', output: { earliest: 0, total: 6 } },
     })
-    const outputs = frames.filter(frame => frame.type === 'output')
-    const text = outputs.flatMap(frame => frame.chunks.map(chunk => chunk.text)).join('')
+    const outputs = frames.filter((frame) => frame.type === 'output')
+    const text = outputs.flatMap((frame) => frame.chunks.map((chunk) => chunk.text)).join('')
     expect(text).toBe('early live')
     expect(outputs.at(-1)?.next).toBe(10)
-    expect(outputs.flatMap(frame => frame.chunks).find(chunk => chunk.text === 'live')?.channel).toBe('stderr')
+    expect(outputs.flatMap((frame) => frame.chunks).find((chunk) => chunk.text === 'live')?.channel).toBe('stderr')
     expect(frames.at(-1)).toMatchObject({
       type: 'status',
       job: { status: 'completed', detail: 'exit code: 0', output: { total: 10 } },
@@ -62,13 +62,13 @@ describe('observeJobOutput', () => {
 
     const fresh = observed(ctx, { jobId: job.id, from: 0 })
     await fresh.done
-    const output = fresh.frames.find(frame => frame.type === 'output')
+    const output = fresh.frames.find((frame) => frame.type === 'output')
     expect(output?.lossy).toBe(true)
-    expect(output?.chunks.map(chunk => chunk.text).join('')).toBe('b'.repeat(60))
+    expect(output?.chunks.map((chunk) => chunk.text).join('')).toBe('b'.repeat(60))
 
     const resumed = observed(ctx, { jobId: job.id, from: 120 })
     await resumed.done
-    expect(resumed.frames.some(frame => frame.type === 'output')).toBe(false)
+    expect(resumed.frames.some((frame) => frame.type === 'output')).toBe(false)
     expect(resumed.frames.at(-1)?.type).toBe('status')
   })
 
@@ -84,7 +84,7 @@ describe('observeJobOutput', () => {
       5,
       abort,
     )
-    const outputs = frames.filter(frame => frame.type === 'output')
+    const outputs = frames.filter((frame) => frame.type === 'output')
     expect(outputs).toHaveLength(2)
     expect(outputs[0]?.next).toBe(30)
     expect(outputs[1]?.next).toBe(60)
@@ -103,7 +103,7 @@ describe('observeJobOutput', () => {
       5,
       abort,
     )
-    const outputs = frames.filter(frame => frame.type === 'output')
+    const outputs = frames.filter((frame) => frame.type === 'output')
     expect(outputs[0]?.lossy).toBe(true)
     expect(outputs[1]?.lossy).toBeUndefined()
   })
@@ -117,29 +117,22 @@ describe('observeJobOutput', () => {
 
     const { frames, done } = observed(ctx, { jobId: job.id, sessionId: owner.id })
     await done
-    expect(frames.some(frame => frame.type === 'output'
-      && frame.chunks.some(chunk => chunk.text === 'classified'))).toBe(true)
+    expect(frames.some((frame) => frame.type === 'output' && frame.chunks.some((chunk) => chunk.text === 'classified'))).toBe(true)
 
     const foreign = new AbortController()
-    await expect(collect(
-      observeJobOutput(ctx.jobs, { jobId: job.id }, OBSERVE, foreign.signal),
-      1,
-      foreign,
-    )).rejects.toThrow(/belongs to another session/)
+    await expect(collect(observeJobOutput(ctx.jobs, { jobId: job.id }, OBSERVE, foreign.signal), 1, foreign)).rejects.toThrow(
+      /belongs to another session/,
+    )
 
     const abort = new AbortController()
-    await expect(collect(
-      observeJobOutput(ctx.jobs, { jobId: job.id, sessionId: owner.id, from: -1 }, OBSERVE, abort.signal),
-      1,
-      abort,
-    )).rejects.toThrow(/invalid observe offset/)
+    await expect(
+      collect(observeJobOutput(ctx.jobs, { jobId: job.id, sessionId: owner.id, from: -1 }, OBSERVE, abort.signal), 1, abort),
+    ).rejects.toThrow(/invalid observe offset/)
 
     const abortUnknown = new AbortController()
-    await expect(collect(
-      observeJobOutput(ctx.jobs, { jobId: JobId('bash-999') }, OBSERVE, abortUnknown.signal),
-      1,
-      abortUnknown,
-    )).rejects.toThrow(/unknown job/)
+    await expect(
+      collect(observeJobOutput(ctx.jobs, { jobId: JobId('bash-999') }, OBSERVE, abortUnknown.signal), 1, abortUnknown),
+    ).rejects.toThrow(/unknown job/)
   })
 
   it('anchors with the live progress and takes the fast wait path for a wake that lands mid-yield', async () => {
@@ -178,7 +171,7 @@ describe('observeJobOutput', () => {
     await watched.settle({ status: 'completed' })
     await done
     abort.abort()
-    expect(frames.filter(frame => frame.type === 'output')).toEqual([])
+    expect(frames.filter((frame) => frame.type === 'output')).toEqual([])
     await noisy.settle({ status: 'completed' })
   })
 
@@ -193,7 +186,7 @@ describe('observeJobOutput', () => {
     // chain; the generation wakes on the removal and closes without a read.
     await owner.disposeScope()
     await done
-    expect(frames.map(frame => frame.type)).toEqual(['opened', 'output', 'status'])
+    expect(frames.map((frame) => frame.type)).toEqual(['opened', 'output', 'status'])
     expect(frames.at(-1)).toMatchObject({ type: 'status', job: { id: job.id, status: 'killed' } })
     expect(() => ctx.jobs.get(job.id, owner.id)).toThrow(/unknown job/)
   })
@@ -237,7 +230,7 @@ describe('JobController', () => {
       steer: () => {},
       inject: () => {},
       cancel: () => {},
-      runMaintenance: task => task(new AbortController().signal),
+      runMaintenance: (task) => task(new AbortController().signal),
       whenIdle: () => Promise.resolve(),
     }
     await ctx.agents.register(owner)
@@ -250,7 +243,7 @@ describe('JobController', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TypertRegistry)
     ctx.plugin(JobController, {})
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(ctx.get('jobController')).toBeUndefined()
   })
 
@@ -262,12 +255,8 @@ describe('JobController', () => {
     await job.settle({ status: 'completed' })
 
     const abort = new AbortController()
-    const frames = await collect<JobFollowFrame>(
-      ctx.jobController.follow({ sessionId: owner.id, jobId: job.id }, abort.signal),
-      3,
-      abort,
-    )
-    expect(frames.map(frame => frame.type)).toEqual(['opened', 'output', 'status'])
+    const frames = await collect<JobFollowFrame>(ctx.jobController.follow({ sessionId: owner.id, jobId: job.id }, abort.signal), 3, abort)
+    expect(frames.map((frame) => frame.type)).toEqual(['opened', 'output', 'status'])
   })
 
   it('observes an unowned job without a request session', async () => {
@@ -277,12 +266,8 @@ describe('JobController', () => {
     await job.settle({ status: 'completed' })
 
     const abort = new AbortController()
-    const frames = await collect<JobFollowFrame>(
-      ctx.jobController.follow({ jobId: job.id }, abort.signal),
-      3,
-      abort,
-    )
-    expect(frames.map(frame => frame.type)).toEqual(['opened', 'output', 'status'])
+    const frames = await collect<JobFollowFrame>(ctx.jobController.follow({ jobId: job.id }, abort.signal), 3, abort)
+    expect(frames.map((frame) => frame.type)).toEqual(['opened', 'output', 'status'])
   })
 
   it('rows mirrors the session-visible set and follows a settlement', async () => {
@@ -294,11 +279,11 @@ describe('JobController', () => {
     const abort = new AbortController()
     const iterator = ctx.jobController.list({ sessionId: owner.id }, abort.signal)[Symbol.asyncIterator]()
     const first = await next(iterator)
-    expect(first?.jobs.map(job => job.label)).toEqual(['owned', 'shared'])
+    expect(first?.jobs.map((job) => job.label)).toEqual(['owned', 'shared'])
     const pending = next(iterator)
     await owned.settle({ status: 'completed', detail: 'exit code: 0' })
     const second = await pending
-    expect(second?.jobs.find(job => job.id === owned.id)).toMatchObject({ status: 'completed', detail: 'exit code: 0' })
+    expect(second?.jobs.find((job) => job.id === owned.id)).toMatchObject({ status: 'completed', detail: 'exit code: 0' })
     abort.abort()
     expect(await next(iterator)).toBeUndefined()
   })

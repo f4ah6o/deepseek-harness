@@ -4,7 +4,7 @@ import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { Rolldown } from 'tsdown'
+import { Rolldown } from 'vite-plus/pack'
 
 const GUEST_ENTRY = 'packages/workflow/workflow-ptc/src/guest.ts'
 const GUEST_SOURCE = 'packages/workflow/workflow-ptc/src/guest-source.ts'
@@ -21,7 +21,7 @@ export async function bundleWorkflowGuest(root: string): Promise<string> {
     input: resolve(root, GUEST_ENTRY),
     platform: 'node',
     tsconfig: resolve(root, 'tsconfig.base.json'),
-    external: id => isBuiltin(id),
+    external: (id) => isBuiltin(id),
     // The guest imports pure helpers from package barrels, without mounting their services.
     treeshake: { moduleSideEffects: false },
     onLog(level, log, defaultHandler) {
@@ -35,7 +35,7 @@ export async function bundleWorkflowGuest(root: string): Promise<string> {
     if (output.length !== 1) {
       throw new Error('workflow guest must bundle into exactly one JavaScript module')
     }
-    const external = [...chunk.imports, ...chunk.dynamicImports].filter(id => !isBuiltin(id))
+    const external = [...chunk.imports, ...chunk.dynamicImports].filter((id) => !isBuiltin(id))
     if (external.length > 0) throw new Error(`workflow guest imports files outside its module: ${external.join(', ')}`)
     return `${chunk.code.trimEnd()}\n//# sourceURL=dsh-workflow-guest.js\n`
   } finally {

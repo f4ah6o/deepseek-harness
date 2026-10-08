@@ -1,8 +1,11 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /** Node-only backend: listing and creation primitives over the host filesystem. */
 export default defineConfig([
   {
+    deps: {
+      resolveDepSubpath: true,
+    },
     entry: ['lib/types/index.js'],
     outDir: 'lib',
     format: ['esm'],

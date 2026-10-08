@@ -1,7 +1,7 @@
 /** Additional spreadsheet formats retain layout and literal delimited fields. */
 import { readFileSync } from 'node:fs'
 import { utils, write } from 'xlsx'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { Config } from '../src/config.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { excelFormat } from '../src/client/excel/format.ts'
@@ -22,9 +22,13 @@ it('rejects unsupported filename suffixes', () => {
 
 it.each([false, true])('reads BIFF values, formulas, merges, layout, and dates with 1904 epoch %s', async (date1904) => {
   const { sheets, missingResults } = await convertExcel(xlsFixture(legacyWorkbook(date1904)), 'xls', limits)
-  expect(sheets.map(sheet => [sheet.name, sheet.hide, sheet.status])).toEqual([['预算', 0, 1], ['明细', 0, 0], ['隐藏', 1, 0]])
+  expect(sheets.map((sheet) => [sheet.name, sheet.hide, sheet.status])).toEqual([
+    ['预算', 0, 1],
+    ['明细', 0, 0],
+    ['隐藏', 1, 0],
+  ])
   const first = sheets[0]!
-  const cell = (r: number, c: number) => first.celldata!.find(cell => cell.r === r && cell.c === c)!.v!
+  const cell = (r: number, c: number) => first.celldata!.find((cell) => cell.r === r && cell.c === c)!.v!
   expect(cell(0, 0)).toMatchObject({ v: '旧版预算', mc: { r: 0, c: 0, rs: 1, cs: 3 } })
   expect(cell(0, 1)).toEqual({ mc: { r: 0, c: 0 } })
   expect(cell(2, 1)).toMatchObject({ v: 1234.5, m: '1,234.50' })
@@ -41,7 +45,7 @@ it.each([false, true])('reads BIFF values, formulas, merges, layout, and dates w
 it('reads an independently generated Office XLS fixture', async () => {
   const bytes = readFileSync(new URL('../../../../apps/web/tests/fixtures/office/preview.xls', import.meta.url))
   const result = await convertExcel(new Uint8Array(bytes), 'xls', limits)
-  expect(result.sheets.flatMap(sheet => sheet.celldata).some(cell => String(cell?.v?.v).includes('Office preview'))).toBe(true)
+  expect(result.sheets.flatMap((sheet) => sheet.celldata).some((cell) => String(cell?.v?.v).includes('Office preview'))).toBe(true)
 })
 
 it('maps optional row metadata, empty formula caches, errors, and Date values', () => {
@@ -54,7 +58,7 @@ it('maps optional row metadata, empty formula caches, errors, and Date values', 
   sheet['B5'] = { t: 'd', v: new Date('2024-03-01T00:00:00Z'), z: 'yyyy-mm-dd' }
   sheet['C5'] = { t: 'e', v: 7, w: '#DIV/0!' }
   const { sheets, missingResults } = mapXlsWorkbook(workbook, limits)
-  const cell = (r: number, c: number) => sheets[0]!.celldata!.find(value => value.r === r && value.c === c)!.v!
+  const cell = (r: number, c: number) => sheets[0]!.celldata!.find((value) => value.r === r && value.c === c)!.v!
   expect(sheets[0]!.config).toMatchObject({ rowlen: { 0: 40, 1: 18 }, rowhidden: { 2: 0 }, columnlen: { 0: 130 }, colhidden: { 1: 0 } })
   expect(cell(3, 1)).toMatchObject({ f: '=1+2', m: '' })
   expect(cell(4, 1)).toMatchObject({ m: '2024-03-01' })
@@ -63,13 +67,20 @@ it('maps optional row metadata, empty formula caches, errors, and Date values', 
 })
 
 it('rejects damaged, renamed, hidden-only, and oversized legacy workbooks', async () => {
-  for (const bytes of [encode('a,b\n1,2'), encode('<html>not a workbook</html>'), new Uint8Array([9, 8, 0]), new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])]) {
+  for (const bytes of [
+    encode('a,b\n1,2'),
+    encode('<html>not a workbook</html>'),
+    new Uint8Array([9, 8, 0]),
+    new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+  ]) {
     await expect(convertExcel(bytes, 'xls', limits)).rejects.toMatchObject({ code: 'invalid' })
   }
   const workbook = legacyWorkbook()
   const metadata = workbook.Workbook?.Sheets
   if (metadata === undefined) throw new Error('legacy fixture has no workbook sheet metadata')
-  metadata.forEach((sheet) => { sheet.Hidden = 1 })
+  metadata.forEach((sheet) => {
+    sheet.Hidden = 1
+  })
   await expect(convertExcel(xlsFixture(workbook), 'xls', limits)).rejects.toMatchObject({ code: 'invalid' })
   await expect(convertExcel(xlsFixture(), 'xls', { ...limits, maxCells: 10 })).rejects.toMatchObject({ code: 'tooLarge' })
   const sparse = utils.book_new()
@@ -98,12 +109,18 @@ it('opens raw BIFF and empty legacy worksheets', async () => {
 
 it.each(['csv', 'tsv'] as const)('preserves %s strings, quoted separators, newlines, empty fields, and ragged rows', async (format) => {
   const delimiter = format === 'csv' ? ',' : '\t'
-  const text = ['编号', '说明', '值'].join(delimiter) + '\r\n'
-    + ['00123', `"中文${delimiter}字段\n第二行 ""引号"""`, '=SUM(1,2)'].map((field, index) => index === 2 ? '"' + field + '"' : field).join(delimiter) + '\r\n'
-    + ['2024-03-01', '', 'TRUE', '99999999999999999999'].join(delimiter) + '\r\nshort\r\n\r\n'
+  const text =
+    ['编号', '说明', '值'].join(delimiter) +
+    '\r\n' +
+    ['00123', `"中文${delimiter}字段\n第二行 ""引号"""`, '=SUM(1,2)']
+      .map((field, index) => (index === 2 ? '"' + field + '"' : field))
+      .join(delimiter) +
+    '\r\n' +
+    ['2024-03-01', '', 'TRUE', '99999999999999999999'].join(delimiter) +
+    '\r\nshort\r\n\r\n'
   const result = await convertExcel(encode(text), format, limits)
   const sheet = result.sheets[0]!
-  const cell = (r: number, c: number) => sheet.celldata!.find(cell => cell.r === r && cell.c === c)!.v!
+  const cell = (r: number, c: number) => sheet.celldata!.find((cell) => cell.r === r && cell.c === c)!.v!
   expect(sheet.column).toBe(4)
   expect(cell(0, 0).v).toBe('编号')
   expect(cell(1, 0)).toMatchObject({ v: '00123', ct: { t: 's', fa: '@' } })
@@ -125,7 +142,7 @@ it.each(['utf8', 'le', 'be'] as const)('decodes BOM-marked %s text', async (enco
   if (encoding === 'be') for (let i = 0; i < bytes.length; i += 2) [bytes[i], bytes[i + 1]] = [bytes[i + 1]!, bytes[i]!]
   const sheet = (await convertExcel(bytes, 'csv', limits)).sheets[0]!
   expect(sheet.celldata![0]!.v!.v).toBe('名称')
-  expect(sheet.celldata!.find(cell => cell.r === 1 && cell.c === 0)!.v!.v).toBe('中文')
+  expect(sheet.celldata!.find((cell) => cell.r === 1 && cell.c === 0)!.v!.v).toBe('中文')
 })
 
 it('handles empty text and rejects invalid encoding, broken quoting, and excess area', async () => {

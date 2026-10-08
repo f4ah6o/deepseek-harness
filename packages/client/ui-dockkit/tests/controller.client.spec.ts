@@ -3,7 +3,7 @@
  * identity (focus an existing tab, or open an explicit copy), the guide tab a
  * split seats, drop resolution, floating, and the notification contract.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { DockController } from '../src/engine/controller.ts'
 import { dockPaneCount, FLOAT_DEFAULT_SIZE } from '../src/engine/constraints.ts'
 import { SEED_CONTENT_ID, childAt, firstTab, seededController } from './fixtures.client.ts'
@@ -12,7 +12,7 @@ import type { LayoutState, PaneId } from '../src/contract/types.ts'
 
 /** Tab titles of one pane, in strip order. */
 function titles(state: LayoutState, paneId: PaneId): string[] {
-  return getPane(state, paneId).tabs.map(id => state.tabs[id]?.title ?? '?')
+  return getPane(state, paneId).tabs.map((id) => state.tabs[id]?.title ?? '?')
 }
 
 /** A controller expanded once, with its first pane id. */
@@ -54,7 +54,7 @@ describe('presentation', () => {
     controller.setMode('fullscreen')
     expect(controller.getSnapshot().state.mode).toBe('fullscreen')
     controller.setMode('fullscreen')
-    expect(controller.ops.map(op => op.type)).toEqual(['setMode'])
+    expect(controller.ops.map((op) => op.type)).toEqual(['setMode'])
   })
 })
 
@@ -69,14 +69,14 @@ describe('splitting', () => {
     expect(newPaneId).not.toBe(paneId)
     expect(titles(state, newPaneId)).toHaveLength(1)
     expect(state.tabs[firstTab(getPane(state, newPaneId))]?.contentId).toBe(SEED_CONTENT_ID)
-    expect(controller.ops.map(op => op.type)).toEqual(['setExpanded', 'split', 'openTab'])
+    expect(controller.ops.map((op) => op.type)).toEqual(['setExpanded', 'split', 'openTab'])
   })
 
-  it('seats the pane factory\'s tab at the end of a strip from the add control, and nothing without one', () => {
+  it("seats the pane factory's tab at the end of a strip from the add control, and nothing without one", () => {
     const { controller, paneId } = expanded()
     expect(controller.addTab(paneId)).toBe(true)
     expect(titles(controller.getSnapshot().state, paneId)).toEqual(['Start', 'Start'])
-    const bare = new DockController({ makeInitialTab: id => ({ id, kind: 'seed', contentId: SEED_CONTENT_ID, title: 'Start' }) })
+    const bare = new DockController({ makeInitialTab: (id) => ({ id, kind: 'seed', contentId: SEED_CONTENT_ID, title: 'Start' }) })
     expect(bare.addTab(getPane(bare.getSnapshot().state, bare.getSnapshot().state.rootId).id)).toBe(false)
   })
 
@@ -112,7 +112,7 @@ describe('tab identity', () => {
     const state = controller.getSnapshot().state
     expect(getPane(state, paneId).activeTabId).toBe(first)
     expect(state.activePaneId).toBe(paneId)
-    expect(Object.values(state.tabs).filter(tab => tab.contentId === 'dsh-resource://file/session/s/a.txt')).toHaveLength(1)
+    expect(Object.values(state.tabs).filter((tab) => tab.contentId === 'dsh-resource://file/session/s/a.txt')).toHaveLength(1)
   })
 
   it('opens an explicit second copy beside the original', () => {
@@ -295,9 +295,8 @@ describe('floating', () => {
     const floatId = controller.floatTab(tabId)
     controller.moveFloat(floatId, 300, 210)
     controller.resizeFloat(floatId, { x: 300, y: 210, width: 500, height: 400 })
-    expect(getPane(controller.getSnapshot().state, floatId).rect)
-      .toEqual({ x: 300, y: 210, width: 500, height: 400 })
-    expect(controller.ops.map(op => op.type).slice(-2)).toEqual(['moveFloat', 'resizeFloat'])
+    expect(getPane(controller.getSnapshot().state, floatId).rect).toEqual({ x: 300, y: 210, width: 500, height: 400 })
+    expect(controller.ops.map((op) => op.type).slice(-2)).toEqual(['moveFloat', 'resizeFloat'])
   })
 
   it('raises a panel to the top when focused', () => {
@@ -327,7 +326,9 @@ describe('notification', () => {
   it('notifies subscribers and keeps the snapshot stable between changes', () => {
     const controller = seededController()
     let notifications = 0
-    const dispose = controller.subscribe(() => { notifications += 1 })
+    const dispose = controller.subscribe(() => {
+      notifications += 1
+    })
     const before = controller.getSnapshot()
     expect(controller.getSnapshot()).toBe(before)
 

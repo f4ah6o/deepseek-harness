@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { findAll, isUiElement, renderText, serializeTree, treeProblem, uiElements } from '../src/elements.ts'
 
 describe('elements', () => {
@@ -21,19 +21,34 @@ describe('elements', () => {
     const held: (() => unknown)[] = []
     const onPress = (): void => {}
     const tree = Box({
-      flexDirection: 'row', paddingX: 1, border: true,
-      children: [Text({ dimColor: true, color: undefined, children: ['a', 'b'] }), Button({ label: 'Proceed', hotkey: '1', onPress }), Button({ label: 'Plain' }), '', 'tail'],
-    })
-    expect(serializeTree(tree, (callback) => { held.push(callback); return `action-${held.length}` })).toEqual([{
-      type: 'Box',
-      props: { flexDirection: 'row', paddingX: 1, border: true },
+      flexDirection: 'row',
+      paddingX: 1,
+      border: true,
       children: [
-        { type: 'Text', props: { dimColor: true }, children: ['a', 'b'] },
-        { type: 'Button', props: { label: 'Proceed', hotkey: '1' }, children: [], actionId: 'action-1' },
-        { type: 'Button', props: { label: 'Plain' }, children: [] },
+        Text({ dimColor: true, color: undefined, children: ['a', 'b'] }),
+        Button({ label: 'Proceed', hotkey: '1', onPress }),
+        Button({ label: 'Plain' }),
+        '',
         'tail',
       ],
-    }])
+    })
+    expect(
+      serializeTree(tree, (callback) => {
+        held.push(callback)
+        return `action-${held.length}`
+      }),
+    ).toEqual([
+      {
+        type: 'Box',
+        props: { flexDirection: 'row', paddingX: 1, border: true },
+        children: [
+          { type: 'Text', props: { dimColor: true }, children: ['a', 'b'] },
+          { type: 'Button', props: { label: 'Proceed', hotkey: '1' }, children: [], actionId: 'action-1' },
+          { type: 'Button', props: { label: 'Plain' }, children: [] },
+          'tail',
+        ],
+      },
+    ])
     expect(held).toEqual([onPress])
   })
 
@@ -42,12 +57,12 @@ describe('elements', () => {
       Box({ children: [Text({ children: '☀  Clear' }), Text({ children: '  18% of context' })] }),
       Box({ flexDirection: 'row', children: [Button({ label: 'Proceed', hotkey: '1' }), Button({ label: 'Cancel', hotkey: '2' })] }),
     ]
-    expect(findAll(tree, { type: 'Text', text: /Clear/ }).map(element => element.props['children'])).toEqual(['☀  Clear'])
+    expect(findAll(tree, { type: 'Text', text: /Clear/ }).map((element) => element.props['children'])).toEqual(['☀  Clear'])
     expect(findAll(tree, { type: 'Text', text: '18%' })).toHaveLength(1)
-    expect(findAll(tree, { label: /Cancel/ }).map(element => element.props['hotkey'])).toEqual(['2'])
+    expect(findAll(tree, { label: /Cancel/ }).map((element) => element.props['hotkey'])).toEqual(['2'])
     expect(findAll(tree, { type: 'Button', label: 'Proceed' })).toHaveLength(1)
     expect(findAll(tree, { type: 'Box' })).toHaveLength(2)
-    expect(findAll(tree, { text: 'Clear' }).map(element => element.type)).toEqual(['Box', 'Text'])
+    expect(findAll(tree, { text: 'Clear' }).map((element) => element.type)).toEqual(['Box', 'Text'])
     expect(renderText(tree)).toBe('☀  Clear  18% of context\nProceedCancel')
     expect(renderText('just text')).toBe('just text')
   })

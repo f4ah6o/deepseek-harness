@@ -4,10 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import {
-  acknowledgeReloadConnectionLoss, assertFixtureInventory, compareOrRefreshGolden,
-  fixtureUserPrompts, launchWebScaffold, seedSession, watchConsole, webSnapshotMode,
+  acknowledgeReloadConnectionLoss,
+  assertFixtureInventory,
+  compareOrRefreshGolden,
+  fixtureUserPrompts,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
@@ -45,16 +51,17 @@ function appFrame(page: Page) {
 
 /** Render the two column-resize handles without platform-dependent coordinates. */
 async function handleSnapshot(page: Page): Promise<string> {
-  const handles = await page.locator('[class*="handle"]').evaluateAll(elements =>
-    elements.map(element => ({
+  const handles = await page.locator('[class*="handle"]').evaluateAll((elements) =>
+    elements.map((element) => ({
       side: element.getAttribute('data-side'),
       cursor: getComputedStyle(element).cursor,
       pillGenerated: getComputedStyle(element, '::after').content !== 'none',
-    })))
+    })),
+  )
   return [
     '# AppFrame drag handles',
     '',
-    ...handles.flatMap(handle => [
+    ...handles.flatMap((handle) => [
       `## ${handle.side}`,
       '',
       '- hit strip present: true',
@@ -62,13 +69,18 @@ async function handleSnapshot(page: Page): Promise<string> {
       `- pill generated: ${String(handle.pillGenerated)}`,
       '',
     ]),
-  ].join('\n').trimEnd()
+  ]
+    .join('\n')
+    .trimEnd()
 }
 
 /** Rendered frame tracks, rounded only to remove browser subpixel allocation. */
 async function columns(page: Page): Promise<number[]> {
-  return await appFrame(page).evaluate(element =>
-    getComputedStyle(element).gridTemplateColumns.split(' ').map(value => Math.round(Number.parseFloat(value))))
+  return await appFrame(page).evaluate((element) =>
+    getComputedStyle(element)
+      .gridTemplateColumns.split(' ')
+      .map((value) => Math.round(Number.parseFloat(value))),
+  )
 }
 
 /** Select panes by visual column rather than retained-host DOM order. */
@@ -78,15 +90,17 @@ function paneAt(column: Locator, index: number): Locator {
 
 /** Tab order and selection inside each docked pane, independent of generated ids. */
 async function paneSnapshot(page: Page) {
-  return await page.locator('[data-rightbar-col] [data-dockkit-pane]').evaluateAll(panes => panes
-    .sort((left, right) => Number(left.getAttribute('data-dockkit-column')) - Number(right.getAttribute('data-dockkit-column')))
-    .map(pane => ({
-      active: pane.hasAttribute('data-dockkit-pane-active'),
-      tabs: [...pane.querySelectorAll('[data-dockkit-tab]')].map(tab => ({
-        title: tab.querySelector('[data-dockkit-tab-title]')?.textContent?.trim(),
-        selected: tab.getAttribute('aria-selected') === 'true',
+  return await page.locator('[data-rightbar-col] [data-dockkit-pane]').evaluateAll((panes) =>
+    panes
+      .sort((left, right) => Number(left.getAttribute('data-dockkit-column')) - Number(right.getAttribute('data-dockkit-column')))
+      .map((pane) => ({
+        active: pane.hasAttribute('data-dockkit-pane-active'),
+        tabs: [...pane.querySelectorAll('[data-dockkit-tab]')].map((tab) => ({
+          title: tab.querySelector('[data-dockkit-tab-title]')?.textContent?.trim(),
+          selected: tab.getAttribute('aria-selected') === 'true',
+        })),
       })),
-    })))
+  )
 }
 
 /** Product-visible geometry, pane state, and expanded Files directories at a settled checkpoint. */
@@ -94,7 +108,7 @@ async function sidebarSnapshot(page: Page) {
   // A toggle holds data-animating until transitionend or its 600ms fallback
   // (ui-layout AppFrame); computed transition values are stable only after it
   // drops, so capturing earlier races the settle window.
-  await expect.poll(() => appFrame(page).evaluate(frame => frame.hasAttribute('data-animating'))).toBe(false)
+  await expect.poll(() => appFrame(page).evaluate((frame) => frame.hasAttribute('data-animating'))).toBe(false)
   const geometry = await appFrame(page).evaluate((frame) => {
     const panel = frame.querySelector<HTMLElement>('[data-sidebar-right-panel]')
     if (panel === null) throw new Error('Sidebar panel is not mounted')
@@ -104,17 +118,24 @@ async function sidebarSnapshot(page: Page) {
     const handle = frame.querySelector('[data-side="rightbar"]')
     return {
       viewport: [window.innerWidth, window.innerHeight],
-      columns: getComputedStyle(frame).gridTemplateColumns.split(' ').map(value => Math.round(Number.parseFloat(value))),
+      columns: getComputedStyle(frame)
+        .gridTemplateColumns.split(' ')
+        .map((value) => Math.round(Number.parseFloat(value))),
       columnTransition: getComputedStyle(frame).transitionProperty,
       expanded,
       mode: panel.getAttribute('data-sidebar-right-panel'),
       panelContentWidth: expanded ? Math.round(Number.parseFloat(style.width)) : 0,
       panelOuterWidth: expanded ? Math.round(rect.width) : 0,
-      coversViewport: expanded && rect.x === 0 && rect.y === 0
-        && Math.round(rect.width) === window.innerWidth && Math.round(rect.height) === window.innerHeight,
+      coversViewport:
+        expanded &&
+        rect.x === 0 &&
+        rect.y === 0 &&
+        Math.round(rect.width) === window.innerWidth &&
+        Math.round(rect.height) === window.innerHeight,
       resizeHandleWidth: handle === null ? 0 : Math.round(handle.getBoundingClientRect().width),
-      expandedDirectories: [...panel.querySelectorAll('[data-files-entry="directory"] > button[aria-expanded="true"]')]
-        .map(button => button.textContent?.trim()),
+      expandedDirectories: [...panel.querySelectorAll('[data-files-entry="directory"] > button[aria-expanded="true"]')].map((button) =>
+        button.textContent?.trim(),
+      ),
     }
   })
   return { ...geometry, panes: await paneSnapshot(page) }
@@ -146,7 +167,9 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     expect(fixtureUserPrompts(fixture)).toEqual([PROMPT])
     scaffold = await launchWebScaffold({ replayFixture: FIXTURE, paceMs: 5, compareReplaySession: false })
     await seedSession(scaffold, await readFile(SEED_FIXTURE, 'utf8'), 'details-session-lifecycle-seed')
-    scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event.type) })
+    scaffold.ctx.on('session/event', (_session, event) => {
+      sessionEvents.push(event.type)
+    })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -180,7 +203,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await blankColumn.getByText('Workspace preview is available.', { exact: true }).waitFor()
     await page.getByText('Into the Unknown', { exact: false }).waitFor()
     const blankPanes = await paneSnapshot(page)
-    expect(blankPanes.map(pane => pane.tabs.map(tab => tab.title))).toEqual([['Files', 'before-chat.md']])
+    expect(blankPanes.map((pane) => pane.tabs.map((tab) => tab.title))).toEqual([['Files', 'before-chat.md']])
     await page.screenshot({ path: join(SHOT_DIR, `blank-preview-${MODE}-${process.pid}.png`), fullPage: true })
 
     const blankViewport = page.viewportSize()!
@@ -192,9 +215,13 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
       await page.locator('[data-sidebar-right-expand]').click()
       // The fullscreen shell keeps its viewport box while its docked content closes.
       await expect.poll(() => blankColumn.locator('[data-sidebar-right-open]').count()).toBe(1)
-      await expect.poll(() => blankColumn.locator('[data-dockkit-host="dock"]:not([hidden])').evaluate(element => getComputedStyle(element).transform))
+      await expect
+        .poll(() =>
+          blankColumn.locator('[data-dockkit-host="dock"]:not([hidden])').evaluate((element) => getComputedStyle(element).transform),
+        )
         .toBe('none')
-      await expect.poll(() => blankColumn.locator('[data-sidebar-right-panel]').boundingBox())
+      await expect
+        .poll(() => blankColumn.locator('[data-sidebar-right-panel]').boundingBox())
         .toEqual({ x: 0, y: 0, width: 767, height: blankViewport.height })
       await blankColumn.getByText('Workspace preview is available.', { exact: true }).waitFor()
       await blankColumn.locator('[data-sidebar-right-toggle]').click()
@@ -205,13 +232,15 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await expect.poll(() => columns(page)).toEqual([280, blankViewport.width - 280, 0])
     await page.locator('[data-sidebar-right-expand]').click()
     await blankColumn.locator('[data-dockkit-add-tab]').click()
-    await blankColumn.locator('[data-sidebar-right-guide-entry="terminal"]')
-      .getByRole('button', { name: /^New terminal/u }).click()
-    const agent = scaffold.ctx.agents.list().find(agent => agent.session.header.cwd === workspace)
+    await blankColumn
+      .locator('[data-sidebar-right-guide-entry="terminal"]')
+      .getByRole('button', { name: /^New terminal/u })
+      .click()
+    const agent = scaffold.ctx.agents.list().find((agent) => agent.session.header.cwd === workspace)
     if (agent === undefined) throw new Error('Blank Session has no workspace Agent')
-    await expect.poll(() => scaffold.ctx.terminalController.list(agent.id).map(terminal => terminal.state)).toEqual(['running'])
+    await expect.poll(() => scaffold.ctx.terminalController.list(agent.id).map((terminal) => terminal.state)).toEqual(['running'])
     await page.locator('.xterm-helper-textarea:visible').click()
-    await page.keyboard.insertText('node -e "require(\'fs\').writeFileSync(\'before-chat-terminal.txt\',\'READY\')"')
+    await page.keyboard.insertText("node -e \"require('fs').writeFileSync('before-chat-terminal.txt','READY')\"")
     await page.keyboard.press('Enter')
     await expect.poll(() => readFile(join(workspace, 'before-chat-terminal.txt'), 'utf8')).toBe('READY')
     expect(sessionEvents).not.toContain('turn/start')
@@ -225,15 +254,21 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     expect(await closed.json()).toMatchObject({ result: { ok: true } })
     expect(scaffold.ctx.terminalController.list(agent.id)).toEqual([])
     await blankColumn.locator('[data-dockkit-tab]').filter({ hasText: 'before-chat.md' }).click()
-    await compareOrRefreshGolden(BLANK_EXPECTED, [
-      '# Blank Session workspace sidebar', '',
-      '- No selected Session: expand control absent',
-      '- Selected workspace before first message: expand control visible',
-      '- Files: before-chat.md opens as a Markdown preview',
-      '- Narrow viewport: reopened preview fills the viewport',
-      '- Terminal: writes a file in the selected workspace before any user message or turn', '',
-      `\`\`\`json\n${JSON.stringify(await paneSnapshot(page), null, 2)}\n\`\`\``,
-    ].join('\n'), MODE)
+    await compareOrRefreshGolden(
+      BLANK_EXPECTED,
+      [
+        '# Blank Session workspace sidebar',
+        '',
+        '- No selected Session: expand control absent',
+        '- Selected workspace before first message: expand control visible',
+        '- Files: before-chat.md opens as a Markdown preview',
+        '- Narrow viewport: reopened preview fills the viewport',
+        '- Terminal: writes a file in the selected workspace before any user message or turn',
+        '',
+        `\`\`\`json\n${JSON.stringify(await paneSnapshot(page), null, 2)}\n\`\`\``,
+      ].join('\n'),
+      MODE,
+    )
 
     const settled = scaffold.whenTurnSettled()
     const input = page.locator('[data-composer-input]').first()
@@ -272,7 +307,10 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await expect.poll(() => detailsTrack(page), { timeout: 5_000 }).toBe(0)
     expect(await page.getByText('Details', { exact: true }).isVisible()).toBe(false)
 
-    await page.getByRole('button', { name: /^(?:New session|新.*会话)$/ }).last().click()
+    await page
+      .getByRole('button', { name: /^(?:New session|新.*会话)$/ })
+      .last()
+      .click()
     await page.getByText('Into the Unknown', { exact: false }).waitFor({ timeout: 15_000 })
     await expect.poll(() => detailsTrack(page), { timeout: 5_000 }).toBe(0)
     expect(await page.getByText('Details', { exact: true }).isVisible()).toBe(false)
@@ -285,7 +323,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
 
     const ungrouped = page.getByText('Ungrouped', { exact: true })
     const ungroupedRow = ungrouped.locator('..').locator('..')
-    if (await ungroupedRow.getAttribute('aria-expanded') !== 'true') await ungrouped.click()
+    if ((await ungroupedRow.getAttribute('aria-expanded')) !== 'true') await ungrouped.click()
     await expect.poll(() => ungroupedRow.getAttribute('aria-expanded')).toBe('true')
     // A cold Session's row may still show its cwd until its history loads.
     const seeded = ungroupedRow.locator('..').locator('[role="treeitem"][aria-selected]')
@@ -315,15 +353,14 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
       await expect.poll(() => column.locator('[data-sidebar-right-open]').count()).toBe(1)
       await expect.poll(() => columns(page)).toEqual(normalColumns)
       // The panel's slide completes independently of the frame's grid tracks.
-      await expect.poll(() => panel.evaluate(element => getComputedStyle(element).transform))
-        .toBe('none')
+      await expect.poll(() => panel.evaluate((element) => getComputedStyle(element).transform)).toBe('none')
     }
     const close = async (): Promise<void> => {
       await column.locator('[data-sidebar-right-toggle]').click()
       await expect.poll(() => column.locator('[data-sidebar-right-open]').count()).toBe(0)
       // Closing publishes state before the frame's grid transition finishes.
       await appFrame(page).evaluate(async (frame) => {
-        await Promise.allSettled(frame.getAnimations().map(animation => animation.finished))
+        await Promise.allSettled(frame.getAnimations().map((animation) => animation.finished))
       })
       await expect.poll(() => detailsTrack(page)).toBe(0)
       await panel.locator('[data-dockkit-pane]').first().waitFor({ state: 'hidden' })
@@ -333,12 +370,15 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await open()
     await column.locator('[data-sidebar-right-guide-entry="files"]').click()
     // Pane borders stay inside the grid width; the shared panel owns no border.
-    await expect.poll(() => sidebarSnapshot(page), { timeout: 5_000 })
+    await expect
+      .poll(() => sidebarSnapshot(page), { timeout: 5_000 })
       .toMatchObject({ mode: 'push', panelContentWidth: normalWidth, panelOuterWidth: normalWidth, resizeHandleWidth: 8 })
-    await expect.poll(async () => ({
-      filesVisible: await column.locator('[data-files-state="tree"]').isVisible(),
-      errors: tripwire.pageErrors,
-    })).toEqual({ filesVisible: true, errors: [] })
+    await expect
+      .poll(async () => ({
+        filesVisible: await column.locator('[data-files-state="tree"]').isVisible(),
+        errors: tripwire.pageErrors,
+      }))
+      .toEqual({ filesVisible: true, errors: [] })
     await column.locator('[data-dockkit-add-tab]').click()
     const split = column.locator('[data-dockkit-split-button]').first()
     await expect.poll(() => split.isDisabled()).toBe(false)
@@ -348,7 +388,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await paneAt(column, 0).locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).click()
     await expect.poll(() => paneAt(column, 0).locator('[data-files-state="tree"]').count()).toBe(1)
     const retainedA = await paneSnapshot(page)
-    expect(retainedA.map(pane => pane.tabs.map(tab => tab.title))).toEqual([['Files', 'Start'], ['Files']])
+    expect(retainedA.map((pane) => pane.tabs.map((tab) => tab.title))).toEqual([['Files', 'Start'], ['Files']])
     await checkpoint('A normal: two panes')
 
     await column.locator('[data-sidebar-right-mode="fullscreen"]').click()
@@ -377,7 +417,7 @@ describe.skipIf(MODE === 'record')('web e2e: details panel follows the current S
     await column.locator('[data-files-row="loading"]').waitFor({ state: 'hidden', timeout: 15_000 })
     expect(await column.locator('[data-files-row="failed"]').count()).toBe(0)
     const retainedB = await paneSnapshot(page)
-    expect(retainedB.map(pane => pane.tabs.map(tab => tab.title))).toEqual([['Files']])
+    expect(retainedB.map((pane) => pane.tabs.map((tab) => tab.title))).toEqual([['Files']])
     await close()
     await checkpoint('B closed: independent pane and expanded workspace directory')
 

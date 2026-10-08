@@ -1,5 +1,5 @@
 import { Context, CordisError, FiberState, type Fiber } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 /**
  * Direct regressions for the vendored Cordis ownership substrate used by
@@ -28,7 +28,9 @@ describe('Cordis effect ownership', () => {
     }, 'reentrant-restart')
 
     let settled = false
-    void restarted.then(() => { settled = true })
+    void restarted.then(() => {
+      settled = true
+    })
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -48,10 +50,14 @@ describe('Cordis effect ownership', () => {
     const ctx = new Context()
     let cleanups = 0
 
-    expect(() => ctx.effect(function* () {
-      yield () => { cleanups += 1 }
-      throw new Error('setup failed')
-    }, 'throwing-setup')).toThrow('setup failed')
+    expect(() =>
+      ctx.effect(function* () {
+        yield () => {
+          cleanups += 1
+        }
+        throw new Error('setup failed')
+      }, 'throwing-setup'),
+    ).toThrow('setup failed')
 
     expect(cleanups).toBe(1)
     expect(ctx.fiber.getEffects()).toEqual([])
@@ -63,18 +69,22 @@ describe('Cordis effect ownership', () => {
     const cleanupStarted = Promise.withResolvers<undefined>()
     let restarted!: Promise<void>
 
-    expect(() => ctx.effect(function* () {
-      yield async () => {
-        cleanupStarted.resolve(undefined)
-        await cleanupGate.promise
-      }
-      restarted = ctx.fiber.restart()
-      throw new Error('setup failed after restart')
-    }, 'reentrant-throw')).toThrow('setup failed after restart')
+    expect(() =>
+      ctx.effect(function* () {
+        yield async () => {
+          cleanupStarted.resolve(undefined)
+          await cleanupGate.promise
+        }
+        restarted = ctx.fiber.restart()
+        throw new Error('setup failed after restart')
+      }, 'reentrant-throw'),
+    ).toThrow('setup failed after restart')
 
     await cleanupStarted.promise
     let settled = false
-    void restarted.then(() => { settled = true })
+    void restarted.then(() => {
+      settled = true
+    })
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -86,7 +96,12 @@ describe('Cordis effect ownership', () => {
   it('keeps ordinary teardown synchronous and the public disposer single-shot', () => {
     const ctx = new Context()
     let cleanups = 0
-    const dispose = ctx.effect(() => () => { cleanups += 1 }, 'sync-effect')
+    const dispose = ctx.effect(
+      () => () => {
+        cleanups += 1
+      },
+      'sync-effect',
+    )
 
     expect(dispose()).toBeUndefined()
     expect(cleanups).toBe(1)
@@ -99,13 +114,16 @@ describe('Cordis effect ownership', () => {
     const ctx = new Context()
     let registrationError: unknown
 
-    ctx.effect(() => () => {
-      try {
-        ctx.effect(() => () => {}, 'too-late')
-      } catch (error) {
-        registrationError = error
-      }
-    }, 'restart-cleanup')
+    ctx.effect(
+      () => () => {
+        try {
+          ctx.effect(() => () => {}, 'too-late')
+        } catch (error) {
+          registrationError = error
+        }
+      },
+      'restart-cleanup',
+    )
 
     await ctx.fiber.restart()
     expect(registrationError).toBeInstanceOf(CordisError)
@@ -122,14 +140,24 @@ describe('Cordis effect ownership', () => {
     ctx.on('internal/plugin', (fiber) => {
       if (fiber.name !== 'state-probe' || fiber.uid === null) return
       expect(fiber.state).toBe(FiberState.PENDING)
-      fiber.ctx.effect(() => () => { pendingCleanup = true }, 'pending-effect')
+      fiber.ctx.effect(
+        () => () => {
+          pendingCleanup = true
+        },
+        'pending-effect',
+      )
     })
 
     const fiber = await ctx.plugin({
       name: 'state-probe',
       apply(inner) {
         expect(inner.fiber.state).toBe(FiberState.LOADING)
-        inner.effect(() => () => { loadingCleanup = true }, 'loading-effect')
+        inner.effect(
+          () => () => {
+            loadingCleanup = true
+          },
+          'loading-effect',
+        )
       },
     })
     await fiber.dispose()
@@ -175,7 +203,9 @@ describe('Cordis child publication ownership', () => {
   it('contains teardown notification failures so ownership cleanup and peers complete', async () => {
     const ctx = new Context()
     const errors: unknown[] = []
-    ctx.logger.error = ((error: unknown) => { errors.push(error) }) as typeof ctx.logger.error
+    ctx.logger.error = ((error: unknown) => {
+      errors.push(error)
+    }) as typeof ctx.logger.error
     const observed: string[] = []
     ctx.on('internal/plugin', (fiber) => {
       if (fiber.name === 'contained-teardown' && fiber.uid === null) {
@@ -206,10 +236,13 @@ describe('Cordis child publication ownership', () => {
     ctx.on('internal/plugin', (fiber) => {
       if (fiber.name !== 'loading-child' || fiber.uid === null) return
       childFiber = fiber
-      fiber.ctx.effect(() => async () => {
-        cleanupStarted.resolve(undefined)
-        await cleanupGate.promise
-      }, 'loading-child-cleanup')
+      fiber.ctx.effect(
+        () => async () => {
+          cleanupStarted.resolve(undefined)
+          await cleanupGate.promise
+        },
+        'loading-child-cleanup',
+      )
       ownerDisposal = ownerFiber.dispose()
       childDisposal = Promise.resolve(fiber.dispose())
     })
@@ -224,7 +257,9 @@ describe('Cordis child publication ownership', () => {
 
     await cleanupStarted.promise
     let ownerSettled = false
-    void ownerDisposal.then(() => { ownerSettled = true })
+    void ownerDisposal.then(() => {
+      ownerSettled = true
+    })
     await Promise.resolve()
     expect(ownerSettled).toBe(false)
 
@@ -253,11 +288,14 @@ describe('Cordis child publication ownership', () => {
     ctx.on('internal/plugin', (fiber) => {
       if (fiber.name !== 'child' || fiber.uid === null) return
       expect(fiber.state).toBe(FiberState.PENDING)
-      fiber.ctx.effect(() => async () => {
-        cleanupStarted.resolve(undefined)
-        await cleanupGate.promise
-        cleanupFinished = true
-      }, 'pending-child-cleanup')
+      fiber.ctx.effect(
+        () => async () => {
+          cleanupStarted.resolve(undefined)
+          await cleanupGate.promise
+          cleanupFinished = true
+        },
+        'pending-child-cleanup',
+      )
     })
     ctx.on('internal/plugin', (fiber) => {
       if (fiber.name !== 'child' || fiber.uid === null) return
@@ -273,7 +311,9 @@ describe('Cordis child publication ownership', () => {
 
     await cleanupStarted.promise
     let settled = false
-    void parentDisposal.then(() => { settled = true })
+    void parentDisposal.then(() => {
+      settled = true
+    })
     await Promise.resolve()
     expect(settled).toBe(false)
 

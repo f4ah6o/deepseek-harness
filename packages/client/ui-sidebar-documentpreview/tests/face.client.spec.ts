@@ -5,7 +5,7 @@
  * a newer file version arriving past the first line restarts the walk. The read
  * runs under the session the file names, not the one the face was injected for.
  */
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
@@ -56,7 +56,7 @@ function readQueue<T>() {
       return deferred.promise
     },
     settle: async (result: RemoteResult<T>, key?: number): Promise<void> => {
-      const at = key === undefined ? 0 : pending.findIndex(call => call.key === key)
+      const at = key === undefined ? 0 : pending.findIndex((call) => call.key === key)
       const call = pending[at]
       if (call === undefined) throw new Error('no outstanding read to settle')
       pending.splice(at, 1)
@@ -64,11 +64,11 @@ function readQueue<T>() {
       // The face registered its synchronous store-writing reaction before this await.
       await call.promise
     },
-    outstanding: () => pending.map(call => call.key),
+    outstanding: () => pending.map((call) => call.key),
     async close(): Promise<void> {
       const remaining = pending.splice(0)
       for (const call of remaining) call.resolve(bytesFailure())
-      await Promise.all(remaining.map(call => call.promise))
+      await Promise.all(remaining.map((call) => call.promise))
     },
   }
 }
@@ -89,7 +89,7 @@ function bench(sessionId = 'other-session' as SessionId) {
     controller.abort()
     const remaining = pending.splice(0)
     for (const call of remaining) call.resolve(failure('workspace-file/outside-workspace', { path: PATH }))
-    await Promise.all([...remaining.map(call => call.promise), whole.close()])
+    await Promise.all([...remaining.map((call) => call.promise), whole.close()])
   })
   // The store's own `forget`, counted: the record's end must forget a tab exactly once.
   const forget = vi.fn(instance.actions.forget)
@@ -98,17 +98,24 @@ function bench(sessionId = 'other-session' as SessionId) {
   const face = textFace(read, bytes, resources)(sessionId, { ...instance.actions, forget })
   /** Settle the oldest outstanding read, or the oldest one for `offset`. */
   const settle = async (result: RemoteResult<WorkspaceFileText>, offset?: number): Promise<void> => {
-    const at = offset === undefined ? 0 : pending.findIndex(call => call.offset === offset)
+    const at = offset === undefined ? 0 : pending.findIndex((call) => call.offset === offset)
     const [call] = pending.splice(at, 1)
     if (call === undefined) throw new Error('no outstanding read to settle')
     call.resolve(result)
     await call.promise
   }
   return {
-    instance, read, face, forget, settle, bytes, controller, resources,
+    instance,
+    read,
+    face,
+    forget,
+    settle,
+    bytes,
+    controller,
+    resources,
     settleAll: whole.settle,
     outstandingAll: whole.outstanding,
-    outstanding: () => pending.map(call => call.offset),
+    outstanding: () => pending.map((call) => call.offset),
     tab: () => instance.getSnapshot().byTab[TAB_1],
   }
 }
@@ -156,7 +163,9 @@ describe('textFace', () => {
     const { read, face, forget, settle, tab } = bench()
     const controller = new AbortController()
     const armed = vi.spyOn(controller.signal, 'addEventListener')
-    onTestFinished(() => { armed.mockRestore() })
+    onTestFinished(() => {
+      armed.mockRestore()
+    })
     face.loadPage(TAB_1, FILE, 1, controller.signal)
     await settle(page(1, ['a'], false))
     face.loadPage(TAB_1, FILE, 2, controller.signal)
@@ -268,8 +277,14 @@ describe('textFace', () => {
     const result = complete('v2', new Uint8Array([2, 3, 255]))
     await settleAll(result)
     expect(tab()).toMatchObject({
-      complete: result.value, version: 'v2', loading: false, eof: true,
-      rendererId: 'test/whole-file', scrollTop: 77, wrap: false, revision: 3,
+      complete: result.value,
+      version: 'v2',
+      loading: false,
+      eof: true,
+      rendererId: 'test/whole-file',
+      scrollTop: 77,
+      wrap: false,
+      revision: 3,
     })
   })
 
@@ -280,7 +295,10 @@ describe('textFace', () => {
     face.reloadAll(TAB_1, FILE, controller.signal)
     await settleAll(bytesFailure())
     expect(tab()).toMatchObject({
-      mode: 'bytes-complete', loading: false, version: undefined, eof: false,
+      mode: 'bytes-complete',
+      loading: false,
+      version: undefined,
+      eof: false,
       failure: { code: 'workspace-file/outside-workspace' },
     })
     expect(tab()?.complete).toBeUndefined()
@@ -334,7 +352,7 @@ describe('textFace', () => {
   })
 
   describe.each(['text-pages', 'bytes-complete'] as const)('switching away from %s', (mode) => {
-    it.each(settlements)('ignores the previous mode\'s $outcome ($order)', async ({ outcome, order }) => {
+    it.each(settlements)("ignores the previous mode's $outcome ($order)", async ({ outcome, order }) => {
       const { instance, face, settle, settleAll, outstanding, outstandingAll, tab, controller } = bench()
       const { signal } = controller
       if (mode === 'text-pages') {
@@ -386,31 +404,33 @@ describe('textFace', () => {
     expect(tab()).toMatchObject({ mode: 'bytes-complete', complete: complete('v2', new Uint8Array([2, 3, 255])).value, pages: {} })
   })
 
-
-  it.each([PATH, ABSOLUTE_PATH, 'C:/w/notes.md', '//host/share/notes.md'])('uses the addressed Session for %s in both reading modes', async (path) => {
-    const first = bench()
-    const secondSession = 'second-caller-session' as SessionId
-    const second = bench(secondSession)
-    const address = sessionFileAddress(SESSION, path)
-    const firstFile = hostFileOf(address)
-    const secondFile = hostFileOf(address)
-    expect(firstFile).toEqual({ sessionId: SESSION, path })
-    expect(secondFile).toEqual(firstFile)
-    first.face.loadPage(TAB_1, firstFile, 1, first.controller.signal)
-    second.face.reloadPages(TAB_1, secondFile, second.controller.signal)
-    expect(first.read).toHaveBeenCalledExactlyOnceWith(firstFile.sessionId, firstFile.path, 1, first.controller.signal)
-    expect(second.read).toHaveBeenCalledExactlyOnceWith(secondFile.sessionId, secondFile.path, 1, second.controller.signal)
-    await first.settle(page(1, ['first'], true))
-    await second.settle(page(1, ['second'], true))
-    first.face.loadAll(TAB_1, firstFile, first.controller.signal)
-    second.face.reloadAll(TAB_1, secondFile, second.controller.signal)
-    expect(first.bytes).toHaveBeenCalledExactlyOnceWith(firstFile, expect.any(AbortSignal))
-    expect(second.bytes).toHaveBeenCalledExactlyOnceWith(secondFile, expect.any(AbortSignal))
-    await first.settleAll(complete('v1'))
-    await second.settleAll(complete('v2'))
-    expect(first.tab()?.version).toBe('v1')
-    expect(second.tab()?.version).toBe('v2')
-  })
+  it.each([PATH, ABSOLUTE_PATH, 'C:/w/notes.md', '//host/share/notes.md'])(
+    'uses the addressed Session for %s in both reading modes',
+    async (path) => {
+      const first = bench()
+      const secondSession = 'second-caller-session' as SessionId
+      const second = bench(secondSession)
+      const address = sessionFileAddress(SESSION, path)
+      const firstFile = hostFileOf(address)
+      const secondFile = hostFileOf(address)
+      expect(firstFile).toEqual({ sessionId: SESSION, path })
+      expect(secondFile).toEqual(firstFile)
+      first.face.loadPage(TAB_1, firstFile, 1, first.controller.signal)
+      second.face.reloadPages(TAB_1, secondFile, second.controller.signal)
+      expect(first.read).toHaveBeenCalledExactlyOnceWith(firstFile.sessionId, firstFile.path, 1, first.controller.signal)
+      expect(second.read).toHaveBeenCalledExactlyOnceWith(secondFile.sessionId, secondFile.path, 1, second.controller.signal)
+      await first.settle(page(1, ['first'], true))
+      await second.settle(page(1, ['second'], true))
+      first.face.loadAll(TAB_1, firstFile, first.controller.signal)
+      second.face.reloadAll(TAB_1, secondFile, second.controller.signal)
+      expect(first.bytes).toHaveBeenCalledExactlyOnceWith(firstFile, expect.any(AbortSignal))
+      expect(second.bytes).toHaveBeenCalledExactlyOnceWith(secondFile, expect.any(AbortSignal))
+      await first.settleAll(complete('v1'))
+      await second.settleAll(complete('v2'))
+      expect(first.tab()?.version).toBe('v1')
+      expect(second.tab()?.version).toBe('v2')
+    },
+  )
 })
 
 it.each([new Error('invalid bytes'), 'invalid bytes'])('reports an active complete-read decoding failure: %s', async (failure) => {
@@ -421,7 +441,9 @@ it.each([new Error('invalid bytes'), 'invalid bytes'])('reports an active comple
     textFace(vi.fn(), read, createResources())(SESSION, instance.actions).loadAll(TAB_1, FILE, controller.signal)
     await Promise.resolve()
     expect(instance.getSnapshot().byTab[TAB_1]?.failure).toMatchObject({ code: 'gateway/internal', message: 'invalid bytes' })
-  } finally { controller.abort() }
+  } finally {
+    controller.abort()
+  }
 })
 
 it('ignores a complete-read rejection after renderer-owned loading takes over', async () => {
@@ -435,5 +457,7 @@ it('ignores a complete-read rejection after renderer-owned loading takes over', 
     pending.reject(new Error('retired'))
     await pending.promise.catch(() => {})
     expect(instance.getSnapshot().byTab[TAB_1]?.failure).toBeUndefined()
-  } finally { controller.abort() }
+  } finally {
+    controller.abort()
+  }
 })

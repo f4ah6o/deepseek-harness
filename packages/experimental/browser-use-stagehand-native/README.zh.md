@@ -68,14 +68,14 @@ kind: "package-reference"
 定向检查覆盖原生模型配置、生命周期、Loader 组合、取消和截图接纳。
 
 ```sh
-pnpm exec vitest run packages/experimental/browser-use-stagehand-native/tests
+pnpm exec vp test run packages/experimental/browser-use-stagehand-native/tests
 ```
 
 显式启用的已安装浏览器测试使用受控本地页面和构建后的连接 Worker。请将 `DSH_BROWSER_EXECUTABLE` 设为已安装的 Chromium 可执行程序。只有同时提供 `DSH_STAGEHAND_MODEL` 和 `DSH_STAGEHAND_MODEL_API_KEY` 时，才会测试原生推理。
 
 ```sh
 pnpm run build
-env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vitest run --config vitest.e2e.config.ts packages/experimental/browser-use-stagehand-native/tests/native.e2e.ts
+env -u NODE_USE_ENV_PROXY DSH_STAGEHAND_E2E=1 pnpm exec vp test run --config vitest.e2e.config.ts packages/experimental/browser-use-stagehand-native/tests/native.e2e.ts
 ```
 
 -----

@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs'
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import {
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
@@ -92,7 +92,7 @@ async function snapshotNamedTests(): Promise<string[]> {
       }
     }
   }
-  for (const root of ['apps', 'native', 'packages', 'python', 'scripts', 'snapshots', 'website']) {
+  for (const root of ['apps', 'native', 'packages', 'python', 'scripts', 'snapshots']) {
     await visit(join(repoRoot, root), root)
   }
   return files.sort()
@@ -104,7 +104,7 @@ it('reserves the snapshot test suffix for recorded-session adapters', async () =
 
 it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', async () => {
   const all = await scenarios()
-  const byKey = new Map(all.map(scenario => [scenario.key, scenario]))
+  const byKey = new Map(all.map((scenario) => [scenario.key, scenario]))
   const pinByClass = new Map<string, Scenario>()
 
   for (const scenario of all) {
@@ -120,7 +120,7 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
     expect(pinByClass.has(classKey), `${key}: missing composition/header pin ${classKey}`).toBe(true)
 
     const localEntries = await readdir(dir)
-    const localSessionNames = localEntries.filter(name => parseSessionFixtureName(name) !== undefined)
+    const localSessionNames = localEntries.filter((name) => parseSessionFixtureName(name) !== undefined)
     if (manifest.session === undefined) {
       expect(localSessionNames.length, `${key}: owner Session fixture`).toBeGreaterThan(0)
     } else {
@@ -132,22 +132,17 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
       expect(byKey.has(sourceKey), `${key}: session source must name a corpus owner`).toBe(true)
       expect(byKey.get(sourceKey)?.manifest.session, `${key}: session source cannot chain through a borrower`).toBeUndefined()
       const [selectedParent] = sessionFixtureFiles(await readdir(targetDir))
-      expect(basename(target), `${key}: session source must name the owner's selected parent generation`)
-        .toBe(selectedParent?.name)
+      expect(basename(target), `${key}: session source must name the owner's selected parent generation`).toBe(selectedParent?.name)
     }
 
-    expect(existsSync(join(dir, 'replay.override.json')), `${key}: replay override presence`)
-      .toBe(manifest.replay?.override === true)
-    expect(existsSync(join(dir, 'workspace.expected')), `${key}: final workspace presence`)
-      .toBe(manifest.workspace?.final === true)
+    expect(existsSync(join(dir, 'replay.override.json')), `${key}: replay override presence`).toBe(manifest.replay?.override === true)
+    expect(existsSync(join(dir, 'workspace.expected')), `${key}: final workspace presence`).toBe(manifest.workspace?.final === true)
     if (manifest.workspace?.final === true) {
       const expectedRoot = join(dir, 'workspace.expected')
       const expectedWorkspace = await captureExpectedWorkspaceSnapshot(expectedRoot)
-      expect(existsSync(join(expectedRoot, EMPTY_WORKSPACE_MARKER)), `${key}: empty workspace marker`)
-        .toBe(expectedWorkspace.length === 0)
+      expect(existsSync(join(expectedRoot, EMPTY_WORKSPACE_MARKER)), `${key}: empty workspace marker`).toBe(expectedWorkspace.length === 0)
     }
-    expect(existsSync(join(dir, 'input.json')), `${key}: executable input metadata is ACP-only`)
-      .toBe(scenario.profile === 'acp')
+    expect(existsSync(join(dir, 'input.json')), `${key}: executable input metadata is ACP-only`).toBe(scenario.profile === 'acp')
     if (scenario.profile !== 'acp') {
       expect(existsSync(join(dir, 'stdout.expected.jsonl')), `${key}: ACP transcript outside ACP`).toBe(false)
     }
@@ -165,14 +160,15 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
       ] as const) {
         const local = join(dir, field)
         if (!existsSync(local) || !(await lstat(local)).isSymbolicLink()) continue
-        expect(await realpath(local), `${key}: ${field} symlink follows its manifest source`)
-          .toBe(await realpath(join((source as Scenario).dir, field)))
+        expect(await realpath(local), `${key}: ${field} symlink follows its manifest source`).toBe(
+          await realpath(join((source as Scenario).dir, field)),
+        )
       }
     }
 
     if (manifest.session !== undefined) continue
     const names = sessionFixtureNames(localEntries)
-    const fixtures = await Promise.all(names.map(name => readFile(join(dir, name), 'utf8')))
+    const fixtures = await Promise.all(names.map((name) => readFile(join(dir, name), 'utf8')))
     for (const name of localSessionNames) {
       assertSessionFixtureVersion(name, await readFile(join(dir, name), 'utf8'))
     }
@@ -193,14 +189,14 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
 })
 
 it('keeps V3 replay input plus bounded declared historical migration coverage', async () => {
-  const owners = (await scenarios()).filter(scenario => scenario.manifest.session === undefined)
-  const inventory = await Promise.all(owners.map(async scenario => ({
-    key: scenario.key,
-    selectedVersions: sessionFixtureFiles(await readdir(scenario.dir)).map(file => file.version),
-    ...(scenario.manifest.sessionFormat === undefined
-      ? {}
-      : { retained: scenario.manifest.sessionFormat }),
-  })))
+  const owners = (await scenarios()).filter((scenario) => scenario.manifest.session === undefined)
+  const inventory = await Promise.all(
+    owners.map(async (scenario) => ({
+      key: scenario.key,
+      selectedVersions: sessionFixtureFiles(await readdir(scenario.dir)).map((file) => file.version),
+      ...(scenario.manifest.sessionFormat === undefined ? {} : { retained: scenario.manifest.sessionFormat }),
+    })),
+  )
 
   const summary = assertSnapshotCorpusPolicy(inventory)
   expect(summary.baselineRoles).toBeGreaterThan(0)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, {
@@ -29,7 +29,7 @@ import type {
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'test': { kind: 'test' } & ContextFormed
+    test: { kind: 'test' } & ContextFormed
   }
 }
 
@@ -38,17 +38,17 @@ class ScriptedAdapter extends LlmAdapter {
     super()
   }
 
-  async * stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
-    yield * this.script
+  async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
+    yield* this.script
   }
 }
 
 class RecordingAdapter extends ScriptedAdapter {
   lastOptions: GenerateOptions | undefined
 
-  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.lastOptions = options
-    yield * super.stream(options)
+    yield* super.stream(options)
   }
 }
 
@@ -82,20 +82,15 @@ class CatalogAdapter extends ScriptedAdapter {
     return Promise.resolve(this.models)
   }
 
-  override resolveModel(
-    provider: string,
-    model: string,
-  ): Promise<LlmResolvedModelInfo> {
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({
       provider,
       id: model,
       name: model,
-      ...this.contexts[model] === undefined ? {} : { context: this.contexts[model] },
-      ...this.reasoning[model] === undefined ? {} : { reasoning: this.reasoning[model] },
-      ...this.defaultMaxTokens[model] === undefined ? {} : { defaultMaxTokens: this.defaultMaxTokens[model] },
-      ...this.systemPromptUpdate[model] === undefined
-        ? {}
-        : { systemPromptUpdate: this.systemPromptUpdate[model] as SystemPromptUpdate },
+      ...(this.contexts[model] === undefined ? {} : { context: this.contexts[model] }),
+      ...(this.reasoning[model] === undefined ? {} : { reasoning: this.reasoning[model] }),
+      ...(this.defaultMaxTokens[model] === undefined ? {} : { defaultMaxTokens: this.defaultMaxTokens[model] }),
+      ...(this.systemPromptUpdate[model] === undefined ? {} : { systemPromptUpdate: this.systemPromptUpdate[model] as SystemPromptUpdate }),
     })
   }
 }
@@ -137,7 +132,8 @@ describe('LlmRuntime', () => {
       'usage-limit-exceeded',
       'out of credits',
       'OpenAI API error (429): You exceeded your current quota, please check your plan and billing details.',
-    ]) expect(isQuotaExceededError(detail)).toBe(true)
+    ])
+      expect(isQuotaExceededError(detail)).toBe(true)
     expect(isQuotaExceededError('HTTP 429: rate limit reached')).toBe(false)
     expect(isQuotaExceededError('quota resets in one minute')).toBe(false)
   })
@@ -148,27 +144,31 @@ describe('LlmRuntime', () => {
   })
 
   it('errorChain renders AggregateError members (Happy Eyeballs multi-address failures)', () => {
-    const aggregate = new AggregateError(
-      [new Error('connect ECONNREFUSED ::1:443'), new Error('connect ECONNREFUSED 127.0.0.1:443')],
-      '',
-    )
+    const aggregate = new AggregateError([new Error('connect ECONNREFUSED ::1:443'), new Error('connect ECONNREFUSED 127.0.0.1:443')], '')
     const wrapped = new TypeError('fetch failed', { cause: aggregate })
-    expect(errorChain(wrapped)).toBe(
-      'fetch failed: AggregateError [connect ECONNREFUSED ::1:443; connect ECONNREFUSED 127.0.0.1:443]',
-    )
+    expect(errorChain(wrapped)).toBe('fetch failed: AggregateError [connect ECONNREFUSED ::1:443; connect ECONNREFUSED 127.0.0.1:443]')
   })
 
   it('errorChain survives non-Error values, hostile coercion, and circular causes', () => {
     expect(errorChain('plain string')).toBe('plain string')
-    expect(errorChain({ message: 'structured provider failure', code: 'SERVER' }))
-      .toBe('structured provider failure')
-    expect(errorChain({ toString: () => { throw new Error('hostile') } })).toBe('<unrenderable value>')
+    expect(errorChain({ message: 'structured provider failure', code: 'SERVER' })).toBe('structured provider failure')
+    expect(
+      errorChain({
+        toString: () => {
+          throw new Error('hostile')
+        },
+      }),
+    ).toBe('<unrenderable value>')
     const circular = new Error('outer')
     circular.cause = circular
     expect(errorChain(circular)).toBe('outer: <circular cause>')
     // A hostile accessor collapses only its own node, not the whole chain.
     const hostileNode = new Error('node')
-    Object.defineProperty(hostileNode, 'message', { get() { throw new Error('hostile getter') } })
+    Object.defineProperty(hostileNode, 'message', {
+      get() {
+        throw new Error('hostile getter')
+      },
+    })
     expect(errorChain(new Error('outer', { cause: hostileNode }))).toBe('outer: <unrenderable value>')
     // A diamond-shared (non-cyclic) cause renders in full on both paths.
     const shared = new Error('shared')
@@ -205,15 +205,17 @@ describe('LlmRuntime', () => {
     ctx.llm.registerAdapter(['test-provider'], adapter)
     const changes = createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'tool-addition', toolName: 'search' }] })
     const search = { name: 'search', description: 'Search', parameters: {} }
-    await collect(ctx.llm.stream({
-      provider: 'test-provider',
-      model: 'test-model',
-      messages: [createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } }), changes],
-      tools: [{ ...search, deferLoading: true }],
-      toolHistory: { tools: [], updates: [{ messageId: changes.id, additions: [search] }] },
-    }))
+    await collect(
+      ctx.llm.stream({
+        provider: 'test-provider',
+        model: 'test-model',
+        messages: [createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } }), changes],
+        tools: [{ ...search, deferLoading: true }],
+        toolHistory: { tools: [], updates: [{ messageId: changes.id, additions: [search] }] },
+      }),
+    )
     expect(adapter.lastOptions?.tools).toEqual([search])
-    expect(adapter.lastOptions?.messages.map(message => message.role)).toEqual(['user'])
+    expect(adapter.lastOptions?.messages.map((message) => message.role)).toEqual(['user'])
   })
 
   it.each(['in-history', 'addition-only'] as const)('projects additions and removals before %s adapter dispatch', async (mode) => {
@@ -231,25 +233,32 @@ describe('LlmRuntime', () => {
       const added = createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'tool-addition', toolName: 'search' }] })
       const removed = createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'tool-removal', toolName: 'search' }] })
       const prepared = await ctx.llm.prepareCall({ provider: 'test-provider', model: 'test-model' })
-      await collect(prepared.stream({
-        ...prepared.config,
-        messages: [added],
-        tools: [search],
-        toolHistory: { tools: [], updates: [{ messageId: added.id, additions: [search] }] },
-      }))
+      await collect(
+        prepared.stream({
+          ...prepared.config,
+          messages: [added],
+          tools: [search],
+          toolHistory: { tools: [], updates: [{ messageId: added.id, additions: [search] }] },
+        }),
+      )
       expect(adapter.lastOptions?.tools).toEqual([{ ...search, deferLoading: true }])
       expect(adapter.lastOptions?.messages).toEqual([added])
 
       const afterRemoval = await ctx.llm.prepareCall({ provider: 'test-provider', model: 'test-model' })
-      await collect(afterRemoval.stream({
-        ...afterRemoval.config,
-        messages: [added, removed],
-        tools: [],
-        toolHistory: { tools: [], updates: [
-          { messageId: added.id, additions: [search] },
-          { messageId: removed.id, additions: [] },
-        ] },
-      }))
+      await collect(
+        afterRemoval.stream({
+          ...afterRemoval.config,
+          messages: [added, removed],
+          tools: [],
+          toolHistory: {
+            tools: [],
+            updates: [
+              { messageId: added.id, additions: [search] },
+              { messageId: removed.id, additions: [] },
+            ],
+          },
+        }),
+      )
       if (mode === 'in-history') {
         expect(adapter.lastOptions?.tools).toEqual([{ ...search, deferLoading: true }])
         expect(adapter.lastOptions?.messages).toEqual([added, removed])
@@ -277,7 +286,9 @@ describe('LlmRuntime', () => {
       provider: 'test-provider',
       model: 'test-model',
       messages: [message],
-    })) { /* drain */ }
+    })) {
+      /* drain */
+    }
 
     expect(adapter.lastOptions?.messages[0]).toBe(message)
   })
@@ -312,7 +323,11 @@ describe('LlmRuntime', () => {
       },
       {
         name: 'invalid durable reference',
-        attachments: { fileHostPath: () => { throw new Error('invalid ref') } },
+        attachments: {
+          fileHostPath: () => {
+            throw new Error('invalid ref')
+          },
+        },
         expected: 'current execution environment cannot access a readable path',
       },
       {
@@ -330,14 +345,18 @@ describe('LlmRuntime', () => {
       const adapter = new RecordingAdapter(SCRIPT)
       ctx.llm.registerAdapter(['test-provider'], adapter)
 
-      await collect(ctx.llm.stream({
-        provider: 'test-provider',
-        model: 'test-model',
-        messages: [createUserMessage({
-          content: [{ type: 'file', attachment }],
-          source: { kind: 'user' },
-        })],
-      }))
+      await collect(
+        ctx.llm.stream({
+          provider: 'test-provider',
+          model: 'test-model',
+          messages: [
+            createUserMessage({
+              content: [{ type: 'file', attachment }],
+              source: { kind: 'user' },
+            }),
+          ],
+        }),
+      )
 
       const projected = adapter.lastOptions?.messages[0]?.content[0]
       expect(projected, fixture.name).toMatchObject({ type: 'text' })
@@ -351,11 +370,11 @@ describe('LlmRuntime', () => {
 
   it('captures provider-owned retry policy at registration and defaults omission', async () => {
     const configured = resolveRetryPolicy({ mode: 'always' }, 'test retryPolicy')
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override providerRetryPolicy(provider: string) {
         return provider === 'configured' ? configured : undefined
       }
-    }(SCRIPT)
+    })(SCRIPT)
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['configured', 'defaulted'], adapter)
@@ -365,9 +384,7 @@ describe('LlmRuntime', () => {
       mode: 'normal',
       maxRetries: 5,
     })
-    expect(() => ctx.llm.providerRetryPolicy('missing')).toThrow(
-      expect.objectContaining({ code: 'NO_ADAPTER' }),
-    )
+    expect(() => ctx.llm.providerRetryPolicy('missing')).toThrow(expect.objectContaining({ code: 'NO_ADAPTER' }))
   })
 
   it('keeps a prepared registration and retry policy after route replacement', async () => {
@@ -376,19 +393,25 @@ describe('LlmRuntime', () => {
     const oldFailure = new LlmError('old route failed', 'AUTH')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    const disposeOld = ctx.llm.registerAdapter(['route'], new class extends ThrowingAdapter {
-      override providerRetryPolicy(): typeof oldPolicy {
-        return oldPolicy
-      }
-    }(oldFailure))
+    const disposeOld = ctx.llm.registerAdapter(
+      ['route'],
+      new (class extends ThrowingAdapter {
+        override providerRetryPolicy(): typeof oldPolicy {
+          return oldPolicy
+        }
+      })(oldFailure),
+    )
     const prepared = await ctx.llm.prepareCall({ provider: 'route', model: 'model' })
 
     disposeOld()
-    ctx.llm.registerAdapter(['route'], new class extends ScriptedAdapter {
-      override providerRetryPolicy(): typeof newPolicy {
-        return newPolicy
-      }
-    }(SCRIPT))
+    ctx.llm.registerAdapter(
+      ['route'],
+      new (class extends ScriptedAdapter {
+        override providerRetryPolicy(): typeof newPolicy {
+          return newPolicy
+        }
+      })(SCRIPT),
+    )
 
     const chunks = await collect(prepared.stream({ ...prepared.config, messages: [] }))
     expect(chunks.at(-1)).toEqual({
@@ -406,11 +429,13 @@ describe('LlmRuntime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'nope',
-      model: 'any-model',
-      messages: [],
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'nope',
+        model: 'any-model',
+        messages: [],
+      }),
+    )
 
     const finish = chunks.at(-1)
     expect(finish).toMatchObject({
@@ -427,7 +452,11 @@ describe('LlmRuntime', () => {
   it.each(['done', 'value'] as const)('normalizes a throwing IteratorResult.%s getter', async (field) => {
     const original = new LlmError(`${field} getter failed`, 'RESULT_GETTER_FAILED')
     const result = field === 'done' ? {} : { done: false }
-    Object.defineProperty(result, field, { get: () => { throw original } })
+    Object.defineProperty(result, field, {
+      get: () => {
+        throw original
+      },
+    })
     let cleanupLookups = 0
     const iterator: AsyncIterator<StreamChunk> = {
       next: () => Promise.resolve(result as IteratorResult<StreamChunk>),
@@ -438,20 +467,22 @@ describe('LlmRuntime', () => {
         throw new Error('return getter must not run after iteration fails')
       },
     })
-    const adapter = new class extends LlmAdapter {
+    const adapter = new (class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         return { [Symbol.asyncIterator]: () => iterator }
       }
-    }()
+    })()
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], adapter)
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'test',
+        model: 'test',
+        messages: [],
+      }),
+    )
 
     expect(chunks.at(-1)).toEqual({
       type: 'finish',
@@ -465,21 +496,27 @@ describe('LlmRuntime', () => {
 
   it.each(['dispatch', 'iterator'] as const)('normalizes synchronous adapter %s failures', async (boundary) => {
     const original = new LlmError(`${boundary} failed`, 'BOUNDARY_FAILED')
-    const adapter = new class extends LlmAdapter {
+    const adapter = new (class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         if (boundary === 'dispatch') throw original
-        return { [Symbol.asyncIterator]: () => { throw original } }
+        return {
+          [Symbol.asyncIterator]: () => {
+            throw original
+          },
+        }
       }
-    }()
+    })()
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], adapter)
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'test',
+        model: 'test',
+        messages: [],
+      }),
+    )
 
     expect(chunks.at(-1)).toEqual({
       type: 'finish',
@@ -500,11 +537,13 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], new ThrowingAdapter(failure))
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'test',
+        model: 'test',
+        messages: [],
+      }),
+    )
 
     expect(chunks.at(-1)).toEqual({
       type: 'finish',
@@ -522,7 +561,7 @@ describe('LlmRuntime', () => {
   })
 
   it('normalizes arbitrary adapter rejections without throwing them downstream', async () => {
-    const adapter = new class extends LlmAdapter {
+    const adapter = new (class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         return {
           [Symbol.asyncIterator](): AsyncIterator<StreamChunk> {
@@ -534,16 +573,18 @@ describe('LlmRuntime', () => {
           },
         }
       }
-    }()
+    })()
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], adapter)
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'test',
+        model: 'test',
+        messages: [],
+      }),
+    )
 
     expect(chunks.at(-1)).toEqual({
       type: 'finish',
@@ -561,12 +602,14 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], new ThrowingAdapter(new Error('stopped')))
 
-    const chunks = await collect(ctx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-      signal: controller.signal,
-    }))
+    const chunks = await collect(
+      ctx.llm.stream({
+        provider: 'test',
+        model: 'test',
+        messages: [],
+        signal: controller.signal,
+      }),
+    )
 
     expect(chunks.at(-1)).toMatchObject({
       type: 'finish',
@@ -579,34 +622,42 @@ describe('LlmRuntime', () => {
     const middlewareCtx = new Context()
     await middlewareCtx.plugin(LlmRuntime)
     middlewareCtx.llm.registerAdapter(['test'], new ScriptedAdapter(SCRIPT))
-    middlewareCtx.on('llm/stream', () => (async function* () {
-      throw middlewareFailure
-    })())
-    await expect(collect(middlewareCtx.llm.stream({
-      provider: 'test',
-      model: 'test',
-      messages: [],
-    }))).rejects.toBe(middlewareFailure)
+    middlewareCtx.on('llm/stream', () =>
+      (async function* () {
+        throw middlewareFailure
+      })(),
+    )
+    await expect(
+      collect(
+        middlewareCtx.llm.stream({
+          provider: 'test',
+          model: 'test',
+          messages: [],
+        }),
+      ),
+    ).rejects.toBe(middlewareFailure)
 
     const consumerFailure = new Error('consumer failed')
     const consumerCtx = new Context()
     await consumerCtx.plugin(LlmRuntime)
     consumerCtx.llm.registerAdapter(['test'], new ScriptedAdapter(SCRIPT))
-    await expect((async () => {
-      for await (const _chunk of consumerCtx.llm.stream({
-        provider: 'test',
-        model: 'test',
-        messages: [],
-      })) {
-        throw consumerFailure
-      }
-    })()).rejects.toBe(consumerFailure)
+    await expect(
+      (async () => {
+        for await (const _chunk of consumerCtx.llm.stream({
+          provider: 'test',
+          model: 'test',
+          messages: [],
+        })) {
+          throw consumerFailure
+        }
+      })(),
+    ).rejects.toBe(consumerFailure)
   })
 
   it('awaits adapter cleanup on downstream close and leaves cleanup failure thrown', async () => {
     const cleanup = new Error('cleanup failed')
     let cleanupCalls = 0
-    const adapter = new class extends LlmAdapter {
+    const adapter = new (class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         return {
           [Symbol.asyncIterator](): AsyncIterator<StreamChunk> {
@@ -620,23 +671,26 @@ describe('LlmRuntime', () => {
           },
         }
       }
-    }()
+    })()
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], adapter)
 
-    await expect((async () => {
-      for await (const _chunk of ctx.llm.stream({
-        provider: 'test',
-        model: 'test',
-        messages: [],
-      })) break
-    })()).rejects.toBe(cleanup)
+    await expect(
+      (async () => {
+        for await (const _chunk of ctx.llm.stream({
+          provider: 'test',
+          model: 'test',
+          messages: [],
+        }))
+          break
+      })(),
+    ).rejects.toBe(cleanup)
     expect(cleanupCalls).toBe(1)
   })
 
   it('allows downstream close when an adapter iterator has no return method', async () => {
-    const adapter = new class extends LlmAdapter {
+    const adapter = new (class extends LlmAdapter {
       stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
         return {
           [Symbol.asyncIterator](): AsyncIterator<StreamChunk> {
@@ -644,7 +698,7 @@ describe('LlmRuntime', () => {
           },
         }
       }
-    }()
+    })()
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['test'], adapter)
@@ -656,9 +710,14 @@ describe('LlmRuntime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
 
-    const fiber = await ctx.plugin(Object.assign((inner: Context) => {
-      inner.llm.registerAdapter(['scoped-model'], new ScriptedAdapter(SCRIPT))
-    }, { inject: ['llm'] }))
+    const fiber = await ctx.plugin(
+      Object.assign(
+        (inner: Context) => {
+          inner.llm.registerAdapter(['scoped-model'], new ScriptedAdapter(SCRIPT))
+        },
+        { inject: ['llm'] },
+      ),
+    )
     expect(ctx.llm.listProviders()).toEqual([{ id: 'scoped-model', name: 'scoped-model' }])
 
     await fiber.dispose()
@@ -689,9 +748,15 @@ describe('LlmRuntime', () => {
     provider.name = 'source mutated'
     model.name = 'source mutated'
     expect(ctx.llm.listProviders()).toEqual([{ id: 'catalog', name: 'Catalog Provider' }])
-    await expect(ctx.llm.listModels('catalog')).resolves.toEqual([{
-      provider: 'catalog', id: 'fast', name: 'source mutated', description: 'Low latency', inputModalities: ['text'],
-    }])
+    await expect(ctx.llm.listModels('catalog')).resolves.toEqual([
+      {
+        provider: 'catalog',
+        id: 'fast',
+        name: 'source mutated',
+        description: 'Low latency',
+        inputModalities: ['text'],
+      },
+    ])
   })
 
   it('defaults adapters to their route name and an empty advisory model list', async () => {
@@ -702,7 +767,9 @@ describe('LlmRuntime', () => {
     await expect(ctx.llm.listModels('plain')).resolves.toEqual([])
     await expect(ctx.llm.listModels('missing')).rejects.toMatchObject({ code: 'NO_ADAPTER' })
     await expect(ctx.llm.resolveModelInfo('plain', 'unlisted')).resolves.toEqual({
-      provider: 'plain', id: 'unlisted', name: 'unlisted',
+      provider: 'plain',
+      id: 'unlisted',
+      name: 'unlisted',
     })
     await expect(ctx.llm.resolveModelInfo('missing', 'm')).rejects.toMatchObject({ code: 'NO_ADAPTER' })
   })
@@ -719,35 +786,38 @@ describe('LlmRuntime', () => {
   ] as const)('rejects invalid exact model metadata (%s: %s)', async (metadata, _label) => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override resolveModel(): Promise<LlmResolvedModelInfo> {
         return Promise.resolve(metadata as unknown as LlmResolvedModelInfo)
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
 
-    await expect(ctx.llm.resolveModelInfo('route', 'model'))
-      .rejects.toMatchObject({ code: 'INVALID_MODEL_INFO' })
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).rejects.toMatchObject({ code: 'INVALID_MODEL_INFO' })
   })
 
   it('preserves modality metadata through exact model resolution', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override resolveModel(): Promise<LlmResolvedModelInfo> {
         return Promise.resolve({
-          provider: 'route', id: 'model', name: 'Model',
+          provider: 'route',
+          id: 'model',
+          name: 'Model',
           inputModalities: ['text', 'image'],
           toolUpdate: 'in-history',
         })
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
 
     // Downstream preflights (image admission) act on this exact field; a
     // rebuild that drops it silently reads as "modalities unknown".
     await expect(ctx.llm.resolveModelInfo('route', 'model')).resolves.toEqual({
-      provider: 'route', id: 'model', name: 'Model',
+      provider: 'route',
+      id: 'model',
+      name: 'Model',
       inputModalities: ['text', 'image'],
       toolUpdate: 'in-history',
     })
@@ -758,18 +828,16 @@ describe('LlmRuntime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const source = { contextWindow: 32_000 }
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      { unlisted: source },
-    ))
+    ctx.llm.registerAdapter(['route'], new CatalogAdapter({ id: 'route', name: 'Route' }, [], { unlisted: source }))
 
     const resolved = await ctx.llm.resolveModelInfo('route', 'unlisted')
     expect(resolved.context).toEqual({ contextWindow: 32_000 })
     source.contextWindow = 64_000
     expect(resolved.context).toEqual({ contextWindow: 32_000 })
     await expect(ctx.llm.resolveModelInfo('route', 'other')).resolves.toEqual({
-      provider: 'route', id: 'other', name: 'other',
+      provider: 'route',
+      id: 'other',
+      name: 'other',
     })
   })
 
@@ -783,17 +851,20 @@ describe('LlmRuntime', () => {
       ],
       defaultEffort: ReasoningEffortId('standard'),
     }
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      {},
-      {
-        model: source,
-        providerDefault: {
-          efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
+    ctx.llm.registerAdapter(
+      ['route'],
+      new CatalogAdapter(
+        { id: 'route', name: 'Route' },
+        [],
+        {},
+        {
+          model: source,
+          providerDefault: {
+            efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
+          },
         },
-      },
-    ))
+      ),
+    )
 
     const resolved = await ctx.llm.resolveModelInfo('route', 'model')
     expect(resolved.reasoning).toEqual(source)
@@ -813,13 +884,7 @@ describe('LlmRuntime', () => {
   it('materializes an adapter-owned maxTokens default while preserving an explicit cap', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      {},
-      {},
-      { model: 256_000 },
-    ))
+    ctx.llm.registerAdapter(['route'], new CatalogAdapter({ id: 'route', name: 'Route' }, [], {}, {}, { model: 256_000 }))
 
     await expect(ctx.llm.resolveModelInfo('route', 'model')).resolves.toMatchObject({
       defaultMaxTokens: 256_000,
@@ -837,69 +902,77 @@ describe('LlmRuntime', () => {
     expect(preparedExplicit.adapterDefaults).toEqual({})
   })
 
-  it.each([0, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid adapter-owned default maxTokens %s',
-    async (defaultMaxTokens) => {
-      const ctx = new Context()
-      await ctx.plugin(LlmRuntime)
-      const adapter = new class extends ScriptedAdapter {
-        override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-          return Promise.resolve({ provider, id: model, name: model, defaultMaxTokens })
-        }
-      }(SCRIPT)
-      ctx.llm.registerAdapter(['route'], adapter)
+  it.each([0, 1.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid adapter-owned default maxTokens %s', async (defaultMaxTokens) => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new (class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, defaultMaxTokens })
+      }
+    })(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
 
-      await expect(ctx.llm.resolveModelInfo('route', 'model'))
-        .rejects.toMatchObject({ code: 'INVALID_MODEL_MAX_TOKENS' })
-    },
-  )
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).rejects.toMatchObject({ code: 'INVALID_MODEL_MAX_TOKENS' })
+  })
 
   it.each([
     [{ efforts: [] }, 'empty effort list'],
     [{ efforts: [{ id: '', name: 'Empty' }] }, 'empty id'],
     [{ efforts: [{ id: 'valid', name: '' }] }, 'empty name'],
     [{ efforts: [{ id: 'valid', name: 'Valid', description: 1 }] }, 'non-string description'],
-    [{ efforts: [{ id: 'same', name: 'One' }, { id: 'same', name: 'Two' }] }, 'duplicate id'],
+    [
+      {
+        efforts: [
+          { id: 'same', name: 'One' },
+          { id: 'same', name: 'Two' },
+        ],
+      },
+      'duplicate id',
+    ],
     [{ efforts: [{ id: 'valid', name: 'Valid' }], defaultEffort: 'other' }, 'unknown default'],
   ] as const)('rejects invalid model reasoning metadata (%s: %s)', async (metadata, _label) => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      {},
-      { model: metadata as unknown as LlmModelReasoningInfo },
-    ))
-    await expect(ctx.llm.resolveModelInfo('route', 'model'))
-      .rejects.toMatchObject({ code: 'INVALID_MODEL_REASONING' })
+    ctx.llm.registerAdapter(
+      ['route'],
+      new CatalogAdapter({ id: 'route', name: 'Route' }, [], {}, { model: metadata as unknown as LlmModelReasoningInfo }),
+    )
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).rejects.toMatchObject({ code: 'INVALID_MODEL_REASONING' })
   })
 
   it('rejects unsupported reasoning efforts without clamping', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      {},
-      { model: { efforts: [{ id: ReasoningEffortId('ultra'), name: 'Ultra' }] } },
-    ))
+    ctx.llm.registerAdapter(
+      ['route'],
+      new CatalogAdapter(
+        { id: 'route', name: 'Route' },
+        [],
+        {},
+        { model: { efforts: [{ id: ReasoningEffortId('ultra'), name: 'Ultra' }] } },
+      ),
+    )
 
-    await expect(ctx.llm.resolveCallConfig({
-      provider: 'route',
-      model: 'model',
-      reasoningEffort: ReasoningEffortId('standard'),
-    })).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
-    await expect(ctx.llm.resolveCallConfig({
-      provider: 'route',
-      model: 'plain',
-      reasoningEffort: ReasoningEffortId('standard'),
-    })).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
+    await expect(
+      ctx.llm.resolveCallConfig({
+        provider: 'route',
+        model: 'model',
+        reasoningEffort: ReasoningEffortId('standard'),
+      }),
+    ).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
+    await expect(
+      ctx.llm.resolveCallConfig({
+        provider: 'route',
+        model: 'plain',
+        reasoningEffort: ReasoningEffortId('standard'),
+      }),
+    ).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
   })
 
   it('resolves reasoning defaults at the final adapter boundary after routing middleware', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    const adapter = new class extends RecordingAdapter {
+    const adapter = new (class extends RecordingAdapter {
       override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
         const reasoning: LlmModelReasoningInfo = {
           efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
@@ -912,7 +985,7 @@ describe('LlmRuntime', () => {
           reasoning,
         })
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['routed'], adapter)
     const disposeRouting = ctx.on('llm/stream', (options, next) => {
       options.provider = 'routed'
@@ -923,7 +996,9 @@ describe('LlmRuntime', () => {
       provider: 'initial',
       model: 'model',
       messages: [],
-    })) { /* drain */ }
+    })) {
+      /* drain */
+    }
 
     expect(adapter.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('standard'))
     disposeRouting()
@@ -933,7 +1008,9 @@ describe('LlmRuntime', () => {
       model: 'model',
       messages: [],
     })
-    for await (const _chunk of ctx.llm.stream(frozenRequest)) { /* drain */ }
+    for await (const _chunk of ctx.llm.stream(frozenRequest)) {
+      /* drain */
+    }
     expect(adapter.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('standard'))
     expect(Object.isFrozen(adapter.lastOptions)).toBe(true)
   })
@@ -943,12 +1020,8 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     const started = Promise.withResolvers<undefined>()
     const reasoning = Promise.withResolvers<LlmModelReasoningInfo>()
-    const first = new class extends RecordingAdapter {
-      override async resolveModel(
-        provider: string,
-        model: string,
-        _signal?: AbortSignal,
-      ): Promise<LlmResolvedModelInfo> {
+    const first = new (class extends RecordingAdapter {
+      override async resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo> {
         started.resolve(undefined)
         return {
           provider,
@@ -957,14 +1030,16 @@ describe('LlmRuntime', () => {
           reasoning: await reasoning.promise,
         }
       }
-    }(SCRIPT)
+    })(SCRIPT)
     const disposeFirst = ctx.llm.registerAdapter(['route'], first)
     const draining = (async () => {
       for await (const _chunk of ctx.llm.stream({
         provider: 'route',
         model: 'model',
         messages: [],
-      })) { /* drain */ }
+      })) {
+        /* drain */
+      }
     })()
 
     await started.promise
@@ -1000,19 +1075,25 @@ describe('LlmRuntime', () => {
     expect(Object.isFrozen(prepared.config)).toBe(true)
     expect(Object.isFrozen(prepared.adapterDefaults)).toBe(true)
     expect(prepared.adapterDefaults).toEqual({ reasoningEffort: true })
-    expect(() => prepared.stream({
-      ...prepared.config,
-      model: 'other',
-      messages: [],
-    })).toThrow(expect.objectContaining({ code: 'INVALID_PREPARED_CALL' }))
-    await collect(prepared.stream({
-      ...prepared.config,
-      messages: [],
-    }))
-    expect(() => prepared.stream({
-      ...prepared.config,
-      messages: [],
-    })).toThrow(expect.objectContaining({ code: 'INVALID_PREPARED_CALL' }))
+    expect(() =>
+      prepared.stream({
+        ...prepared.config,
+        model: 'other',
+        messages: [],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_PREPARED_CALL' }))
+    await collect(
+      prepared.stream({
+        ...prepared.config,
+        messages: [],
+      }),
+    )
+    expect(() =>
+      prepared.stream({
+        ...prepared.config,
+        messages: [],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_PREPARED_CALL' }))
 
     const late = await ctx.llm.prepareCall({ provider: 'route', model: 'model' })
     const lateOptions = { ...late.config, messages: [] }
@@ -1035,7 +1116,7 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     let resolutions = 0
     const source = { contextWindow: 128_000 }
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
         resolutions += 1
         return Promise.resolve({
@@ -1044,15 +1125,16 @@ describe('LlmRuntime', () => {
           name: model,
           description: 'Resolved model',
           context: source,
-          reasoning: model === 'no-default'
-            ? { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] }
-            : {
-              efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
-              defaultEffort: ReasoningEffortId('high'),
-            },
+          reasoning:
+            model === 'no-default'
+              ? { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] }
+              : {
+                  efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+                  defaultEffort: ReasoningEffortId('high'),
+                },
         })
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
 
     const prepared = await ctx.llm.prepareCall({ provider: 'route', model: 'model' })
@@ -1063,7 +1145,9 @@ describe('LlmRuntime', () => {
     for await (const _chunk of prepared.stream({
       ...prepared.config,
       messages: [],
-    })) { /* drain */ }
+    })) {
+      /* drain */
+    }
     expect(resolutions).toBe(1)
 
     const noDefault = await ctx.llm.prepareCall({ provider: 'route', model: 'no-default' })
@@ -1077,7 +1161,7 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     let generation = 'first'
     let dispatched: string | undefined
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override prepareCall(provider: string, model: string) {
         const captured = generation
         return Promise.resolve({
@@ -1088,7 +1172,7 @@ describe('LlmRuntime', () => {
           },
         })
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
 
     const prepared = await ctx.llm.prepareCall({ provider: 'route', model: 'model' })
@@ -1103,16 +1187,16 @@ describe('LlmRuntime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const seen: GenerateOptions[] = []
-    const adapter = new class extends ScriptedAdapter {
+    const adapter = new (class extends ScriptedAdapter {
       override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
         return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text'] })
       }
 
-      override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
         seen.push(options)
-        yield * super.stream(options)
+        yield* super.stream(options)
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
     const attachment = {
       attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
@@ -1124,31 +1208,39 @@ describe('LlmRuntime', () => {
     const waterfall: GenerateOptions[] = []
     ctx.on('llm/stream', async function* (options, next) {
       waterfall.push(options)
-      yield * next()
+      yield* next()
     })
 
-    await collect(ctx.llm.stream({
-      provider: 'route',
-      model: 'text-only',
-      messages: [createUserMessage({
-        content: [{ type: 'image', attachment }],
-        source: { kind: 'test' },
-      })],
-    }))
+    await collect(
+      ctx.llm.stream({
+        provider: 'route',
+        model: 'text-only',
+        messages: [
+          createUserMessage({
+            content: [{ type: 'image', attachment }],
+            source: { kind: 'test' },
+          }),
+        ],
+      }),
+    )
 
     expect(waterfall[0]?.messages[0]?.content).toEqual([{ type: 'image', attachment }])
-    expect(seen[0]?.messages[0]?.content).toEqual([{
-      type: 'text',
-      text: '[image omitted because this model accepts text only; attachment sha256:aaaaaaaa]',
-    }])
+    expect(seen[0]?.messages[0]?.content).toEqual([
+      {
+        type: 'text',
+        text: '[image omitted because this model accepts text only; attachment sha256:aaaaaaaa]',
+      },
+    ])
 
     const frozen = Object.freeze({
       provider: 'route',
       model: 'text-only',
-      messages: [createUserMessage({
-        content: [{ type: 'image', attachment }],
-        source: { kind: 'test' as const },
-      })],
+      messages: [
+        createUserMessage({
+          content: [{ type: 'image', attachment }],
+          source: { kind: 'test' as const },
+        }),
+      ],
     })
     await collect(ctx.llm.stream(frozen))
     expect(Object.isFrozen(seen[1])).toBe(true)
@@ -1159,12 +1251,8 @@ describe('LlmRuntime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const started = Promise.withResolvers<undefined>()
-    const adapter = new class extends ScriptedAdapter {
-      override resolveModel(
-        _provider: string,
-        _model: string,
-        signal?: AbortSignal,
-      ): Promise<LlmResolvedModelInfo> {
+    const adapter = new (class extends ScriptedAdapter {
+      override resolveModel(_provider: string, _model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo> {
         started.resolve(undefined)
         return new Promise<LlmResolvedModelInfo>((_resolve, reject) => {
           if (signal === undefined) {
@@ -1175,18 +1263,19 @@ describe('LlmRuntime', () => {
             reject(signal.reason instanceof Error ? signal.reason : new Error('reasoning aborted'))
             return
           }
-          signal.addEventListener('abort', () => {
-            reject(signal.reason instanceof Error ? signal.reason : new Error('reasoning aborted'))
-          }, { once: true })
+          signal.addEventListener(
+            'abort',
+            () => {
+              reject(signal.reason instanceof Error ? signal.reason : new Error('reasoning aborted'))
+            },
+            { once: true },
+          )
         })
       }
-    }(SCRIPT)
+    })(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
     const controller = new AbortController()
-    const resolving = ctx.llm.resolveCallConfig(
-      { provider: 'route', model: 'model' },
-      controller.signal,
-    )
+    const resolving = ctx.llm.resolveCallConfig({ provider: 'route', model: 'model' }, controller.signal)
 
     await started.promise
     const reason = new Error('cancel reasoning')
@@ -1194,38 +1283,23 @@ describe('LlmRuntime', () => {
     await expect(resolving).rejects.toBe(reason)
   })
 
-  it.each([0, -1, 1.5, Number.NaN])(
-    'rejects invalid adapter model context %s',
-    async (contextWindow) => {
-      const ctx = new Context()
-      await ctx.plugin(LlmRuntime)
-      ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-        { id: 'route', name: 'Route' },
-        [],
-        { model: { contextWindow } },
-      ))
-      await expect(ctx.llm.resolveModelInfo('route', 'model'))
-        .rejects.toMatchObject({ code: 'INVALID_MODEL_CONTEXT' })
-    },
-  )
+  it.each([0, -1, 1.5, Number.NaN])('rejects invalid adapter model context %s', async (contextWindow) => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['route'], new CatalogAdapter({ id: 'route', name: 'Route' }, [], { model: { contextWindow } }))
+    await expect(ctx.llm.resolveModelInfo('route', 'model')).rejects.toMatchObject({ code: 'INVALID_MODEL_CONTEXT' })
+  })
 
   it('captures a declared in-history system prompt update mode and rejects any other mode', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [],
-      {},
-      {},
-      {},
-      { capable: 'in-history', bogus: 'leading' },
-    ))
-    await expect(ctx.llm.resolveModelInfo('route', 'capable'))
-      .resolves.toMatchObject({ systemPromptUpdate: 'in-history' })
-    await expect(ctx.llm.resolveModelInfo('route', 'plain'))
-      .resolves.not.toHaveProperty('systemPromptUpdate')
-    await expect(ctx.llm.resolveModelInfo('route', 'bogus'))
-      .rejects.toMatchObject({ code: 'INVALID_MODEL_INFO' })
+    ctx.llm.registerAdapter(
+      ['route'],
+      new CatalogAdapter({ id: 'route', name: 'Route' }, [], {}, {}, {}, { capable: 'in-history', bogus: 'leading' }),
+    )
+    await expect(ctx.llm.resolveModelInfo('route', 'capable')).resolves.toMatchObject({ systemPromptUpdate: 'in-history' })
+    await expect(ctx.llm.resolveModelInfo('route', 'plain')).resolves.not.toHaveProperty('systemPromptUpdate')
+    await expect(ctx.llm.resolveModelInfo('route', 'bogus')).rejects.toMatchObject({ code: 'INVALID_MODEL_INFO' })
     const capable = await ctx.llm.prepareCall({ provider: 'route', model: 'capable' })
     expect(capable.systemPromptUpdate).toBe('in-history')
     const plain = await ctx.llm.prepareCall({ provider: 'route', model: 'plain' })
@@ -1256,10 +1330,7 @@ describe('LlmRuntime', () => {
   ] as const)('rejects invalid model metadata (%s: %s)', async (metadata, _label) => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    ctx.llm.registerAdapter(['route'], new CatalogAdapter(
-      { id: 'route', name: 'Route' },
-      [metadata as unknown as LlmModelInfo],
-    ))
+    ctx.llm.registerAdapter(['route'], new CatalogAdapter({ id: 'route', name: 'Route' }, [metadata as unknown as LlmModelInfo]))
     await expect(ctx.llm.listModels('route')).rejects.toMatchObject({ code: 'INVALID_CATALOG' })
   })
 
@@ -1278,10 +1349,10 @@ describe('LlmRuntime', () => {
 
     ctx.on('llm/stream', function (_options, next) {
       const inner = next()
-      return (async function * () {
+      return (async function* () {
         yield { type: 'block-start', index: 99, blockType: 'text' } satisfies StreamChunk
         yield { type: 'block-end', index: 99, block: { type: 'text', text: '' } } satisfies StreamChunk
-        yield * inner
+        yield* inner
       })()
     })
 
@@ -1301,7 +1372,9 @@ describe('LlmRuntime', () => {
       return next()
     })
 
-    for await (const _chunk of ctx.llm.stream({ provider: 'initial', model: 'm', messages: [] })) { /* drain */ }
+    for await (const _chunk of ctx.llm.stream({ provider: 'initial', model: 'm', messages: [] })) {
+      /* drain */
+    }
     expect(adapter.lastOptions?.provider).toBe('routed')
   })
 
@@ -1318,12 +1391,17 @@ describe('LlmRuntime', () => {
       source: { kind: 'model', provider: 'historical', model: 'old-model', replayState: { private: 'state' } },
     })
     for await (const _chunk of ctx.llm.stream({
-      provider: 'target', model: 'new-model', messages: [assistant, input],
-    })) { /* drain */ }
+      provider: 'target',
+      model: 'new-model',
+      messages: [assistant, input],
+    })) {
+      /* drain */
+    }
     expect(target.lastOptions?.messages[1]).toBe(input)
     expect(target.lastOptions?.messages[1]).toEqual({ role: 'user', content: [{ type: 'text', text: 'summarize' }] })
     expect(target.lastOptions?.messages[0]).toEqual({
-      ...assistant, source: { kind: 'model', provider: 'historical', model: 'old-model' },
+      ...assistant,
+      source: { kind: 'model', provider: 'historical', model: 'old-model' },
     })
     expect(assistant.source.replayState).toEqual({ private: 'state' })
   })
@@ -1338,18 +1416,25 @@ describe('LlmRuntime', () => {
     for await (const _chunk of ctx.llm.stream({
       provider: 'target',
       model: 'new-model',
-      messages: [createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'old response' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'historical', model: 'old-model', replayState },
-        },
-      })],
-    })) { /* drain */ }
+      messages: [
+        createMessage({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'old response' }],
+          source: {
+            kind: 'model',
+            ...{ provider: 'historical', model: 'old-model', replayState },
+          },
+        }),
+      ],
+    })) {
+      /* drain */
+    }
 
     expect(adapter.lastOptions?.messages[0]?.source).toEqual({
-      kind: 'model', provider: 'historical', model: 'old-model', replayState,
+      kind: 'model',
+      provider: 'historical',
+      model: 'old-model',
+      replayState,
     })
   })
 
@@ -1363,15 +1448,19 @@ describe('LlmRuntime', () => {
     for await (const _chunk of ctx.llm.stream({
       provider: 'target',
       model: 'new-model',
-      messages: [createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'old response' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'historical', model: 'old-model', replayState: { private: 'state' } },
-        },
-      })],
-    })) { /* drain */ }
+      messages: [
+        createMessage({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'old response' }],
+          source: {
+            kind: 'model',
+            ...{ provider: 'historical', model: 'old-model', replayState: { private: 'state' } },
+          },
+        }),
+      ],
+    })) {
+      /* drain */
+    }
 
     expect(target.lastOptions?.messages[0]?.source).toEqual({
       kind: 'model',
@@ -1389,19 +1478,23 @@ describe('LlmRuntime', () => {
     const options = Object.freeze({
       provider: 'target',
       model: 'new-model',
-      messages: [createMessage({
-        role: 'assistant' as const,
-        content: [{ type: 'text' as const, text: 'old response' }],
-        source: {
-          kind: 'model',
-          provider: 'historical',
-          model: 'old-model',
-          replayState: { private: 'state' },
-        },
-      })],
+      messages: [
+        createMessage({
+          role: 'assistant' as const,
+          content: [{ type: 'text' as const, text: 'old response' }],
+          source: {
+            kind: 'model',
+            provider: 'historical',
+            model: 'old-model',
+            replayState: { private: 'state' },
+          },
+        }),
+      ],
     })
 
-    for await (const _chunk of ctx.llm.stream(options)) { /* drain */ }
+    for await (const _chunk of ctx.llm.stream(options)) {
+      /* drain */
+    }
 
     expect(target.lastOptions).not.toBe(options)
     expect(Object.isFrozen(target.lastOptions)).toBe(true)
@@ -1422,8 +1515,7 @@ describe('LlmRuntime', () => {
 
   it('rejects non-serializable structured failure facts at construction', () => {
     expect(() => new LlmError('busy', 'RATE_LIMIT', { status: 42 })).toThrow(/status/)
-    expect(() => new LlmError('busy', 'RATE_LIMIT', { providerRetryAfterMs: Number.NaN }))
-      .toThrow(/providerRetryAfterMs/)
+    expect(() => new LlmError('busy', 'RATE_LIMIT', { providerRetryAfterMs: Number.NaN })).toThrow(/providerRetryAfterMs/)
     expect(() => new LlmError('busy', 'RATE_LIMIT', { requestId: ProviderRequestId('') })).toThrow(/requestId/)
     expect(() => new LlmError(1 as never, 'RATE_LIMIT')).toThrow(/message/)
     expect(() => new LlmError('busy', 1 as never)).toThrow(/code/)
@@ -1512,8 +1604,9 @@ describe('LlmRuntime', () => {
 
     const handle = ctx.llm.registerAdapter(['m1'], new ScriptedAdapter(SCRIPT))
     handle()
-    expect(() => { handle.replace(['leaked']) })
-      .toThrow(/disposed adapter registration cannot replace its routes/)
+    expect(() => {
+      handle.replace(['leaked'])
+    }).toThrow(/disposed adapter registration cannot replace its routes/)
     expect(ctx.llm.listProviders()).toEqual([])
   })
 

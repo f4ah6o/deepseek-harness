@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import DeepSeekLlmApiExtensionRegistry from '../src/index.ts'
 
@@ -13,7 +13,7 @@ const contexts: Context[] = []
 const SIGNAL = new AbortController().signal
 
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
 })
 
 async function harness(): Promise<Context> {
@@ -36,9 +36,11 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
       }),
     })
     ctx.deepseekLlmApiExtensions.register('test_beta', {
-      prepare: async request => ({
+      prepare: async (request) => ({
         value: [request.body.messages === undefined ? 0 : 1],
-        accept: async () => { second() },
+        accept: async () => {
+          second()
+        },
       }),
     })
 
@@ -75,16 +77,19 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     const dispose = owner.deepseekLlmApiExtensions.register('test_alpha', {
       prepare: () => ({ value: { value: 'one' } }),
     })
-    expect(() => ctx.deepseekLlmApiExtensions.register('test_alpha', {
-      prepare: () => ({ value: { value: 'two' } }),
-    })).toThrow(/already registered/)
+    expect(() =>
+      ctx.deepseekLlmApiExtensions.register('test_alpha', {
+        prepare: () => ({ value: { value: 'two' } }),
+      }),
+    ).toThrow(/already registered/)
 
     await dispose()
     ctx.deepseekLlmApiExtensions.register('test_alpha', {
       prepare: () => ({ value: { value: 'replacement' } }),
     })
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL }))
-      .resolves.toMatchObject({ fields: { test_alpha: { value: 'replacement' } } })
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })).resolves.toMatchObject({
+      fields: { test_alpha: { value: 'replacement' } },
+    })
   })
 
   it('settles every acceptance callback before reporting one or several failures', async () => {
@@ -93,13 +98,18 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     ctx.deepseekLlmApiExtensions.register('test_alpha', {
       prepare: () => ({
         value: { value: 'x' },
-        accept: () => { throw new Error('alpha failed') },
+        accept: () => {
+          throw new Error('alpha failed')
+        },
       }),
     })
     ctx.deepseekLlmApiExtensions.register('test_beta', {
       prepare: () => ({
         value: [2],
-        accept: () => { later(); throw new Error('beta failed') },
+        accept: () => {
+          later()
+          throw new Error('beta failed')
+        },
       }),
     })
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })
@@ -113,7 +123,12 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     const ctx = await harness()
     const failure = new Error('single failure')
     ctx.deepseekLlmApiExtensions.register('test_alpha', {
-      prepare: () => ({ value: { value: 'x' }, accept: () => { throw failure } }),
+      prepare: () => ({
+        value: { value: 'x' },
+        accept: () => {
+          throw failure
+        },
+      }),
     })
     ctx.deepseekLlmApiExtensions.register('test_beta', { prepare: () => undefined })
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })
@@ -123,11 +138,15 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
 
   it('rejects invalid field names and preparation failures before returning fields', async () => {
     const ctx = await harness()
-    expect(() => ctx.deepseekLlmApiExtensions.register('' as 'test_alpha', {
-      prepare: () => ({ value: { value: 'x' } }),
-    })).toThrow(/non-blank trimmed/)
+    expect(() =>
+      ctx.deepseekLlmApiExtensions.register('' as 'test_alpha', {
+        prepare: () => ({ value: { value: 'x' } }),
+      }),
+    ).toThrow(/non-blank trimmed/)
     ctx.deepseekLlmApiExtensions.register('test_alpha', {
-      prepare: () => { throw new Error('prepare failed') },
+      prepare: () => {
+        throw new Error('prepare failed')
+      },
     })
     await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })).rejects.toThrow('prepare failed')
   })

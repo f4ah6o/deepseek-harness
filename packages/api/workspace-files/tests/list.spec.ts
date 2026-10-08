@@ -1,5 +1,5 @@
 /** The `list` endpoint: the same containment gates as `read`, plus the entry cap. */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { failureOf, openWorkspace, signal, type Harness } from './harness.ts'
@@ -50,7 +50,7 @@ describe('workspaceFiles.list — the happy path', () => {
     await writeFile(join(workspace, 'src', 'my dir', '子目录', 'a.ts'), '', 'utf8')
     const listing = await endpoint().list(harness.scope, 'src/my dir/子目录', signal())
     expect(listing.path).toBe('src/my dir/子目录')
-    expect(listing.entries.map(entry => entry.name)).toEqual(['a.ts'])
+    expect(listing.entries.map((entry) => entry.name)).toEqual(['a.ts'])
   })
 
   it('reports a symlink child as what it points to, and a dangling one as other', async () => {
@@ -83,7 +83,7 @@ describe('workspaceFiles.list — the entry cap', () => {
   it('cuts at the cap in name order and says so', async () => {
     for (const name of ['a', 'b', 'c', 'd', 'e']) await writeFile(join(workspace, name), '', 'utf8')
     const listing = await endpoint({ maxEntries: 2 }).list(harness.scope, '.', signal())
-    expect(listing.entries.map(entry => entry.name)).toEqual(['a', 'b'])
+    expect(listing.entries.map((entry) => entry.name)).toEqual(['a', 'b'])
     expect(listing.truncated).toBe(true)
   })
 

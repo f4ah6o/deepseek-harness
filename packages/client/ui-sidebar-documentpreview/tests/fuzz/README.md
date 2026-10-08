@@ -38,7 +38,7 @@ The [opening fixtures](../excel-opening-fixture.ts) derive Strict URI aliases, r
 Run the Node and browser-bundle parser regressions:
 
 ```sh
-pnpm exec vitest run packages/client/ui-sidebar-documentpreview/tests/excel-opening.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-opc.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-xml.client.spec.ts
+pnpm exec vp test run packages/client/ui-sidebar-documentpreview/tests/excel-opening.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-opc.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-xml.client.spec.ts
 ```
 
 Fuzz reports record each input's SHA-256, whether it opened, and the worktree status. `validOpened` and `validRejected` separate opening failures from value differences; strict exit status still rejects either defect. Known 1904 time/duration offsets and empty-string formula-cache differences remain diagnostic failures. Corrupt inputs accepted by the parser remain informational.

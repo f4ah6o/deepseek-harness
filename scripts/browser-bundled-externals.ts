@@ -4,7 +4,7 @@ import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { Rolldown, type UserConfigExport } from 'tsdown'
+import { Rolldown, type UserConfigExport } from 'vite-plus/pack'
 import ts from 'typescript'
 import { browserDependencyAnalysis } from '../apps/web/product-isolation.ts'
 
@@ -39,8 +39,14 @@ function recorder(seen: Set<string>, workspaceNames: ReadonlySet<string>, follow
     resolveId: {
       order: 'pre' as const,
       async handler(this: ResolveContext, source: string, importer: string | undefined) {
-        if (importer === undefined || source.startsWith('.') || source.startsWith('/')
-          || source.startsWith('\0') || source.startsWith('node:')) return null
+        if (
+          importer === undefined ||
+          source.startsWith('.') ||
+          source.startsWith('/') ||
+          source.startsWith('\0') ||
+          source.startsWith('node:')
+        )
+          return null
         const parts = source.split('/')
         const name = source.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
         if (name !== undefined && workspaceNames.has(name)) {
@@ -69,7 +75,7 @@ function readManifest(path: string): Manifest {
  */
 export function browserSourceAliases(root: string): { find: RegExp; replacement: string }[] {
   const path = resolve(root, 'tsconfig.base.json')
-  const config = ts.readConfigFile(path, file => ts.sys.readFile(file))
+  const config = ts.readConfigFile(path, (file) => ts.sys.readFile(file))
   if (config.error !== undefined) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root)
   return Object.entries(parsed.options.paths ?? {}).map(([name, targets]) => {
@@ -89,11 +95,23 @@ async function collectClientBundles(
   for (const [manifestPath, manifest] of manifests) {
     if (manifest.private === true || manifest.dsh?.client === undefined) continue
     const dir = dirname(manifestPath)
-    const loaded = await import(pathToFileURL(resolve(dir, 'tsdown.config.ts')).href) as { default: UserConfigExport }
+    const loaded = (await import(pathToFileURL(resolve(dir, 'tsdown.config.ts')).href)) as { default: UserConfigExport }
     const factory = await loaded.default
-    const configured = typeof factory === 'function' ? await factory({ env: {} }, { ci: false }) : factory
+    const configured =
+      typeof factory === 'function'
+        ? await factory(
+            { env: {} },
+            {
+              ci: false,
+              watch: {
+                restart: () => Promise.reject(new Error('watch mode is unavailable during dependency analysis')),
+                close: () => Promise.resolve(),
+              },
+            },
+          )
+        : factory
     const configs = Array.isArray(configured) ? configured : [configured]
-    const client = configs.find(config => config.name === `${manifest.name}/client`)
+    const client = configs.find((config) => config.name === `${manifest.name}/client`)
     if (client === undefined) throw new Error(`browser notices: ${manifest.name} has no browser build config`)
     if (typeof client.inputOptions === 'function') throw new Error(`browser notices: ${manifest.name} needs resolved input options`)
     const bundle = await Rolldown.rolldown({
@@ -118,27 +136,21 @@ interface ShellConfig {
 }
 
 interface ViteApi {
-  resolveConfig(
-    config: Record<string, unknown>, command: 'build', defaultMode: string, defaultNodeEnv: string,
-  ): Promise<ShellConfig>
+  resolveConfig(config: Record<string, unknown>, command: 'build', defaultMode: string, defaultNodeEnv: string): Promise<ShellConfig>
   build(config: Record<string, unknown>): Promise<unknown>
 }
 
-async function collectShell(
-  root: string,
-  workspaceNames: ReadonlySet<string>,
-  seen: Set<string>,
-): Promise<void> {
+async function collectShell(root: string, workspaceNames: ReadonlySet<string>, seen: Set<string>): Promise<void> {
   for (const path of globSync('apps/*/vite.config.ts', { cwd: root }).sort()) {
     const dir = dirname(resolve(root, path))
     const manifest = readManifest(resolve(dir, 'package.json'))
     if (manifest.private === true || manifest.exports?.['./dist/*'] === undefined) continue
     const vitePath = createRequire(resolve(dir, 'package.json')).resolve('vite')
-    const vite = await import(pathToFileURL(vitePath).href) as ViteApi
+    const vite = (await import(pathToFileURL(vitePath).href)) as ViteApi
     const config = await vite.resolveConfig({ root: dir, logLevel: 'error' }, 'build', 'production', 'production')
     const input = config.build.rollupOptions?.input
     const entries = typeof input === 'string' ? [input] : Object.values(input ?? {})
-    const pages = entries.filter(entry => entry.endsWith('.html'))
+    const pages = entries.filter((entry) => entry.endsWith('.html'))
     if (pages.length === 0) throw new Error(`browser notices: ${manifest.name} has no HTML build entry`)
     await vite.build({
       root: dir,
@@ -175,7 +187,7 @@ export async function browserBundledExternals(root: string): Promise<Set<string>
       manifests.set(absolute, readManifest(absolute))
     }
   }
-  const names = new Set([...manifests.values()].map(manifest => manifest.name))
+  const names = new Set([...manifests.values()].map((manifest) => manifest.name))
   const seen = new Set<string>()
   await collectClientBundles(root, manifests, names, seen)
   await collectShell(root, names, seen)

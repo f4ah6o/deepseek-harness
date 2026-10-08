@@ -17,20 +17,19 @@
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 const SHEETS = ['MessageFeedbackActions', 'FeedbackDialog'] as const
-const sheets = Object.fromEntries(SHEETS.map(name => [name, readFileSync(
-  fileURLToPath(new URL(`../src/client/${name}.module.css`, import.meta.url)),
-  'utf8',
-)])) as Record<(typeof SHEETS)[number], string>
+const sheets = Object.fromEntries(
+  SHEETS.map((name) => [name, readFileSync(fileURLToPath(new URL(`../src/client/${name}.module.css`, import.meta.url)), 'utf8')]),
+) as Record<(typeof SHEETS)[number], string>
 // The theme package maps `./styles/*` to `./src/styles/*`, so the declarations
 // stay on the source plane rather than needing a build. Every theme sheet, not
 // just the platform tokens: font and scrollbar variables are declared in
 // siblings, and a gate reading one file would call their names undeclared.
 const tokens = readdirSync(fileURLToPath(new URL('../../ui-theme/src/styles/', import.meta.url)))
-  .filter(name => name.endsWith('.css'))
-  .map(name => readFileSync(fileURLToPath(new URL(`../../ui-theme/src/styles/${name}`, import.meta.url)), 'utf8'))
+  .filter((name) => name.endsWith('.css'))
+  .map((name) => readFileSync(fileURLToPath(new URL(`../../ui-theme/src/styles/${name}`, import.meta.url)), 'utf8'))
   .join('\n')
 
 /**
@@ -56,11 +55,11 @@ describe.each(SHEETS)('%s theme styles', (name) => {
     // never been written. Every theme-variable prefix the sheets actually use,
     // not just `--dsw-`: a `--dsh-` name reads as a plausible sibling and would
     // otherwise slip past into an invalid declaration.
-    const named = [...sheet.matchAll(/var\((--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)].map(match => match[1])
+    const named = [...sheet.matchAll(/var\((--(?:dsw|dsh|ds)-[a-z0-9-]+)/g)].map((match) => match[1])
     // Vacuity guard: the sheet has to actually name tokens, or the filter below
     // is satisfied by an empty list and this test proves nothing.
     expect(named.length).toBeGreaterThan(3)
-    const undeclared = [...new Set(named)].filter(token => !tokens.includes(`  ${String(token)}:`))
+    const undeclared = [...new Set(named)].filter((token) => !tokens.includes(`  ${String(token)}:`))
     expect(undeclared).toEqual([])
   })
 
@@ -89,8 +88,7 @@ describe('MessageFeedbackActions row styles', () => {
   })
 
   it('uses the tertiary label colour for recorded rating icons', () => {
-    expect(block('MessageFeedbackActions', '.action[data-active]'))
-      .toMatch(/color:\s*var\(--dsw-alias-label-tertiary\)/)
+    expect(block('MessageFeedbackActions', '.action[data-active]')).toMatch(/color:\s*var\(--dsw-alias-label-tertiary\)/)
   })
 })
 

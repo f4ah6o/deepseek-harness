@@ -6,7 +6,7 @@
  * than at the first prompt assembly.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -19,7 +19,9 @@ import { apply, Config, inject, name } from '@deepseek-ai/dsh-agent-tool-present
 
 /** A runtime that never runs anything: presentation never dispatches. */
 class StubRuntime extends PtcRuntime {
-  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec {
+    return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
+  }
 
   readonly language = 'typescript'
   readonly isolation = 'stub'
@@ -35,13 +37,15 @@ async function host(options: { runtime?: boolean } = {}) {
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime, {})
   if (options.runtime !== false) await ctx.plugin(StubRuntime)
-  ctx.tools.register(defineTool({
-    name: 'echo',
-    description: 'Echo tool.',
-    parameters: { value: { type: 'string', required: true } },
-    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
-    execute: args => Promise.resolve(args.value),
-  }))
+  ctx.tools.register(
+    defineTool({
+      name: 'echo',
+      description: 'Echo tool.',
+      parameters: { value: { type: 'string', required: true } },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: (args) => Promise.resolve(args.value),
+    }),
+  )
   return ctx
 }
 
@@ -49,9 +53,14 @@ async function host(options: { runtime?: boolean } = {}) {
 async function mount(ctx: Context, config: Config, id = 'agent') {
   const agent = { id: SessionId(id) } as Agent
   let inner!: Context
-  const fiber = ctx.plugin(Object.assign((host: Context) => {
-    inner = createScope(host, agent).ctx
-  }, { inject: ['tools', 'systemPrompt'] }))
+  const fiber = ctx.plugin(
+    Object.assign(
+      (host: Context) => {
+        inner = createScope(host, agent).ctx
+      },
+      { inject: ['tools', 'systemPrompt'] },
+    ),
+  )
   await fiber.await()
   const row = inner.plugin({ name, inject: [...inject], Config, apply }, config)
   await row.await()
@@ -73,9 +82,9 @@ describe('the tool-presentation row', () => {
     const codedAssembly = await ctx.systemPrompt.assemble({ scope: coded.agent })
     const plainAssembly = await ctx.systemPrompt.assemble({ scope: plain.agent })
 
-    expect(codedAssembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
-    expect(codedAssembly.sections.find(section => section.name === 'tools:sdk')?.text).toContain('echo')
-    expect(plainAssembly.tools.map(tool => tool.name)).toEqual(['echo'])
+    expect(codedAssembly.tools.map((tool) => tool.name)).toEqual([RUN_CODE_NAME])
+    expect(codedAssembly.sections.find((section) => section.name === 'tools:sdk')?.text).toContain('echo')
+    expect(plainAssembly.tools.map((tool) => tool.name)).toEqual(['echo'])
   })
 
   it('presents both forms when asked for both', async () => {
@@ -84,7 +93,7 @@ describe('the tool-presentation row', () => {
 
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
 
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo', RUN_CODE_NAME])
+    expect(assembly.tools.map((tool) => tool.name)).toEqual(['echo', RUN_CODE_NAME])
   })
 
   it('restores the deployment default when the agent unloads', async () => {
@@ -96,8 +105,8 @@ describe('the tool-presentation row', () => {
     // HMR safety: the preset subtree is torn down with its agent, and the
     // presentation must go with it rather than outliving the composition.
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
-    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
+    expect(assembly.tools.map((tool) => tool.name)).toEqual(['echo'])
+    expect(assembly.sections.some((section) => section.name === 'tools:sdk')).toBe(false)
   })
 
   it('waits for a PTC runtime the deployment does not compose', async () => {
@@ -110,7 +119,7 @@ describe('the tool-presentation row', () => {
     // where the operator can act, instead of at the first request.
     expect(row.ctx.get('ptcRuntime')).toBeUndefined()
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
+    expect(assembly.tools.map((tool) => tool.name)).toEqual(['echo'])
   })
 
   it('applies once the runtime arrives', async () => {
@@ -120,7 +129,7 @@ describe('the tool-presentation row', () => {
     await ctx.plugin(StubRuntime)
 
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+    expect(assembly.tools.map((tool) => tool.name)).toEqual([RUN_CODE_NAME])
   })
 
   it('requires a mode rather than defaulting one', () => {

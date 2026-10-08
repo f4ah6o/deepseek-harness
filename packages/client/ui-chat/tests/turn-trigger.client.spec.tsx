@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -13,12 +13,21 @@ afterEach(cleanup)
 
 function trigger(source: unknown): ChatNode<'turn-trigger'> {
   return {
-    key: 'input-message:notice', kind: 'turn-trigger', id: 'notice', target: 'chat',
-    anchorSeq: 4, location: { kind: 'unresolved' }, visibility: 'visible',
+    key: 'input-message:notice',
+    kind: 'turn-trigger',
+    id: 'notice',
+    target: 'chat',
+    anchorSeq: 4,
+    location: { kind: 'unresolved' },
+    visibility: 'visible',
     data: {
-      kind: 'context', seq: 4, time: 1_700_000_000_000,
+      kind: 'context',
+      seq: 4,
+      time: 1_700_000_000_000,
       content: [{ type: 'text', text: 'Recorded notification\nwith its original body.' }],
-      source, form: contextForm(source), producer: contextProducer(source),
+      source,
+      form: contextForm(source),
+      producer: contextProducer(source),
     },
   }
 }
@@ -54,8 +63,7 @@ describe('Turn trigger notices', () => {
     const view = render(<TurnTriggerNodeView node={node} t={makeTranslate(locale)} />)
     expect(view.getByRole('button').textContent).toContain(title)
     const reference = render(<IconClockOutlineRegular size={14} />)
-    expect(view.getByRole('button').querySelector('svg')?.outerHTML)
-      .toBe(reference.container.querySelector('svg')?.outerHTML)
+    expect(view.getByRole('button').querySelector('svg')?.outerHTML).toBe(reference.container.querySelector('svg')?.outerHTML)
     expect(node.data.source).toEqual({ kind: 'schedule' })
   })
 
@@ -67,20 +75,20 @@ describe('Turn trigger notices', () => {
     fireEvent.click(button)
     expect(button.getAttribute('aria-expanded')).toBe('true')
     expect(document.getElementById(button.getAttribute('aria-controls')!)).not.toBeNull()
-    expect(view.container.querySelector('[data-context-text]')?.textContent)
-      .toBe('Recorded notification\nwith its original body.')
+    expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('Recorded notification\nwith its original body.')
     fireEvent.click(button)
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(view.container.querySelector('[data-context-text]')).toBeNull()
   })
 
   it.each([null, [], 'external-source', {}, { kind: 5 }, { kind: 'webhook', provider: 5 }])(
-    'keeps an opaque source %j readable without invented attribution', (source) => {
+    'keeps an opaque source %j readable without invented attribution',
+    (source) => {
       const details = turnTriggerDetails(trigger(source).data)
       const webhook = typeof source === 'object' && source !== null && 'kind' in source && source.kind === 'webhook'
-      expect(details).toEqual(webhook
-        ? { title: 'message.trigger.webhook', icon: 'webhook' }
-        : { title: 'message.trigger.request', icon: 'request' })
+      expect(details).toEqual(
+        webhook ? { title: 'message.trigger.webhook', icon: 'webhook' } : { title: 'message.trigger.request', icon: 'request' },
+      )
     },
   )
 })

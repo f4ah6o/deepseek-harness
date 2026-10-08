@@ -1,5 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,9 +67,7 @@ function findEvent<T extends SessionEvent['type']>(
   type: T,
   position: 'first' | 'last' = 'first',
 ): Extract<SessionEvent, { type: T }> {
-  const found = position === 'first'
-    ? log.find(event => event.type === type)
-    : log.findLast(event => event.type === type)
+  const found = position === 'first' ? log.find((event) => event.type === type) : log.findLast((event) => event.type === type)
   if (!found) throw new Error(`no ${type} event in the session log`)
   return found as Extract<SessionEvent, { type: T }>
 }
@@ -77,8 +75,8 @@ function findEvent<T extends SessionEvent['type']>(
 function resultText(event: SessionEvent): string {
   if (event.type !== 'tool/result') return ''
   return event.data.message.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
     .join('')
 }
 
@@ -87,7 +85,7 @@ async function pollUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<v
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (predicate()) return
-    await new Promise(resolve => setTimeout(resolve, 20))
+    await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`condition not met within ${timeoutMs}ms`)
 }
@@ -141,13 +139,11 @@ describe('bash tool through the agent loop', () => {
 
     // The second model call saw the tool result in its derived history.
     const lastRequest = adapter.requests.at(-1)
-    const toolResultBlocks = (lastRequest?.messages ?? []).filter(message => message.role === 'tool')
+    const toolResultBlocks = (lastRequest?.messages ?? []).filter((message) => message.role === 'tool')
     expect(toolResultBlocks).toHaveLength(1)
 
     const finalMessage = findEvent(log, 'assistant/message', 'last')
-    expect(finalMessage.data.message.content.some(
-      block => block.type === 'text' && block.text.includes('integration-ok'),
-    )).toBe(true)
+    expect(finalMessage.data.message.content.some((block) => block.type === 'text' && block.text.includes('integration-ok'))).toBe(true)
   })
 
   it('foreground: non-zero exit is reported in the result text, not as isError', async () => {
@@ -198,27 +194,28 @@ describe('bash tool through the agent loop', () => {
     expect(firstResult.data.message.isError).toBe(false)
     expect(resultText(firstResult)).toBe('started background job bash-1')
     // The turn closed with the task still running, so the notice cannot exist yet.
-    const isNotice = (e: SessionEvent): e is SessionEvent<'user/message'> =>
-      e.type === 'user/message' && e.data.source.kind !== 'user'
+    const isNotice = (e: SessionEvent): e is SessionEvent<'user/message'> => e.type === 'user/message' && e.data.source.kind !== 'user'
     expect(events(agent).some(isNotice)).toBe(false)
 
     // Releasing the command now settles it against a provably idle owner. No
     // second user message: the wake alone opens the turn that collects it.
     writeFileSync(sentinel, '')
     const lastResultText = (): string => {
-      const found = events(agent).findLast(event => event.type === 'tool/result')
+      const found = events(agent).findLast((event) => event.type === 'tool/result')
       return found === undefined ? '' : resultText(found)
     }
     await pollUntil(() => events(agent).some(isNotice) && lastResultText().includes('bg-ok'))
     // Two turns: the user's, then the one the completion opened by itself.
-    expect(events(agent).filter(event => event.type === 'turn/start')).toHaveLength(2)
+    expect(events(agent).filter((event) => event.type === 'turn/start')).toHaveLength(2)
 
     // The notice carries the gated command as its label, so this pins the id,
     // the terminal status, and the producer identity; the verbatim notice text
     // and its bounding are pinned in the tool-jobs unit tests.
     const notice = events(agent).find(isNotice)!
     const noticeText = notice.data.content
-      .filter(block => block.type === 'text').map(block => block.text).join('')
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
     expect(noticeText).toContain('background job bash-1 (bash: ')
     expect(noticeText).toContain('finished [status: completed, exit code: 0]')
     expect(notice.data.source).toMatchObject({

@@ -7,7 +7,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { LAUNCHER_FAILURE_EXIT } from '@deepseek-ai/node-addon-system/landlock-run'
@@ -28,7 +28,6 @@ function start(x: { execute(spec: ShellExecSpec): Promise<ShellExecution> }, spe
   return x.execute({ ...spec, onExpiry: 'none' })
 }
 
-
 const NOTICE = 'landlock-run: partial enforcement (older Landlock ABI)'
 const FATAL_PREFIX = 'landlock-run: '
 const FATAL = `${FATAL_PREFIX}landlock ruleset error: Invalid argument`
@@ -37,8 +36,8 @@ const contexts: Context[] = []
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 /** Write a fake native launcher that reports partial enforcement, then execs or fails. */
@@ -47,7 +46,9 @@ async function fakeLauncher(fatalExit?: number): Promise<string> {
   tempDirs.push(dir)
   const launcher = join(dir, 'landlock-run')
   const fatalBranch = fatalExit === undefined ? '' : `printf '%s\\n' '${FATAL}' >&2\nexit ${fatalExit}\n`
-  await writeFile(launcher, `#!/bin/sh
+  await writeFile(
+    launcher,
+    `#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --ro|--rw) shift 2 ;;
@@ -57,7 +58,9 @@ while [ "$#" -gt 0 ]; do
 done
 printf '%s\\n' '${NOTICE}' >&2
 ${fatalBranch}exec "$@"
-`, { mode: 0o755 })
+`,
+    { mode: 0o755 },
+  )
   return launcher
 }
 
@@ -94,67 +97,65 @@ async function setupConfiguredRunner(runner: string): Promise<SandboxBashExecuto
 }
 
 describe('partial Landlock runner-failure classification', () => {
-  it.each(['missing', 'unexecutable', 'missing-interpreter'] as const)('classifies a %s configured runner through the direct spawn error channel', async (kind) => {
-    const dir = await mkdtemp(join(tmpdir(), 'dsh-unusable-sandbox-runner-'))
-    tempDirs.push(dir)
-    const runner = join(dir, `${kind}-runner`)
-    if (kind === 'unexecutable') await writeFile(runner, '#!/bin/sh\nexit 0\n', { mode: 0o644 })
-    if (kind === 'missing-interpreter') {
-      await writeFile(runner, '#!/dsh-definitely-missing-sandbox-interpreter\nexit 0\n', { mode: 0o755 })
-    }
-    const bash = await setupConfiguredRunner(runner)
-
-    const error = await run(bash, bash.resolve({ command: 'true' })).catch((value: unknown) => value)
-    expect(error).toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
-    expect(error).toBeInstanceOf(Error)
-    expect((error as Error).message).toContain(runner)
-
-    const task = (await start(bash, bash.resolve({ command: 'true' })))
-    await task.done
-    expect(task.status).toBe('killed')
-    expect(task.readOutput().delta).toContain(`subprocess failed before reporting an outcome: Error: spawn ${runner}`)
-    expect(task.sandbox).toEqual({
-      mode: 'read-only',
-      denied: false,
-      enforcement: 'full',
-      runnerFailed: true,
-    })
-    const accounting = (bash as unknown as { processFacts: Map<unknown, unknown> }).processFacts
-    expect(accounting.size).toBe(0)
-  })
-
-  it.each(['bare-name', 'relative'] as const)(
-    'classifies a %s runner whose shebang interpreter is missing',
-    async (form) => {
-      const dir = await mkdtemp(join(tmpdir(), 'dsh-argv-form-sandbox-runner-'))
+  it.each(['missing', 'unexecutable', 'missing-interpreter'] as const)(
+    'classifies a %s configured runner through the direct spawn error channel',
+    async (kind) => {
+      const dir = await mkdtemp(join(tmpdir(), 'dsh-unusable-sandbox-runner-'))
       tempDirs.push(dir)
-      const filename = 'missing-interpreter-runner'
-      const runner = form === 'bare-name' ? filename : `./${filename}`
-      await writeFile(join(dir, filename), '#!/dsh-definitely-missing-sandbox-interpreter\nexit 0\n', { mode: 0o755 })
+      const runner = join(dir, `${kind}-runner`)
+      if (kind === 'unexecutable') await writeFile(runner, '#!/bin/sh\nexit 0\n', { mode: 0o644 })
+      if (kind === 'missing-interpreter') {
+        await writeFile(runner, '#!/dsh-definitely-missing-sandbox-interpreter\nexit 0\n', { mode: 0o755 })
+      }
       const bash = await setupConfiguredRunner(runner)
-      const request = form === 'bare-name'
-        ? { command: 'true', env: { PATH: dir } }
-        : { command: 'true', workdir: dir }
 
-      const error = await run(bash, bash.resolve(request)).catch((value: unknown) => value)
+      const error = await run(bash, bash.resolve({ command: 'true' })).catch((value: unknown) => value)
       expect(error).toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
       expect(error).toBeInstanceOf(Error)
-      // Empirically, Darwin and Linux Node 24 preserve the passed bare/relative
-      // argv[0] in this spawn error rather than resolving it to an absolute path.
-      expect((error as Error).message).toContain(`spawn ${runner} ENOENT`)
+      expect((error as Error).message).toContain(runner)
 
-      const task = (await start(bash, bash.resolve(request)))
+      const task = await start(bash, bash.resolve({ command: 'true' }))
       await task.done
       expect(task.status).toBe('killed')
-      expect(task.readOutput().delta).toContain(`subprocess failed before reporting an outcome: Error: spawn ${runner} ENOENT`)
+      expect(task.readOutput().delta).toContain(`subprocess failed before reporting an outcome: Error: spawn ${runner}`)
       expect(task.sandbox).toEqual({
         mode: 'read-only',
         denied: false,
         enforcement: 'full',
         runnerFailed: true,
       })
+      const accounting = (bash as unknown as { processFacts: Map<unknown, unknown> }).processFacts
+      expect(accounting.size).toBe(0)
     },
   )
+
+  it.each(['bare-name', 'relative'] as const)('classifies a %s runner whose shebang interpreter is missing', async (form) => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-argv-form-sandbox-runner-'))
+    tempDirs.push(dir)
+    const filename = 'missing-interpreter-runner'
+    const runner = form === 'bare-name' ? filename : `./${filename}`
+    await writeFile(join(dir, filename), '#!/dsh-definitely-missing-sandbox-interpreter\nexit 0\n', { mode: 0o755 })
+    const bash = await setupConfiguredRunner(runner)
+    const request = form === 'bare-name' ? { command: 'true', env: { PATH: dir } } : { command: 'true', workdir: dir }
+
+    const error = await run(bash, bash.resolve(request)).catch((value: unknown) => value)
+    expect(error).toMatchObject({ name: 'SandboxUnavailableError', code: SANDBOX_UNAVAILABLE })
+    expect(error).toBeInstanceOf(Error)
+    // Empirically, Darwin and Linux Node 24 preserve the passed bare/relative
+    // argv[0] in this spawn error rather than resolving it to an absolute path.
+    expect((error as Error).message).toContain(`spawn ${runner} ENOENT`)
+
+    const task = await start(bash, bash.resolve(request))
+    await task.done
+    expect(task.status).toBe('killed')
+    expect(task.readOutput().delta).toContain(`subprocess failed before reporting an outcome: Error: spawn ${runner} ENOENT`)
+    expect(task.sandbox).toEqual({
+      mode: 'read-only',
+      denied: false,
+      enforcement: 'full',
+      runnerFailed: true,
+    })
+  })
 
   it('keeps a real malformed executable ordinary across no-shebang spawn behavior', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-malformed-sandbox-runner-'))
@@ -175,7 +176,7 @@ describe('partial Landlock runner-failure classification', () => {
       expect((foreground as { path?: unknown }).path).toBeUndefined()
 
       // Containment: the handle settles killed instead of the spawn throwing.
-      const background = (await start(bash, bash.resolve(request)))
+      const background = await start(bash, bash.resolve(request))
       await background.done
       expect(background.status).toBe('killed')
       const backgroundError = await background.result().catch((value: unknown) => value)
@@ -190,7 +191,7 @@ describe('partial Landlock runner-failure classification', () => {
       })
       expect((foreground as { stderr: { text: string } }).stderr.text.length).toBeGreaterThan(0)
 
-      const background = (await start(bash, bash.resolve(request)))
+      const background = await start(bash, bash.resolve(request))
       await background.done
       expect(background.status).toBe('completed')
       expect(background.exitCode).toBe(127)
@@ -252,7 +253,7 @@ describe('partial Landlock runner-failure classification', () => {
   it('applies the same evidence rule to notice-only background exits', async () => {
     const bash = await setup()
     for (const command of ['exit 1', 'exit 2', `exit ${LAUNCHER_FAILURE_EXIT}`]) {
-      const task = (await start(bash, bash.resolve({ command })))
+      const task = await start(bash, bash.resolve({ command }))
       await task.done
       expect(task.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'partial' })
       expect(task.readOutput().delta).toContain(NOTICE)
@@ -261,7 +262,7 @@ describe('partial Landlock runner-failure classification', () => {
 
   it('classifies a background notice plus child Permission denied as denial', async () => {
     const bash = await setup()
-    const task = (await start(bash, bash.resolve({ command: 'printf "%s\\n" "child: Permission denied" >&2; exit 1' })))
+    const task = await start(bash, bash.resolve({ command: 'printf "%s\\n" "child: Permission denied" >&2; exit 1' }))
     await task.done
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement: 'partial' })
     expect(task.readOutput().delta).toContain(NOTICE)
@@ -269,7 +270,7 @@ describe('partial Landlock runner-failure classification', () => {
 
   it('makes a background fatal line outrank denial text after the notice', async () => {
     const bash = await setup(LAUNCHER_FAILURE_EXIT)
-    const task = (await start(bash, bash.resolve({ command: 'true' })))
+    const task = await start(bash, bash.resolve({ command: 'true' }))
     await task.done
     expect(task.sandbox).toEqual({
       mode: 'read-only',

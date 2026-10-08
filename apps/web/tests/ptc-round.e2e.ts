@@ -5,11 +5,19 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
-  acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  acknowledgeReloadConnectionLoss,
+  captureExpandedTurnProcessAria,
+  captureStableAria,
+  compareOrRefreshGolden,
+  fixtureUserPrompts,
+  launchWebScaffold,
+  recordFixture,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -21,8 +29,9 @@ const PREPARING_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-rou
 const MODE = webSnapshotMode()
 
 // Elicits the successful and failed sub-rows this scenario asserts.
-const PROMPT = 'Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt '
-  + 'catching its error in the program. Return an object with both outcomes. Then reply DONE and stop.'
+const PROMPT =
+  'Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt ' +
+  'catching its error in the program. Return an object with both outcomes. Then reply DONE and stop.'
 
 describe('web e2e: PTC mode round renders nested sub-calls', () => {
   let scaffold: WebScaffold
@@ -38,7 +47,9 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
       compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })
-    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
+    scaffold.ctx.on('session/event', (_session, event: SessionEvent) => {
+      sessionEvents.push(event)
+    })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -62,17 +73,24 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     await input.waitFor({ timeout: 10_000 })
     const settled = scaffold.whenTurnSettled()
     const gate = Promise.withResolvers<undefined>()
-    const dispose = scaffold.ctx.on('llm/stream', async function* (_options, next) {
-      let held = false
-      for await (const chunk of next()) {
-        yield chunk
-        if (!held && chunk.type === 'tool-call-delta' && chunk.name) {
-          held = true
-          await gate.promise
+    const dispose = scaffold.ctx.on(
+      'llm/stream',
+      async function* (_options, next) {
+        let held = false
+        for await (const chunk of next()) {
+          yield chunk
+          if (!held && chunk.type === 'tool-call-delta' && chunk.name) {
+            held = true
+            await gate.promise
+          }
         }
-      }
-    }, { prepend: true })
-    releasePreparation = () => { gate.resolve(undefined); dispose() }
+      },
+      { prepend: true },
+    )
+    releasePreparation = () => {
+      gate.resolve(undefined)
+      dispose()
+    }
     const observePreparation = async () => {
       try {
         await input.fill(PROMPT)
@@ -83,7 +101,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
         await row.waitFor({ state: 'visible' })
         await row.getByText('Code', { exact: true }).waitFor()
         expect(await row.getAttribute('data-tool')).toBe('run_code')
-        expect(sessionEvents.some(event => event.type === 'tool/call')).toBe(false)
+        expect(sessionEvents.some((event) => event.type === 'tool/call')).toBe(false)
         expect(await row.getByRole('button').count()).toBe(0)
         expect(await row.locator('pre').count()).toBe(0)
         const group = row.locator('xpath=ancestor::*[@data-chat-group-key][1]')
@@ -100,47 +118,58 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   }, 200_000)
 
   it.skipIf(MODE === 'record')('the durable log carries run_code with full-content sub-dispatches', () => {
-    const calls = sessionEvents.filter(event => event.type === 'tool/call')
+    const calls = sessionEvents.filter((event) => event.type === 'tool/call')
     expect(calls.length).toBeGreaterThanOrEqual(1)
-    expect(new Set(calls.map(call => (call.data as { name: string }).name))).toEqual(new Set(['run_code']))
-    const starts = sessionEvents.filter(event => event.type === 'tool/ptc-dispatch-start')
-    const dispatches = sessionEvents.filter(event => event.type === 'tool/ptc-dispatch')
+    expect(new Set(calls.map((call) => (call.data as { name: string }).name))).toEqual(new Set(['run_code']))
+    const starts = sessionEvents.filter((event) => event.type === 'tool/ptc-dispatch-start')
+    const dispatches = sessionEvents.filter((event) => event.type === 'tool/ptc-dispatch')
     expect(dispatches.length).toBeGreaterThanOrEqual(2)
     for (const dispatch of dispatches) {
       const data = dispatch.data
-      expect(calls.some(call => call.data.callId === data.rootCallId)).toBe(true)
+      expect(calls.some((call) => call.data.callId === data.rootCallId)).toBe(true)
       expect(data.parentCallId).toBe(data.rootCallId)
-      expect(starts.filter(start => start.data.subCallId === data.subCallId)).toMatchObject([{
-        data: {
-          rootCallId: data.rootCallId,
-          parentCallId: data.parentCallId,
-          subCallId: data.subCallId,
-          name: data.name,
-          arguments: data.arguments,
+      expect(starts.filter((start) => start.data.subCallId === data.subCallId)).toMatchObject([
+        {
+          data: {
+            rootCallId: data.rootCallId,
+            parentCallId: data.parentCallId,
+            subCallId: data.subCallId,
+            name: data.name,
+            arguments: data.arguments,
+          },
         },
-      }])
+      ])
       expect(Array.isArray(data.content)).toBe(true)
       expect(typeof data.isError).toBe('boolean')
     }
-    const bash = dispatches.find(dispatch => (dispatch.data as { name: string }).name === 'bash')
+    const bash = dispatches.find((dispatch) => (dispatch.data as { name: string }).name === 'bash')
     expect(bash).toBeDefined()
     const bashContent = (bash!.data as { content: { type: string; text?: string }[] }).content
-    expect(bashContent.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('CODE_ROUND_OK')
+    expect(
+      bashContent
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join(''),
+    ).toContain('CODE_ROUND_OK')
   })
 
-  it.skipIf(MODE === 'record')('renders the code parent row with always-visible nested sub-rows', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-rows'))
-    await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
-    // The parent run_code row wears the code variant with the model-authored
-    // description as its summary (the presentCall contract).
-    const codeRow = page.locator('[data-variant="code"]').first()
-    await expandOwningTurnProcess(page, codeRow)
-    await codeRow.waitFor({ timeout: 10_000 })
-    const nest = page.locator('[data-subcalls]').first()
-    await nest.waitFor({ timeout: 10_000 })
-    expect(await nest.locator('[data-sample="bash"]').count()).toBeGreaterThanOrEqual(1)
-    expect(await nest.locator('[data-state="error"]').count()).toBeGreaterThanOrEqual(1)
-  }, 60_000)
+  it.skipIf(MODE === 'record')(
+    'renders the code parent row with always-visible nested sub-rows',
+    async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-rows'))
+      await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
+      // The parent run_code row wears the code variant with the model-authored
+      // description as its summary (the presentCall contract).
+      const codeRow = page.locator('[data-variant="code"]').first()
+      await expandOwningTurnProcess(page, codeRow)
+      await codeRow.waitFor({ timeout: 10_000 })
+      const nest = page.locator('[data-subcalls]').first()
+      await nest.waitFor({ timeout: 10_000 })
+      expect(await nest.locator('[data-sample="bash"]').count()).toBeGreaterThanOrEqual(1)
+      expect(await nest.locator('[data-state="error"]').count()).toBeGreaterThanOrEqual(1)
+    },
+    60_000,
+  )
 
   it.skipIf(MODE === 'record')('expands the nested bash terminal inline before and after reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-rightbar'))
@@ -178,18 +207,14 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-aria'))
     const row = page.locator('[data-subcalls] [data-sample="bash"]').first()
     await expandOwningTurnProcess(page, row)
-    if (await row.getAttribute('aria-expanded') !== 'true') await row.click()
-    const snapshot = await captureExpandedTurnProcessAria(
-      page,
-      '[class*="centerCol"]',
-      scaffold.workspaceCwd,
-    )
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+    const snapshot = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
   })
 
   it.skipIf(MODE === 'record')('inspects recorded PTC source, wrapping, and original JSON in the trajectory', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-inspector'))
-    const call = sessionEvents.find(event => event.type === 'tool/call' && event.data.name === 'run_code')
+    const call = sessionEvents.find((event) => event.type === 'tool/call' && event.data.name === 'run_code')
     if (call?.type !== 'tool/call') throw new Error('recorded PTC call missing')
     const args = JSON.parse(call.data.arguments) as { code: string; description: string }
     await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
@@ -197,11 +222,12 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     await row.click()
     await page.getByRole('tab', { name: 'Code', exact: true }).waitFor()
     expect(await page.getByRole('tabpanel').textContent()).toContain(args.description)
-    expect(await page.getByRole('tabpanel').locator('dl').first().locator('dt').allTextContents())
-      .toEqual(['Hierarchy', 'Status'])
-    const overview = await Promise.all([1, 2].map(index => captureStableAria(
-      page, `[role="tabpanel"] [class*="overviewSections"] > section:nth-child(${index})`, scaffold.workspaceCwd,
-    )))
+    expect(await page.getByRole('tabpanel').locator('dl').first().locator('dt').allTextContents()).toEqual(['Hierarchy', 'Status'])
+    const overview = await Promise.all(
+      [1, 2].map((index) =>
+        captureStableAria(page, `[role="tabpanel"] [class*="overviewSections"] > section:nth-child(${index})`, scaffold.workspaceCwd),
+      ),
+    )
     await compareOrRefreshGolden(TRAJECTORY_EXPECTED, overview.join('\n'), MODE)
 
     await page.getByRole('button', { name: 'Code', exact: true }).click()
@@ -211,10 +237,10 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     const wrap = page.getByRole('button', { name: 'Wrap lines', exact: true })
     expect(await wrap.getAttribute('aria-pressed')).toBe('false')
     const content = page.locator('[data-wrap]').filter({ has: source })
-    expect(await content.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    expect(await content.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
     await wrap.click()
     expect(await wrap.getAttribute('aria-pressed')).toBe('true')
-    await expect.poll(() => content.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    await expect.poll(() => content.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     const code = await captureStableAria(page, '[role="tabpanel"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(CODE_EXPECTED, code, MODE)
 

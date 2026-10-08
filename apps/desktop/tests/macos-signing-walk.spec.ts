@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 
 const builderRequire = createRequire(createRequire(import.meta.url).resolve('app-builder-lib'))
 const { walkAsync } = builderRequire(join(dirname(builderRequire.resolve('@electron/osx-sign')), 'util.js')) as {
@@ -31,6 +31,8 @@ it.skipIf(process.platform === 'win32')('signs each real Framework file once and
     symlinkSync('Versions/Current/library.dylib', join(framework, 'library.dylib'))
     const files = await walkAsync(contents)
     expect(files.sort()).toEqual([resource, library, executable, framework, helper].sort())
-    expect(new Set(files.map(file => realpathSync(file))).size).toBe(files.length)
-  } finally { rmSync(root, { recursive: true, force: true }) }
+    expect(new Set(files.map((file) => realpathSync(file))).size).toBe(files.length)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

@@ -2,10 +2,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  classifyFileType, FileTypeIcon, type CodeFileType, type FileTypeProjectContext,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { classifyFileType, FileTypeIcon, type CodeFileType, type FileTypeProjectContext } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CODE_FILE_ARTWORK, CODE_FILE_ICON_ID_TOKEN } from '../src/code-file-icon-artwork.ts'
 import { CODE_FILE_TYPES } from '../src/code-file-types.ts'
 
@@ -87,8 +85,7 @@ describe('code-file classification', () => {
 
     const view = render(<FileTypeIcon path="lib/main.dart" context={flutter} />)
     const explicit = render(<FileTypeIcon kind="flutter" />)
-    expect(normalizeCodeIconIds(view.container.innerHTML))
-      .toBe(normalizeCodeIconIds(explicit.container.innerHTML))
+    expect(normalizeCodeIconIds(view.container.innerHTML)).toBe(normalizeCodeIconIds(explicit.container.innerHTML))
   })
 
   it('keeps Markdown and SVG on the traditional file artwork', () => {
@@ -104,12 +101,12 @@ describe('full-color code-file artwork', () => {
     for (const [type, artwork] of Object.entries(CODE_FILE_ARTWORK)) {
       expect(artwork).not.toMatch(/<(?:script|style|foreignObject)\b|\son[a-z]+\s*=/iu)
       expect(artwork).not.toMatch(/(?:href|xlink:href)="(?!#)/iu)
-      const ids = [...artwork.matchAll(/\bid="([^"]+)"/gu)].map(match => match[1]!)
+      const ids = [...artwork.matchAll(/\bid="([^"]+)"/gu)].map((match) => match[1]!)
       expect(new Set(ids).size, `${type} has duplicate SVG ids`).toBe(ids.length)
       for (const id of ids) expect(id).toMatch(new RegExp(`^${CODE_FILE_ICON_ID_TOKEN}`))
       const references = [
-        ...[...artwork.matchAll(/url\(#([^)]+)\)/gu)].map(match => match[1]!),
-        ...[...artwork.matchAll(/(?:href|xlink:href)="#([^"]+)"/gu)].map(match => match[1]!),
+        ...[...artwork.matchAll(/url\(#([^)]+)\)/gu)].map((match) => match[1]!),
+        ...[...artwork.matchAll(/(?:href|xlink:href)="#([^"]+)"/gu)].map((match) => match[1]!),
       ]
       for (const reference of references) {
         expect(reference).toMatch(new RegExp(`^${CODE_FILE_ICON_ID_TOKEN}`))
@@ -126,9 +123,9 @@ describe('full-color code-file artwork', () => {
       excluded: string[]
     }
     expect(manifest.owner).toBe('DeepSeek Harness product design')
-    expect(manifest.sources.every(source => source.kind === 'internal-design-export')).toBe(true)
-    expect(manifest.sources.every(source => /^[0-9a-f]{64}$/u.test(source.sha256))).toBe(true)
-    expect(manifest.sources.flatMap(source => source.icons).sort()).toEqual([...CODE_FILE_TYPES].sort())
+    expect(manifest.sources.every((source) => source.kind === 'internal-design-export')).toBe(true)
+    expect(manifest.sources.every((source) => /^[0-9a-f]{64}$/u.test(source.sha256))).toBe(true)
+    expect(manifest.sources.flatMap((source) => source.icons).sort()).toEqual([...CODE_FILE_TYPES].sort())
     expect(manifest.excluded).toEqual(['markdown'])
   })
 
@@ -151,14 +148,18 @@ describe('full-color code-file artwork', () => {
   })
 
   it('uses instance-safe gradient ids and forwards sizing classes', () => {
-    const { container } = render(<><FileTypeIcon kind="elixir" /><FileTypeIcon kind="elixir" /></>)
-    const ids = [...container.querySelectorAll('[id]')].map(element => element.id)
+    const { container } = render(
+      <>
+        <FileTypeIcon kind="elixir" />
+        <FileTypeIcon kind="elixir" />
+      </>,
+    )
+    const ids = [...container.querySelectorAll('[id]')].map((element) => element.id)
     expect(ids.length).toBeGreaterThan(2)
     expect(new Set(ids).size).toBe(ids.length)
     expect(container.innerHTML).not.toContain(CODE_FILE_ICON_ID_TOKEN)
-    const references = [...container.querySelectorAll('*')].flatMap(element =>
-      [...element.attributes].flatMap(attribute =>
-        [...attribute.value.matchAll(/url\(#([^)]+)\)/gu)].map(match => match[1])),
+    const references = [...container.querySelectorAll('*')].flatMap((element) =>
+      [...element.attributes].flatMap((attribute) => [...attribute.value.matchAll(/url\(#([^)]+)\)/gu)].map((match) => match[1])),
     )
     expect(references.length).toBeGreaterThan(0)
     for (const reference of references) expect(ids).toContain(reference)

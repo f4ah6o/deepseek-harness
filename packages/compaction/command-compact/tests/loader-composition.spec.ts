@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -52,7 +52,7 @@ class LoaderCompactionEngine extends CompactionEngine {
   ): Promise<CompactionResult | null> {
     const operationIds = {
       compactionId: RESULT.compactionId,
-      ...sourceCommandId === undefined ? {} : { sourceCommandId },
+      ...(sourceCommandId === undefined ? {} : { sourceCommandId }),
     }
     agent.session.append('compaction/start', { ...operationIds, turn: null })
     agent.session.append('compaction/summary', {
@@ -83,12 +83,12 @@ describe('command-compact real Loader composition', () => {
   it('discovers and executes /compact through the assembled command plane', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-command-compact-loader-'))
     const configPath = join(root, 'cordis.yml')
-    await writeFile(configPath, [
-      "- name: '@deepseek-ai/dsh-commands'",
-      "- name: '@test/compact-backend'",
-      "- name: '@deepseek-ai/dsh-command-compact'",
-      '',
-    ].join('\n'))
+    await writeFile(
+      configPath,
+      ["- name: '@deepseek-ai/dsh-commands'", "- name: '@test/compact-backend'", "- name: '@deepseek-ai/dsh-command-compact'", ''].join(
+        '\n',
+      ),
+    )
 
     context = new Context()
     context.baseUrl = pathToFileURL(root).href + '/'
@@ -131,7 +131,7 @@ describe('command-compact real Loader composition', () => {
       text: 'Compacted 3 history items (~99 tokens).',
       sourceEventSeq: RESULT.summarySeq,
     })
-    expect(session.snapshotEvents().map(event => ({ type: event.type, data: event.data }))).toEqual([
+    expect(session.snapshotEvents().map((event) => ({ type: event.type, data: event.data }))).toEqual([
       {
         type: 'command/run',
         data: {

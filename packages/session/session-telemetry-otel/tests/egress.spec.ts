@@ -4,7 +4,7 @@ import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { recordFeedback } from '@deepseek-ai/dsh-command-feedback'
 import { Context } from '@deepseek-ai/cordis'
@@ -41,26 +41,33 @@ beforeAll(async () => {
     socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
   })
   proxyUrl = await listen(proxy)
-  const loopbackUrl = await listen(createServer((request, response) => {
-    const chunks: Buffer[] = []
-    request.on('data', chunk => chunks.push(chunk as Buffer))
-    request.on('end', () => {
-      captures.push(Buffer.concat(chunks).toString())
-      response.writeHead(200, { 'content-type': 'application/json' }).end('{}')
-    })
-  }))
+  const loopbackUrl = await listen(
+    createServer((request, response) => {
+      const chunks: Buffer[] = []
+      request.on('data', (chunk) => chunks.push(chunk as Buffer))
+      request.on('end', () => {
+        captures.push(Buffer.concat(chunks).toString())
+        response.writeHead(200, { 'content-type': 'application/json' }).end('{}')
+      })
+    }),
+  )
   collectorUrl = loopbackUrl.replace('127.0.0.1', 'otel-direct.invalid')
 })
 
 afterAll(async () => {
   try {
-    await Promise.all(servers.map(server => new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error === undefined) resolve()
-        else reject(error)
-      })
-      server.closeAllConnections()
-    })))
+    await Promise.all(
+      servers.map(
+        (server) =>
+          new Promise<void>((resolve, reject) => {
+            server.close((error) => {
+              if (error === undefined) resolve()
+              else reject(error)
+            })
+            server.closeAllConnections()
+          }),
+      ),
+    )
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
@@ -70,7 +77,7 @@ afterAll(async () => {
 
 /** The launch environment of a user who exported one proxy for both schemes. */
 function proxyEnv(): { get(name: string): { value: string } | undefined } {
-  return { get: name => (name === 'HTTP_PROXY' || name === 'HTTPS_PROXY' ? { value: proxyUrl } : undefined) }
+  return { get: (name) => (name === 'HTTP_PROXY' || name === 'HTTPS_PROXY' ? { value: proxyUrl } : undefined) }
 }
 
 describe('session-telemetry-otel egress', () => {

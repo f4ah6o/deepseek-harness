@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * The packer ships TWO entries: the library (`index`) and the `dsh-pack-vfs-image`
@@ -7,6 +7,9 @@ import { defineConfig } from 'tsdown'
  * Declarations come from `tsc -b` (dts: false), matching every package.
  */
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: ['lib/types/index.js', 'lib/types/bin.js'],
   outDir: 'lib',
   format: ['esm'],

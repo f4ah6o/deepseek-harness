@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import {
   DESKTOP_BUILD_COMMIT_ENV,
   DESKTOP_BUILD_DIRTY_ENV,
@@ -26,8 +26,7 @@ describe('desktop build commit', () => {
 
   it('round-trips a commit and its tree state through a child environment', () => {
     for (const dirty of [true, false]) {
-      expect(resolveDesktopBuildCommit(desktopBuildCommitEnvironment({ commit: COMMIT, dirty })))
-        .toEqual({ commit: COMMIT, dirty })
+      expect(resolveDesktopBuildCommit(desktopBuildCommitEnvironment({ commit: COMMIT, dirty }))).toEqual({ commit: COMMIT, dirty })
     }
   })
 
@@ -36,8 +35,9 @@ describe('desktop build commit', () => {
   })
 
   it('rejects a tree state that is neither 0 nor 1', () => {
-    expect(() => resolveDesktopBuildCommit({ [DESKTOP_BUILD_COMMIT_ENV]: COMMIT, [DESKTOP_BUILD_DIRTY_ENV]: 'yes' }))
-      .toThrow(/must be 0 or 1/u)
+    expect(() => resolveDesktopBuildCommit({ [DESKTOP_BUILD_COMMIT_ENV]: COMMIT, [DESKTOP_BUILD_DIRTY_ENV]: 'yes' })).toThrow(
+      /must be 0 or 1/u,
+    )
   })
 
   it('reads the checkout this repository is in', () => {
@@ -59,18 +59,17 @@ describe('desktop toolchain preflight', () => {
     try {
       Object.assign(process.env, { PATH: empty, Path: empty })
       const failures = await probeDesktopToolchain('darwin', {})
-      expect(failures.map(failure => failure.tool)).toEqual(['tar'])
+      expect(failures.map((failure) => failure.tool)).toEqual(['tar'])
       expect(failures[0]?.detail).not.toBe('')
-    }
-    finally {
+    } finally {
       Object.assign(process.env, saved)
     }
   })
 
   it('reports the Windows installer compiler when the host cannot locate Visual Studio', async () => {
     const failures = await probeDesktopToolchain('win32', {})
-    expect(failures.map(failure => failure.tool)).toContain('vswhere')
-    expect(failures.find(failure => failure.tool === 'vswhere')?.detail).toContain('ProgramFiles(x86)')
+    expect(failures.map((failure) => failure.tool)).toContain('vswhere')
+    expect(failures.find((failure) => failure.tool === 'vswhere')?.detail).toContain('ProgramFiles(x86)')
   })
 
   it('writes nothing into the working directory while probing', async () => {
@@ -78,6 +77,6 @@ describe('desktop toolchain preflight', () => {
     directories.push(directory)
     await writeFile(join(directory, 'sentinel'), '')
     await probeDesktopToolchain('darwin', {})
-    expect(await import('node:fs/promises').then(async fs => fs.readdir(directory))).toEqual(['sentinel'])
+    expect(await import('node:fs/promises').then(async (fs) => fs.readdir(directory))).toEqual(['sentinel'])
   })
 })

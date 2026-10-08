@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
 /** The theme bootstrap injection row and the resulting pre-plugin browser theme. */
 import { runInNewContext } from 'node:vm'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { bootThemeInjections } from '../src/boot-theme.ts'
 import type { ThemePreference } from '../src/theme-settings.ts'
 
 const DARK_ATTRIBUTE = 'data-ds-dark-theme'
 
 function mockSystemDark(matches: boolean): void {
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches }) as MediaQueryList))
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({ matches }) as MediaQueryList),
+  )
 }
 
 function executeBootstrap(preference?: ThemePreference, fontSize?: number): void {
@@ -64,8 +67,8 @@ describe('theme bootstrap row', () => {
     const [head] = bootThemeInjections('system')
     if (head?.kind !== 'style') throw new Error('theme head bootstrap row is not a style')
     expect(head.text).toBe(
-      ':root{color-scheme:light}body{background-color:#fff;--dsh-boot-bg:#fff}'
-      + '@media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background-color:#151517;--dsh-boot-bg:#151517}}',
+      ':root{color-scheme:light}body{background-color:#fff;--dsh-boot-bg:#fff}' +
+        '@media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background-color:#151517;--dsh-boot-bg:#151517}}',
     )
   })
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { DraftSnapshot } from '../src/client/contract/draft-editor.ts'
 import { createConversationStore, readConversationDraft, readConversationViewPreference } from '../src/client/stores.ts'
@@ -76,9 +76,15 @@ describe('createConversationStore', () => {
     const sessionId = 'structured' as SessionId
     const draft: DraftSnapshot = {
       text: '🙂 @file @file',
-      references: [3, 9].map(offset => ({
-        source: 'reference', ref: '@file', label: 'file', appearance: 'file',
-        clipboardText: '@file', offset, length: 5, invalid: true,
+      references: [3, 9].map((offset) => ({
+        source: 'reference',
+        ref: '@file',
+        label: 'file',
+        appearance: 'file',
+        clipboardText: '@file',
+        offset,
+        length: 5,
+        invalid: true,
       })),
     }
     const store = createConversationStore().create(sessionId)
@@ -86,7 +92,9 @@ describe('createConversationStore', () => {
     store.actions.setView('trajectory')
 
     expect(JSON.parse(localStorage.getItem(`${KEY}.${sessionId}`)!)).toEqual({
-      draft, view: 'trajectory', viewRequest: null,
+      draft,
+      view: 'trajectory',
+      viewRequest: null,
     })
     expect(readConversationDraft(sessionId)).toEqual(draft)
     expect(createConversationStore().create(sessionId).getSnapshot().draft).toEqual(draft)
@@ -118,9 +126,19 @@ describe('createConversationStore', () => {
     null,
     42,
     { text: 'missing references' },
-    { text: '@entry', references: [{
-      source: 'reference', ref: '@entry', label: 'entry', clipboardText: '@entry', offset: 1, length: 6,
-    }] },
+    {
+      text: '@entry',
+      references: [
+        {
+          source: 'reference',
+          ref: '@entry',
+          label: 'entry',
+          clipboardText: '@entry',
+          offset: 1,
+          length: 6,
+        },
+      ],
+    },
   ])('ignores an invalid saved draft while retaining a usable View: %j', (draft) => {
     const sessionId = 'invalid-draft' as SessionId
     localStorage.setItem(`${KEY}.${sessionId}`, JSON.stringify({ draft, view: 'chat' }))
@@ -147,7 +165,9 @@ describe('createConversationStore', () => {
       const sessionId = 'unavailable' as SessionId
       expect(readConversationDraft(sessionId)).toEqual({ text: '', references: [] })
       expect(readConversationViewPreference(sessionId)).toBeNull()
-    } finally { vi.unstubAllGlobals() }
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('returns empty preferences when browser storage denies access', () => {
@@ -159,6 +179,8 @@ describe('createConversationStore', () => {
       expect(readConversationDraft(sessionId)).toEqual({ text: '', references: [] })
       expect(readConversationViewPreference(sessionId)).toBeNull()
       expect(read.mock.calls).toEqual([[`${KEY}.${sessionId}`], [`${KEY}.${sessionId}`]])
-    } finally { read.mockRestore() }
+    } finally {
+      read.mockRestore()
+    }
   })
 })

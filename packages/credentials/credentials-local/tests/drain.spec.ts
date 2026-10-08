@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,7 +23,7 @@ vi.mock('@deepseek-ai/dsh-atomic-write', async (importOriginal) => {
 })
 
 async function setGate(next: Promise<void>): Promise<void> {
-  const mocked = await import('@deepseek-ai/dsh-atomic-write') as unknown as { __setGate: (next: Promise<void>) => void }
+  const mocked = (await import('@deepseek-ai/dsh-atomic-write')) as unknown as { __setGate: (next: Promise<void>) => void }
   mocked.__setGate(next)
 }
 
@@ -49,19 +49,21 @@ describe('write-drain teardown', () => {
     const service = ctx.credentials
 
     let release!: () => void
-    await setGate(new Promise<void>((resolveGate) => {
-      release = resolveGate
-    }))
+    await setGate(
+      new Promise<void>((resolveGate) => {
+        release = resolveGate
+      }),
+    )
     const first = service.set(KEY, 'one')
     // Let the first task pass its liveness checks and park on the gate, so it
     // is genuinely in-flight when disposal begins.
-    await new Promise(resolvePause => setTimeout(resolvePause, 5))
+    await new Promise((resolvePause) => setTimeout(resolvePause, 5))
     // Attach the rejection handler up front: the queued write fails while the
     // drain is still awaited, before any later `await expect` could run.
     const secondRejects = expect(service.set(OTHER, 'two')).rejects.toThrow(/disposed before the queued/)
     const disposal = fiber.dispose()
     // Give the drain disposer its first turn (set closed) before opening the gate.
-    await new Promise(resolvePause => setTimeout(resolvePause, 10))
+    await new Promise((resolvePause) => setTimeout(resolvePause, 10))
     release()
     await disposal
 
@@ -80,16 +82,19 @@ describe('write-drain teardown', () => {
     const service = ctx.credentials
 
     let release!: () => void
-    await setGate(new Promise<void>((resolveGate) => {
-      release = resolveGate
-    }))
+    await setGate(
+      new Promise<void>((resolveGate) => {
+        release = resolveGate
+      }),
+    )
     const first = service.modifyRecord(RECORD, () => Promise.resolve({ kind: 'grant', payload: { v: 1 } }))
-    await new Promise(resolvePause => setTimeout(resolvePause, 5))
-    const queuedModify = expect(service.modifyRecord(OTHER_RECORD, () => Promise.resolve({ kind: 'api-key' })))
-      .rejects.toThrow(/disposed before the queued/)
+    await new Promise((resolvePause) => setTimeout(resolvePause, 5))
+    const queuedModify = expect(service.modifyRecord(OTHER_RECORD, () => Promise.resolve({ kind: 'api-key' }))).rejects.toThrow(
+      /disposed before the queued/,
+    )
     const queuedDelete = expect(service.deleteRecord(OTHER_RECORD)).rejects.toThrow(/disposed before the queued/)
     const disposal = fiber.dispose()
-    await new Promise(resolvePause => setTimeout(resolvePause, 10))
+    await new Promise((resolvePause) => setTimeout(resolvePause, 10))
     release()
     await disposal
 

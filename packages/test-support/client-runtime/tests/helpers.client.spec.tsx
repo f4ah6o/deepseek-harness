@@ -7,14 +7,8 @@ import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversa
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { MainPanelId, PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  bindSnapshotSelector,
-  chatSnapshot,
-  conversationSnapshot,
-  SlotTestRuntime,
-  usePinnedBrowserLanguages,
-} from '../src/index.ts'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { bindSnapshotSelector, chatSnapshot, conversationSnapshot, SlotTestRuntime, usePinnedBrowserLanguages } from '../src/index.ts'
 
 const originalLanguages = [...navigator.languages]
 const originalLanguage = navigator.language
@@ -57,8 +51,7 @@ describe('fixture helpers', () => {
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
       for (const key of ['workspaces', 'panelInfo'] as const) {
-        expect(() => runtime.slots.provideRoot({ hooks: { [key]: hooks[key] } }))
-          .toThrow(`duplicate root standard hook '${key}'`)
+        expect(() => runtime.slots.provideRoot({ hooks: { [key]: hooks[key] } })).toThrow(`duplicate root standard hook '${key}'`)
       }
     } finally {
       try {
@@ -75,13 +68,16 @@ describe('fixture helpers', () => {
     const runtime = await SlotTestRuntime.create()
     try {
       await runtime.declare({ 'trt.panel-info': { kind: 'keyed', scope: 'root' } })
-      runtime.slots.register({ name: 'trt.panel-info', key: 'probe' },
-        ({ usePanelInfo, label }: PropsRuntime<'trt.panel-info'>) => (
-          <span>{label}:{usePanelInfo(info => info.activePanelId) ?? 'conversation'}</span>
-        ))
+      runtime.slots.register({ name: 'trt.panel-info', key: 'probe' }, ({ usePanelInfo, label }: PropsRuntime<'trt.panel-info'>) => (
+        <span>
+          {label}:{usePanelInfo((info) => info.activePanelId) ?? 'conversation'}
+        </span>
+      ))
       const view = runtime.renderSlot('trt.panel-info', { label: 'first' }, { entryKey: 'probe' })
       expect(view.container.textContent).toBe('first:conversation')
-      act(() => { runtime.panelInfo.set({ activePanelId: 'custom' as MainPanelId }) })
+      act(() => {
+        runtime.panelInfo.set({ activePanelId: 'custom' as MainPanelId })
+      })
       expect(view.container.textContent).toBe('first:custom')
       view.update({ label: 'next' })
       expect(view.container.textContent).toBe('next:custom')
@@ -90,7 +86,9 @@ describe('fixture helpers', () => {
         runtime.releasePanelInfoSource()
         await runtime.mount({
           inject: ['slots'],
-          apply(ctx) { ctx.slots.provideRoot({ hooks: { panelInfo: replacement } }) },
+          apply(ctx) {
+            ctx.slots.provideRoot({ hooks: { panelInfo: replacement } })
+          },
         })
       })
       expect(view.container.textContent).toBe('next:conversation')
@@ -122,10 +120,14 @@ describe('fixture helpers', () => {
   it('binds an observable snapshot through the production selector hook', () => {
     const source = createSnapshotStore({ value: 1 })
     const useValue = bindSnapshotSelector(source)
-    const view = renderHook(() => useValue(snapshot => snapshot.value))
+    const view = renderHook(() => useValue((snapshot) => snapshot.value))
     expect(view.result.current).toBe(1)
 
-    act(() => { source.update((draft) => { draft.value = 2 }) })
+    act(() => {
+      source.update((draft) => {
+        draft.value = 2
+      })
+    })
     expect(view.result.current).toBe(2)
   })
 

@@ -6,7 +6,7 @@ import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentResult } from '@deepseek-ai/dsh-subagent'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent } from './setup.ts'
 
@@ -22,12 +22,16 @@ class ControlledRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs === undefined ? 120_000 : request.timeoutMs }
   }
 
-  run(spec: PtcRunSpec): Promise<PtcRunResult> { return this.execute(spec) }
+  run(spec: PtcRunSpec): Promise<PtcRunResult> {
+    return this.execute(spec)
+  }
 }
 
 async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Promise<PtcRunResult>, language = 'typescript') {
   const ctx = new Context()
-  onTestFinished(async () => { await ctx.fiber.dispose() })
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+  })
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode: 'read-only' })
@@ -46,12 +50,15 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
   await ctx.plugin(ControlledRuntime)
   const runtime = ctx.ptcRuntime as ControlledRuntime
   runtime.language = language
-  if (execute !== undefined) runtime.execute = spec => execute(spec.bindings[0]!.functions, spec)
+  if (execute !== undefined) runtime.execute = (spec) => execute(spec.bindings[0]!.functions, spec)
   await ctx.plugin(PtcWorkflowEngine, { provider: 'stub' })
   const parent = fakeParent(ctx)
-  const start = () => ctx.workflowEngine.start({
-    script: 'return null', meta: { name: 'host-test', description: 'workflow callbacks' }, parent,
-  })
+  const start = () =>
+    ctx.workflowEngine.start({
+      script: 'return null',
+      meta: { name: 'host-test', description: 'workflow callbacks' },
+      parent,
+    })
   return { ctx, runtime, start, parent }
 }
 
@@ -75,8 +82,11 @@ describe('workflow host callback validation', () => {
       return completed
     })
     const handle = start()
-    try { expect((await handle.result).stopReason).toBe('completed') }
-    finally { await handle.dispose() }
+    try {
+      expect((await handle.result).stopReason).toBe('completed')
+    } finally {
+      await handle.dispose()
+    }
   })
 
   it('does not emit duplicate agent-end notifications', async () => {
@@ -93,7 +103,9 @@ describe('workflow host callback validation', () => {
     try {
       expect((await handle.result).stopReason).toBe('completed')
       expect(ended).toHaveBeenCalledOnce()
-    } finally { await handle.dispose() }
+    } finally {
+      await handle.dispose()
+    }
   })
 
   it('carries Session authority and an explicit unlimited deadline to the runtime', async () => {
@@ -105,8 +117,11 @@ describe('workflow host callback validation', () => {
       return completed
     })
     const handle = start()
-    try { expect((await handle.result).stopReason).toBe('completed') }
-    finally { await handle.dispose() }
+    try {
+      expect((await handle.result).stopReason).toBe('completed')
+    } finally {
+      await handle.dispose()
+    }
   })
 })
 
@@ -124,13 +139,18 @@ describe('workflow runtime outcomes', () => {
       const result = await handle.result
       expect(result.stopReason).toBe('error')
       expect(result.error).toContain(message)
-    } finally { await handle.dispose() }
+    } finally {
+      await handle.dispose()
+    }
   })
 
   it('preserves cancellation when the runtime rejects during cancellation', async () => {
     const entered = Promise.withResolvers<undefined>()
     const failure = Promise.withResolvers<PtcRunResult>()
-    const { start } = await setup(() => { entered.resolve(undefined); return failure.promise })
+    const { start } = await setup(() => {
+      entered.resolve(undefined)
+      return failure.promise
+    })
     const handle = start()
     try {
       await entered.promise
@@ -160,13 +180,18 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     vi.spyOn(ctx.subagents.getProvider('stub')!, 'start').mockResolvedValue({
-      id: SessionId('output-pending'), localAgent: undefined, result: childResult.promise, dispose: disposed,
+      id: SessionId('output-pending'),
+      localAgent: undefined,
+      result: childResult.promise,
+      dispose: disposed,
     })
     const handle = start()
     let settled = false
-    void handle.result.then(() => { settled = true })
+    void handle.result.then(() => {
+      settled = true
+    })
     try {
-      await new Promise(resolve => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
       expect(settled).toBe(true)
       expect(disposed).toHaveBeenCalledOnce()
       await expect(outputWait).rejects.toBe('workflow settled')

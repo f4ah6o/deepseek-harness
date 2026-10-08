@@ -9,11 +9,19 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import {
-  acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
-  WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_COPY, WELCOME_NOTICE_SETTINGS_NAMESPACE,
+  acknowledgeReloadConnectionLoss,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
+  WELCOME_NOTICE_ACK_FIELD,
+  WELCOME_NOTICE_COPY,
+  WELCOME_NOTICE_SETTINGS_NAMESPACE,
   WELCOME_NOTICE_VERSION,
 } from './scaffold.ts'
 import { openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
@@ -38,7 +46,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     // The scenario asserts the shipped Chinese copy, so the browser asks for it.
     page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: ZH_BROWSER_LOCALE })
     tripwire = watchConsole(page)
-    page.on('console', message => browserConsole.push(message.text()))
+    page.on('console', (message) => browserConsole.push(message.text()))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
@@ -52,13 +60,11 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     onTestFailed(() => saveFailureShot(page, 'web-e2e-onboarding-deepseek-config'))
     const welcome = page.getByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title })
     await welcome.waitFor({ timeout: 15_000 })
-    expect(await page.locator('#root').evaluate(root => (root as HTMLElement).inert)).toBe(true)
+    expect(await page.locator('#root').evaluate((root) => (root as HTMLElement).inert)).toBe(true)
     for (const paragraph of WELCOME_NOTICE_COPY.zh.body.split('\n\n')) {
       expect(await welcome.getByText(paragraph, { exact: true }).count()).toBe(1)
     }
-    expect(await welcome.getByRole('button').allTextContents()).toEqual([
-      WELCOME_NOTICE_COPY.zh.continueLabel,
-    ])
+    expect(await welcome.getByRole('button').allTextContents()).toEqual([WELCOME_NOTICE_COPY.zh.continueLabel])
     const welcomeAria = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(WELCOME_EXPECTED, welcomeAria, MODE)
 
@@ -85,13 +91,13 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     await keyInput.fill(secret)
     await credentialStep.getByRole('button', { name: '保存并继续' }).click()
     await credentialStep.waitFor({ state: 'detached', timeout: 15_000 })
-    expect(await page.locator('#root').evaluate(root => (root as HTMLElement).inert)).toBe(false)
+    expect(await page.locator('#root').evaluate((root) => (root as HTMLElement).inert)).toBe(false)
 
     const stored = await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8')
     expect(stored.includes(`DEEPSEEK_API_KEY: ${secret}`)).toBe(true)
     expect((await page.content()).includes(secret)).toBe(false)
     expect((await page.locator('body').ariaSnapshot()).includes(secret)).toBe(false)
-    expect(browserConsole.some(line => line.includes(secret))).toBe(false)
+    expect(browserConsole.some((line) => line.includes(secret))).toBe(false)
 
     const acknowledgedSettings = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(acknowledgedSettings).toContain(`${WELCOME_NOTICE_ACK_FIELD}: ${WELCOME_NOTICE_VERSION}`)
@@ -107,10 +113,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     await deepSeekRow.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
     const configuredInput = settings.getByLabel('API 密钥', { exact: true })
     await configuredInput.waitFor({ timeout: 10_000 })
-    await expect.poll(
-      () => configuredInput.getAttribute('placeholder'),
-      { timeout: 10_000 },
-    ).toBe('已配置——输入新值可替换')
+    await expect.poll(() => configuredInput.getAttribute('placeholder'), { timeout: 10_000 }).toBe('已配置——输入新值可替换')
 
     const secondReloadWarnings = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
@@ -121,9 +124,13 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
 
     // An old acknowledgement means materially revised copy: welcome returns,
     // while the already-configured provider step remains complete.
-    await scaffold.ctx.settings.mutate(WELCOME_NOTICE_SETTINGS_NAMESPACE, [{
-      op: 'set', path: [WELCOME_NOTICE_ACK_FIELD], value: 'previous-copy-version',
-    }])
+    await scaffold.ctx.settings.mutate(WELCOME_NOTICE_SETTINGS_NAMESPACE, [
+      {
+        op: 'set',
+        path: [WELCOME_NOTICE_ACK_FIELD],
+        value: 'previous-copy-version',
+      },
+    ])
     const thirdReloadWarnings = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, thirdReloadWarnings)
@@ -134,7 +141,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
 
     expect((await page.content()).includes(secret)).toBe(false)
     expect((await page.locator('body').ariaSnapshot()).includes(secret)).toBe(false)
-    expect(browserConsole.some(line => line.includes(secret))).toBe(false)
+    expect(browserConsole.some((line) => line.includes(secret))).toBe(false)
     expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
@@ -156,11 +163,13 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       const sightings: string[] = []
       ;(window as unknown as { __takeoverSightings: string[] }).__takeoverSightings = sightings
       setInterval(() => {
-        if (document.querySelector(
-          '[role="dialog"][aria-label="预览版说明"], '
-          + '[role="dialog"][aria-label="开始你的创作"], '
-          + '[role="dialog"][aria-label="添加一个 API Key 开始使用"]',
-        ) !== null) {
+        if (
+          document.querySelector(
+            '[role="dialog"][aria-label="预览版说明"], ' +
+              '[role="dialog"][aria-label="开始你的创作"], ' +
+              '[role="dialog"][aria-label="添加一个 API Key 开始使用"]',
+          ) !== null
+        ) {
           sightings.push('chrome')
         }
         if (document.getElementById('root')?.inert === true) sightings.push('inert')
@@ -176,7 +185,10 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       for (const resolve of heldRoutes.splice(0)) resolve()
     }
     await page.route('**/api/settings/describe', async (route) => {
-      if (!released) await new Promise<void>((resolve) => { heldRoutes.push(resolve) })
+      if (!released)
+        await new Promise<void>((resolve) => {
+          heldRoutes.push(resolve)
+        })
       await route.continue()
     })
     const warningsBefore = tripwire.warnings.length
@@ -188,8 +200,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     await page.waitForTimeout(400)
     await page.unroute('**/api/settings/describe')
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)
-    expect(await page.evaluate(() =>
-      (window as unknown as { __takeoverSightings: string[] }).__takeoverSightings)).toEqual([])
+    expect(await page.evaluate(() => (window as unknown as { __takeoverSightings: string[] }).__takeoverSightings)).toEqual([])
     expect(await page.getByRole('dialog', { name: WELCOME_NOTICE_COPY.zh.title }).count()).toBe(0)
     expect(await page.getByRole('dialog', { name: '添加一个 API Key 开始使用' }).count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
@@ -228,15 +239,21 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     expect(savedDefaults).toContain('- text')
     expect(savedDefaults).toContain('systemPromptUpdate: in-history')
     await expect(scaffold.ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-flash')).resolves.toMatchObject({
-      name: 'Configured Flash', inputModalities: ['text'], systemPromptUpdate: 'in-history',
+      name: 'Configured Flash',
+      inputModalities: ['text'],
+      systemPromptUpdate: 'in-history',
     })
     await expect(scaffold.ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-v4-pro')).resolves.toMatchObject({
-      name: 'DeepSeek-V4-Pro', inputModalities: ['text'],
+      name: 'DeepSeek-V4-Pro',
+      inputModalities: ['text'],
     })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
     await settings.getByText('自定义设置').click()
     for (let index = 0; index < 2; index++) {
-      await settings.getByRole('button', { name: /删除模型/ }).first().click()
+      await settings
+        .getByRole('button', { name: /删除模型/ })
+        .first()
+        .click()
     }
     await settings.getByRole('button', { name: '添加模型', exact: true }).click()
     const customModelId = settings.getByLabel('模型 ID 1')
@@ -248,10 +265,9 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
 
-    await expect.poll(
-      () => settings.getByLabel('API 密钥', { exact: true }).getAttribute('placeholder'),
-      { timeout: 10_000 },
-    ).toBe('已配置——输入新值可替换')
+    await expect
+      .poll(() => settings.getByLabel('API 密钥', { exact: true }).getAttribute('placeholder'), { timeout: 10_000 })
+      .toBe('已配置——输入新值可替换')
     const modelEditor = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MODELS_EXPECTED, modelEditor, MODE)
     await settings.getByRole('button', { name: '保存', exact: true }).click()
@@ -289,9 +305,11 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
   }, 60_000)
 
   it('keeps the fixture inventory closed', async () => {
-    await assertFixtureInventory(
-      SNAPSHOT_DIR,
-      ['welcome.expected.md', 'missing.expected.md', 'models.expected.md', 'default-models.expected.md'],
-    )
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'welcome.expected.md',
+      'missing.expected.md',
+      'models.expected.md',
+      'default-models.expected.md',
+    ])
   })
 })

@@ -1,8 +1,6 @@
 /** Test doubles for settings transport. */
-import { vi } from 'vitest'
-import type {
-  ConfigForm, ConfigFormSnapshot,
-} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { vi } from 'vite-plus/test'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** Handle over one stubbed scope: the scope, its write spy, and publication controls. */
 export interface StubConfigForm<T> {
@@ -31,8 +29,13 @@ export interface StubConfigForm<T> {
  */
 export function stubConfigForm<T>(): StubConfigForm<T> {
   let snapshot: ConfigFormSnapshot<T> = {
-    status: 'loading', value: undefined, base: undefined, user: undefined,
-    revision: undefined, writable: false, mode: 'host',
+    status: 'loading',
+    value: undefined,
+    base: undefined,
+    user: undefined,
+    revision: undefined,
+    writable: false,
+    mode: 'host',
   }
   const listeners = new Set<() => void>()
   const set = vi.fn(() => Promise.resolve(true))
@@ -43,7 +46,9 @@ export function stubConfigForm<T>(): StubConfigForm<T> {
       getSnapshot: () => snapshot,
       subscribe: (listener) => {
         listeners.add(listener)
-        return () => { listeners.delete(listener) }
+        return () => {
+          listeners.delete(listener)
+        }
       },
       mutate,
       set,

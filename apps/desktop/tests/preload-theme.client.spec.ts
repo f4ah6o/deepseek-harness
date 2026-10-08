@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { DESKTOP_IPC } from '../src/ipc.ts'
 import { syncNativeTheme } from '../src/preload-theme.ts'
 
@@ -34,7 +34,9 @@ it.each(['darwin', 'win32'] as const)('mirrors the application theme source on %
   syncNativeTheme()
   expect(send).toHaveBeenCalledExactlyOnceWith(DESKTOP_IPC.nativeThemeSet, 'dark')
   document.documentElement.setAttribute('data-ds-theme-source', 'system')
-  await vi.waitFor(() => { expect(send).toHaveBeenLastCalledWith(DESKTOP_IPC.nativeThemeSet, 'system') })
+  await vi.waitFor(() => {
+    expect(send).toHaveBeenLastCalledWith(DESKTOP_IPC.nativeThemeSet, 'system')
+  })
   expect(send).toHaveBeenCalledTimes(2)
 })
 

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { countUnknownCasts, findUnknownCasts, scanUnknownCasts, verifyNoUnknownCasts } from './verify-no-unknown-casts.ts'
 
 const roots: string[] = []
@@ -28,7 +28,7 @@ function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-unknown-casts-'))
   roots.push(root)
   git(root, 'init', '--quiet')
-  for (const area of ['packages', 'apps', 'scripts', 'website']) {
+  for (const area of ['packages', 'apps', 'scripts']) {
     write(root, `${area}/seed.ts`, 'export {}\n')
   }
   write(root, baselinePath, '{}\n')
@@ -100,9 +100,10 @@ describe('unknown assertion syntax', () => {
   it('keeps syntax fingerprints through whitespace and comment edits', () => {
     const original = findUnknownCasts('input.ts', 'call(value, "text") as unknown')
     const formatted = findUnknownCasts('input.ts', '\ncall /* call */ (value,\n "text") as /* type */ unknown')
-    expect(formatted.map(cast => cast.fingerprint)).toEqual(original.map(cast => cast.fingerprint))
-    expect(findUnknownCasts('input.ts', 'call(value, "other") as unknown').map(cast => cast.fingerprint))
-      .not.toEqual(original.map(cast => cast.fingerprint))
+    expect(formatted.map((cast) => cast.fingerprint)).toEqual(original.map((cast) => cast.fingerprint))
+    expect(findUnknownCasts('input.ts', 'call(value, "other") as unknown').map((cast) => cast.fingerprint)).not.toEqual(
+      original.map((cast) => cast.fingerprint),
+    )
   })
 
   it.each([
@@ -159,9 +160,7 @@ describe('unknown assertion inventory', () => {
     unlinkSync(join(root, 'apps/retired.ts'))
     expect(() => verifyNoUnknownCasts(root)).toThrow(/remove retired baseline entries/u)
     expect(verifyNoUnknownCasts(root, true)).toBe(1)
-    expect(JSON.parse(readFileSync(join(root, baselinePath), 'utf8'))).toEqual(
-      countUnknownCasts(findUnknownCasts(sourcePath, assertion)),
-    )
+    expect(JSON.parse(readFileSync(join(root, baselinePath), 'utf8'))).toEqual(countUnknownCasts(findUnknownCasts(sourcePath, assertion)))
     expect(verifyNoUnknownCasts(root)).toBe(1)
   })
 
@@ -209,16 +208,14 @@ describe('unknown assertion source discovery', () => {
       'packages/example/src/input.ts',
       'apps/example/input.tsx',
       'scripts/input.mts',
-      'website/input.cts',
       'packages/example/tests/input.js',
       'apps/example/input.jsx',
       'scripts/input.mjs',
-      'website/input.cjs',
       'config.ts',
     ]
     for (const file of files) write(root, file, assertion)
     git(root, 'add', '.')
-    expect(scanUnknownCasts(root).map(cast => cast.file)).toEqual(files.toSorted())
+    expect(scanUnknownCasts(root).map((cast) => cast.file)).toEqual(files.toSorted())
     expect(() => verifyNoUnknownCasts(root)).toThrow(/new assertions to unknown/u)
   })
 
@@ -230,13 +227,13 @@ describe('unknown assertion source discovery', () => {
     }
     git(root, 'add', '.')
     write(root, 'scripts/new.ts', assertion)
-    expect(scanUnknownCasts(root).map(cast => cast.file)).toEqual(['scripts/new.ts'])
+    expect(scanUnknownCasts(root).map((cast) => cast.file)).toEqual(['scripts/new.ts'])
     expect(() => verifyNoUnknownCasts(root)).toThrow('scripts/new.ts:1')
     unlinkSync(join(root, 'scripts/new.ts'))
     expect(verifyNoUnknownCasts(root)).toBe(0)
   })
 
-  it.each(['packages', 'apps', 'scripts', 'website'])('rejects discovery missing %s', (area) => {
+  it.each(['packages', 'apps', 'scripts'])('rejects discovery missing %s', (area) => {
     const root = fixture()
     unlinkSync(join(root, `${area}/seed.ts`))
     expect(() => verifyNoUnknownCasts(root)).toThrow(`source discovery omitted ${area}/`)
@@ -244,7 +241,7 @@ describe('unknown assertion source discovery', () => {
 
   it('rejects an empty source corpus', () => {
     const root = fixture()
-    for (const area of ['packages', 'apps', 'scripts', 'website']) unlinkSync(join(root, `${area}/seed.ts`))
+    for (const area of ['packages', 'apps', 'scripts']) unlinkSync(join(root, `${area}/seed.ts`))
     expect(() => verifyNoUnknownCasts(root)).toThrow(/source discovery omitted/u)
   })
 

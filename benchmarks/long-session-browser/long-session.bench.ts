@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { chromium, type Page, type CDPSession, type Locator } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { launchWebScaffold, seedSession, watchConsole, webSnapshotMode } from '../../apps/web/tests/scaffold.ts'
 import { newEnglishPage } from '../../apps/web/tests/support.ts'
 import { ciTimeBudget, PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
@@ -23,7 +23,7 @@ const REPLAY_DURATION_MS = (DELTAS + 4) * PACE_MS
 
 async function painted(page: Page): Promise<void> {
   // Two rAF callbacks include a rendering opportunity, not a GPU presentation timestamp.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
 }
 
 async function measure(page: Page, action: () => Promise<void>): Promise<number> {
@@ -35,7 +35,7 @@ async function measure(page: Page, action: () => Promise<void>): Promise<number>
 
 async function taskMs(cdp: CDPSession): Promise<number> {
   const result = await cdp.send('Performance.getMetrics')
-  const metric = result.metrics.find(metric => metric.name === 'TaskDuration')
+  const metric = result.metrics.find((metric) => metric.name === 'TaskDuration')
   if (metric === undefined) throw new Error('Chromium TaskDuration missing')
   return metric.value * 1000
 }
@@ -53,33 +53,62 @@ function expectInputOverlap(value: boolean): void {
 }
 
 async function waitForReplyMarker(page: Page, marker: string, timeout = 30000) {
-  return page.waitForFunction(({ marker, first, done }) => {
-    const reply = Array.from(document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')).at(-1)
-    if (!reply) return false
-    const text = document.createTreeWalker(reply, NodeFilter.SHOW_TEXT)
-    let node: Node | null
-    while ((node = text.nextNode())) {
-      if (!node.textContent?.includes(marker) || !node.parentElement?.checkVisibility({ checkVisibilityCSS: true })) continue
-      const composer = Array.from(document.querySelectorAll('[data-composer-input][contenteditable="true"]')).at(-1)
-      const transcript = reply.textContent ?? ''
-      return { atMs: window.performance.now(), focused: document.activeElement === composer, first: transcript.includes(first), done: transcript.includes(done) }
-    }
-    return false
-  }, { marker, first: FIRST, done: DONE }, { polling: 'raf', timeout })
+  return page.waitForFunction(
+    ({ marker, first, done }) => {
+      const reply = Array.from(document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')).at(-1)
+      if (!reply) return false
+      const text = document.createTreeWalker(reply, NodeFilter.SHOW_TEXT)
+      let node: Node | null
+      while ((node = text.nextNode())) {
+        if (!node.textContent?.includes(marker) || !node.parentElement?.checkVisibility({ checkVisibilityCSS: true })) continue
+        const composer = Array.from(document.querySelectorAll('[data-composer-input][contenteditable="true"]')).at(-1)
+        const transcript = reply.textContent ?? ''
+        return {
+          atMs: window.performance.now(),
+          focused: document.activeElement === composer,
+          first: transcript.includes(first),
+          done: transcript.includes(done),
+        }
+      }
+      return false
+    },
+    { marker, first: FIRST, done: DONE },
+    { polling: 'raf', timeout },
+  )
 }
 
 async function watchInputOverlap(composer: Locator): Promise<void> {
-  await composer.evaluate((element, markers) => {
-    element.removeAttribute('data-benchmark-input-witness')
-    element.removeAttribute('data-benchmark-input-overlap')
-    element.removeAttribute('data-benchmark-input-timing')
-    element.addEventListener('input', (event) => {
-      const transcript = Array.from(document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')).at(-1)?.textContent ?? ''
-      element.setAttribute('data-benchmark-input-overlap', String(event.isTrusted && transcript.includes(markers.first) && !transcript.includes(markers.done)))
-      element.setAttribute('data-benchmark-input-witness', JSON.stringify({ trusted: event.isTrusted, first: transcript.includes(markers.first), done: transcript.includes(markers.done) }))
-      element.setAttribute('data-benchmark-input-timing', JSON.stringify({ atMs: window.performance.now(), eventAtMs: event.timeStamp, focused: document.activeElement === element }))
-    }, { once: true })
-  }, { first: FIRST, done: DONE })
+  await composer.evaluate(
+    (element, markers) => {
+      element.removeAttribute('data-benchmark-input-witness')
+      element.removeAttribute('data-benchmark-input-overlap')
+      element.removeAttribute('data-benchmark-input-timing')
+      element.addEventListener(
+        'input',
+        (event) => {
+          const transcript = Array.from(document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')).at(-1)?.textContent ?? ''
+          element.setAttribute(
+            'data-benchmark-input-overlap',
+            String(event.isTrusted && transcript.includes(markers.first) && !transcript.includes(markers.done)),
+          )
+          element.setAttribute(
+            'data-benchmark-input-witness',
+            JSON.stringify({
+              trusted: event.isTrusted,
+              first: transcript.includes(markers.first),
+              done: transcript.includes(markers.done),
+            }),
+          )
+          element.setAttribute(
+            'data-benchmark-input-timing',
+            JSON.stringify({ atMs: window.performance.now(), eventAtMs: event.timeStamp, focused: document.activeElement === element }),
+          )
+        },
+        { once: true },
+      )
+    },
+    { first: FIRST, done: DONE },
+  )
 }
 
 it('accepts recorded hosted open samples and rejects slower endpoints', () => {
@@ -116,9 +145,13 @@ it('waits for visible marker text in the latest Assistant step', async () => {
   const browser = await chromium.launch({ headless: true })
   try {
     const page = await browser.newPage()
-    await page.setContent(`<div data-chat-flow-kind="assistant-step">${FIRST}</div><div data-chat-flow-kind="assistant-step"><span style="visibility:hidden">${FIRST}</span></div>`)
+    await page.setContent(
+      `<div data-chat-flow-kind="assistant-step">${FIRST}</div><div data-chat-flow-kind="assistant-step"><span style="visibility:hidden">${FIRST}</span></div>`,
+    )
     await expect(waitForReplyMarker(page, FIRST, 100)).rejects.toThrow('Timeout')
-    await page.locator('span').evaluate(element => { element.style.visibility = 'visible' })
+    await page.locator('span').evaluate((element) => {
+      element.style.visibility = 'visible'
+    })
     const observation = await waitForReplyMarker(page, FIRST)
     expect(await observation.jsonValue()).toMatchObject({ first: true, done: false })
     await observation.dispose()
@@ -130,14 +163,30 @@ it('waits for visible marker text in the latest Assistant step', async () => {
 
 it('opens, pages, navigates and streams into a 240-turn browser history', async () => {
   if (webSnapshotMode() !== 'replay') throw new Error('browser benchmarks require keyless replay mode')
-  const samples: { open: number; page: number; trajectory: number; first: number; streamTask: number; streamWall: number; input: number; inputOverlapped: boolean; heapMb: number; nodes: number }[] = []
+  const samples: {
+    open: number
+    page: number
+    trajectory: number
+    first: number
+    streamTask: number
+    streamWall: number
+    input: number
+    inputOverlapped: boolean
+    heapMb: number
+    nodes: number
+  }[] = []
   for (let sample = 0; sample < SAMPLES; sample++) {
     const failures: unknown[] = []
     const root = await mkdtemp(join(tmpdir(), 'dsh-browser-benchmark-'))
     try {
       const replayOverride = join(root, 'reply.json')
       await writeFile(replayOverride, JSON.stringify([{ kind: 'chunks', chunks: syntheticReply() }]))
-      const scaffold = await launchWebScaffold({ replayFixture: join(root, 'override-only.jsonl'), replayOverride, paceMs: PACE_MS, replayContextWindow: 10000000 })
+      const scaffold = await launchWebScaffold({
+        replayFixture: join(root, 'override-only.jsonl'),
+        replayOverride,
+        paceMs: PACE_MS,
+        replayContextWindow: 10000000,
+      })
       try {
         const history = syntheticHistory()
         await seedSession(scaffold, history, SESSION_ID)
@@ -149,7 +198,9 @@ it('opens, pages, navigates and streams into a 240-turn browser history', async 
           page.setDefaultTimeout(30000)
           await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
           expect(new URL(page.url()).origin).toBe(scaffold.baseUrl)
-          console.log(JSON.stringify({ benchmark: 'long-session-browser/server', url: scaffold.baseUrl, browser: browser.version(), sample }))
+          console.log(
+            JSON.stringify({ benchmark: 'long-session-browser/server', url: scaffold.baseUrl, browser: browser.version(), sample }),
+          )
           await page.waitForSelector('[class*="frame"]')
           await page.getByRole('treeitem').first().click()
           const result = page.getByRole('treeitem').nth(1)
@@ -165,10 +216,15 @@ it('opens, pages, navigates and streams into a 240-turn browser history', async 
           expect(initialTurns).toBeLessThan(HISTORY_TURNS)
           let count = initialTurns
           while (count < HISTORY_TURNS) {
-            pages.push(await measure(page, async () => {
-              await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
-              await page.waitForFunction(({ selector, previous }) => document.querySelectorAll(selector).length > previous, { selector: TAIL, previous: count })
-            }))
+            pages.push(
+              await measure(page, async () => {
+                await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+                await page.waitForFunction(({ selector, previous }) => document.querySelectorAll(selector).length > previous, {
+                  selector: TAIL,
+                  previous: count,
+                })
+              }),
+            )
             count = await page.locator(TAIL).count()
           }
           const trajectory = await measure(page, async () => {
@@ -177,7 +233,10 @@ it('opens, pages, navigates and streams into a 240-turn browser history', async 
             await page.getByRole('row').last().waitFor()
           })
           await page.getByRole('tab', { name: 'Chat', exact: true }).click()
-          await page.waitForFunction(({ selector, expected }) => document.querySelectorAll(selector).length === expected, { selector: TAIL, expected: HISTORY_TURNS })
+          await page.waitForFunction(({ selector, expected }) => document.querySelectorAll(selector).length === expected, {
+            selector: TAIL,
+            expected: HISTORY_TURNS,
+          })
           const composer = page.locator('[data-composer-input][contenteditable="true"]').last()
           await composer.fill('Continue the synthetic review and summarize the validation. '.repeat(30))
           const cdp = await page.context().newCDPSession(page)
@@ -197,48 +256,100 @@ it('opens, pages, navigates and streams into a 240-turn browser history', async 
             await page.keyboard.type('next synthetic question')
             await expect.poll(() => composer.textContent()).toBe('next synthetic question')
           })
-          const inputOverlapped = await composer.getAttribute('data-benchmark-input-overlap') === 'true'
+          const inputOverlapped = (await composer.getAttribute('data-benchmark-input-overlap')) === 'true'
           const firstObservation = await firstMarker.jsonValue()
           await firstMarker.dispose()
-          console.log(JSON.stringify({ benchmark: 'long-session-browser/input', sample, first, input, firstObservation, witness: await composer.getAttribute('data-benchmark-input-witness'), inputTiming: await composer.getAttribute('data-benchmark-input-timing') }))
+          console.log(
+            JSON.stringify({
+              benchmark: 'long-session-browser/input',
+              sample,
+              first,
+              input,
+              firstObservation,
+              witness: await composer.getAttribute('data-benchmark-input-witness'),
+              inputTiming: await composer.getAttribute('data-benchmark-input-timing'),
+            }),
+          )
           expectInputOverlap(inputOverlapped)
           await (await waitForReplyMarker(page, DONE)).dispose()
           const settlement = await settled
           if (!settlement.ok) throw settlement.error
-          await page.waitForFunction(({ selector, expected }) => document.querySelectorAll(selector).length === expected, { selector: TAIL, expected: HISTORY_TURNS + 1 })
+          await page.waitForFunction(({ selector, expected }) => document.querySelectorAll(selector).length === expected, {
+            selector: TAIL,
+            expected: HISTORY_TURNS + 1,
+          })
           await painted(page)
           const streamWall = performance.now() - started
-          const streamTask = await taskMs(cdp) - beforeTask
+          const streamTask = (await taskMs(cdp)) - beforeTask
           await cdp.send('HeapProfiler.collectGarbage')
           const metrics = (await cdp.send('Performance.getMetrics')).metrics
-          const heap = metrics.find(metric => metric.name === 'JSHeapUsedSize')
+          const heap = metrics.find((metric) => metric.name === 'JSHeapUsedSize')
           if (heap === undefined) throw new Error('Chromium heap metric missing')
-          samples.push({ open, page: Math.max(...pages), trajectory, first, streamTask, streamWall, input, inputOverlapped, heapMb: heap.value / 1048576, nodes: await page.locator('*').count() })
+          samples.push({
+            open,
+            page: Math.max(...pages),
+            trajectory,
+            first,
+            streamTask,
+            streamWall,
+            input,
+            inputOverlapped,
+            heapMb: heap.value / 1048576,
+            nodes: await page.locator('*').count(),
+          })
           console.log(JSON.stringify({ benchmark: 'long-session-browser/sample', sample, initialTurns, pages, ...samples.at(-1) }))
           await watchInputOverlap(composer)
           await composer.click()
           await page.keyboard.type('!')
-          const lateInputOverlapped = await composer.getAttribute('data-benchmark-input-overlap') === 'true'
-          expect(await composer.getAttribute('data-benchmark-input-witness')).toBe(JSON.stringify({ trusted: true, first: true, done: true }))
+          const lateInputOverlapped = (await composer.getAttribute('data-benchmark-input-overlap')) === 'true'
+          expect(await composer.getAttribute('data-benchmark-input-witness')).toBe(
+            JSON.stringify({ trusted: true, first: true, done: true }),
+          )
           expect(() => expectInputOverlap(lateInputOverlapped)).toThrow()
           expect(consoleWatch.pageErrors).toEqual([])
           expect(consoleWatch.warnings).toEqual([])
-        } catch (error) { failures.push(error) } finally {
+        } catch (error) {
+          failures.push(error)
+        } finally {
           await browser.close().catch((error: unknown) => failures.push(error))
         }
-      } catch (error) { failures.push(error) } finally {
+      } catch (error) {
+        failures.push(error)
+      } finally {
         await scaffold.close().catch((error: unknown) => failures.push(error))
       }
-    } catch (error) { failures.push(error) } finally {
+    } catch (error) {
+      failures.push(error)
+    } finally {
       await rm(root, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
     }
     if (failures.length > 0) throw new AggregateError(failures, 'browser benchmark failed')
   }
-  const aggregate = Object.fromEntries(Object.keys(REFERENCE).map(key => [key, median(samples.map(sample => sample[key as keyof typeof REFERENCE]))]))
+  const aggregate = Object.fromEntries(
+    Object.keys(REFERENCE).map((key) => [key, median(samples.map((sample) => sample[key as keyof typeof REFERENCE]))]),
+  )
   const budgets: Record<string, number> = {
-    ...Object.fromEntries(Object.entries(REFERENCE).map(([key, value]) => [key, ciTimeBudget(value) + (key === 'streamWall' ? REPLAY_DURATION_MS : 0)])),
-    open: OPEN_BUDGET_MS, page: PAGE_BUDGET_MS, trajectory: TRAJECTORY_BUDGET_MS,
+    ...Object.fromEntries(
+      Object.entries(REFERENCE).map(([key, value]) => [key, ciTimeBudget(value) + (key === 'streamWall' ? REPLAY_DURATION_MS : 0)]),
+    ),
+    open: OPEN_BUDGET_MS,
+    page: PAGE_BUDGET_MS,
+    trajectory: TRAJECTORY_BUDGET_MS,
   }
-  console.log(JSON.stringify({ benchmark: 'long-session-browser/median', turns: HISTORY_TURNS, deltas: DELTAS, paceMs: PACE_MS, samples, aggregate, referenceMs: REFERENCE, expectedOpenCiMs: EXPECTED_OPEN_CI_MS, expectedPageCiMs: EXPECTED_PAGE_CI_MS, expectedTrajectoryCiMs: EXPECTED_TRAJECTORY_CI_MS, budgets }))
+  console.log(
+    JSON.stringify({
+      benchmark: 'long-session-browser/median',
+      turns: HISTORY_TURNS,
+      deltas: DELTAS,
+      paceMs: PACE_MS,
+      samples,
+      aggregate,
+      referenceMs: REFERENCE,
+      expectedOpenCiMs: EXPECTED_OPEN_CI_MS,
+      expectedPageCiMs: EXPECTED_PAGE_CI_MS,
+      expectedTrajectoryCiMs: EXPECTED_TRAJECTORY_CI_MS,
+      budgets,
+    }),
+  )
   for (const [key, value] of Object.entries(aggregate)) expectEndpointWithinBudget(value, budgets[key]!)
 })

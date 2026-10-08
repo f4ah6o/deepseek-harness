@@ -1,15 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Config, resolveProfiles } from '../src/config.ts'
 import { THINKING_TOKEN_BUDGET_FIELDS } from '../src/catalog.ts'
 
 function configured(compat: Record<string, unknown>, api = 'openai-completions'): Config {
-  return Config({ providers: { gateway: {
-    api, baseURL: 'https://gateway.test/v1', models: [{ id: 'model' }], compat,
-  } } })
+  return Config({
+    providers: {
+      gateway: {
+        api,
+        baseURL: 'https://gateway.test/v1',
+        models: [{ id: 'model' }],
+        compat,
+      },
+    },
+  })
 }
 
 function resolved(compat: Record<string, unknown>, api = 'openai-completions') {
-  return resolveProfiles(structuredClone(configured(compat, api).providers.get()) as import('../src/config.ts').Options['providers']).get('gateway')?.piProvider?.getModels()[0]?.compat
+  return resolveProfiles(structuredClone(configured(compat, api).providers.get()) as import('../src/config.ts').Options['providers'])
+    .get('gateway')
+    ?.piProvider?.getModels()[0]?.compat
 }
 
 describe('pi-ai gateway compatibility declarations', () => {
@@ -22,8 +31,7 @@ describe('pi-ai gateway compatibility declarations', () => {
   })
 
   it('preserves a disabled Responses output-cap parameter', () => {
-    expect(resolved({ supportsMaxOutputTokens: false }, 'openai-responses'))
-      .toMatchObject({ supportsMaxOutputTokens: false })
+    expect(resolved({ supportsMaxOutputTokens: false }, 'openai-responses')).toMatchObject({ supportsMaxOutputTokens: false })
   })
 
   it.each(['chatTemplateKwargs', 'chatTemplateArgs'])('accepts thinking.budget in %s', (field) => {
@@ -42,27 +50,30 @@ describe('pi-ai gateway compatibility declarations', () => {
     expect(() => configured(compat)).toThrow()
   })
 
-  it.each([
-    { thinkingTokenBudgetField: 'thinking_budget' },
-    { vllmPriority: 0 },
-    { supportsMaxOutputTokens: false },
-  ])('rejects fields on a protocol that cannot consume them: %j', (compat) => {
-    expect(() => resolved(compat, 'anthropic-messages')).toThrow(/compat/)
-  })
+  it.each([{ thinkingTokenBudgetField: 'thinking_budget' }, { vllmPriority: 0 }, { supportsMaxOutputTokens: false }])(
+    'rejects fields on a protocol that cannot consume them: %j',
+    (compat) => {
+      expect(() => resolved(compat, 'anthropic-messages')).toThrow(/compat/)
+    },
+  )
 
   it.each([
-    'supportsMidConvoEffort', 'allowedFallbackModels', 'supportsMidConvoSystemMessages',
-    'supportsMidConvoToolAdditions', 'supportsMidConvoToolChanges', 'sessionAffinityFormat',
+    'supportsMidConvoEffort',
+    'allowedFallbackModels',
+    'supportsMidConvoSystemMessages',
+    'supportsMidConvoToolAdditions',
+    'supportsMidConvoToolChanges',
+    'sessionAffinityFormat',
   ])('withholds catalog-owned %s', (field) => {
-    expect(() => resolved({ [field]: true }, 'anthropic-messages'))
-      .toThrow(/which is not configurable here/)
+    expect(() => resolved({ [field]: true }, 'anthropic-messages')).toThrow(/which is not configurable here/)
   })
 
   it('withholds Mistral conversation capabilities', () => {
-    expect(() => resolveProfiles({
-      mistral: { compat: { supportsMidConvoSystemMessages: true } as never },
-    }))
-      .toThrow(/which is not configurable here/)
+    expect(() =>
+      resolveProfiles({
+        mistral: { compat: { supportsMidConvoSystemMessages: true } as never },
+      }),
+    ).toThrow(/which is not configurable here/)
   })
 
   it('keeps generic additions absent unless configured', () => {

@@ -38,7 +38,7 @@ pnpm exec tsx packages/client/ui-sidebar-documentpreview/tests/fuzz/run.client.t
 运行 Node 和浏览器 bundle 解析器回归测试：
 
 ```sh
-pnpm exec vitest run packages/client/ui-sidebar-documentpreview/tests/excel-opening.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-opc.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-xml.client.spec.ts
+pnpm exec vp test run packages/client/ui-sidebar-documentpreview/tests/excel-opening.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-opc.client.spec.ts packages/client/ui-sidebar-documentpreview/tests/excel-xml.client.spec.ts
 ```
 
 fuzz 报告记录每个输入的 SHA-256、能否打开以及工作区状态。`validOpened` 和 `validRejected` 将打开失败与值差异分开，严格退出状态仍会拒绝这两类缺陷。已知的 1904 时间／累计时长偏移和空字符串公式缓存差异仍作为诊断失败。解析器接受的损坏输入继续作为观察结果单列。

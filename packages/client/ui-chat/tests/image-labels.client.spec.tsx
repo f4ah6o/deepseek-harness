@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { cleanup, render } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -45,7 +45,8 @@ describe('assistant image slot handoff', () => {
   it('passes one image group and its message alignment to the renderer', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'image', attachment }]}
@@ -61,7 +62,8 @@ describe('assistant image slot handoff', () => {
   it('merges consecutive image blocks into one group and splits groups at text', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[
@@ -76,14 +78,15 @@ describe('assistant image slot handoff', () => {
     )
     const galleries = view.getAllByTestId('message-images')
     expect(galleries).toHaveLength(2)
-    expect(galleries.map(gallery => gallery.getAttribute('data-count'))).toEqual(['2', '1'])
-    expect(calls.map(call => call.images.length)).toEqual([2, 1])
+    expect(galleries.map((gallery) => gallery.getAttribute('data-count'))).toEqual(['2', '1'])
+    expect(calls.map((call) => call.images.length)).toEqual([2, 1])
   })
 
   it('keeps the renderer output at the image block position between text blocks', () => {
     const calls: MessageImagesRenderOwner[] = []
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[

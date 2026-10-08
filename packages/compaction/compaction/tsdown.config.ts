@@ -1,9 +1,19 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /** Builds each published entry as a self-contained file admitted by the package whitelist. */
 export default defineConfig([
   {
-    entry: ['lib/types/index.js'], outDir: 'lib', format: ['esm'], platform: 'node', target: 'es2024',
-    fixedExtension: false, outputOptions: { codeSplitting: false }, dts: false, clean: false,
+    deps: {
+      resolveDepSubpath: true,
+    },
+    entry: ['lib/types/index.js'],
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    outputOptions: { codeSplitting: false },
+    dts: false,
+    clean: false,
   },
 ])

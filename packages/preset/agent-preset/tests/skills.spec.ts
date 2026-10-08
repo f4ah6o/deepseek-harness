@@ -12,7 +12,7 @@ import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 const skills = fileURLToPath(new URL('../skills/', import.meta.url))
 const names = readdirSync(skills)
@@ -32,8 +32,8 @@ function body(name: string): string {
 
 function markdownFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter(file => file.endsWith('.md'))
-    .map(file => join(dir, file))
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => join(dir, file))
 }
 
 describe('the shipped creator skills', () => {
@@ -59,10 +59,11 @@ describe('the shipped creator skills', () => {
     test.onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillFileSystem, {
-      includeDefaultRoots: false, watch: false,
+      includeDefaultRoots: false,
+      watch: false,
       customSkillDirs: [source === 'package' ? skills : repositorySkills],
     })
-    expect((await ctx.skills.list()).map(skill => skill.name)).toContain('agent-experience')
+    expect((await ctx.skills.list()).map((skill) => skill.name)).toContain('agent-experience')
     const loaded = await ctx.skills.get('agent-experience')
     expect(loaded?.path).toBe(realpathSync(canonical))
     expect(loaded?.content).toBe(body('agent-experience').trim())
@@ -71,10 +72,13 @@ describe('the shipped creator skills', () => {
   it('render below the pruner threshold and name only files that exist', () => {
     for (const name of names) {
       const rendered = renderSkillContent({
-        name, provider: 'filesystem', resourceBase: { kind: 'directory', path: join(skills, name) }, content: body(name),
+        name,
+        provider: 'filesystem',
+        resourceBase: { kind: 'directory', path: join(skills, name) },
+        content: body(name),
       })
       expect(codePointLength(rendered), name).toBeLessThan(PRUNER_THRESHOLD_CHARS)
-      const referenced = [...body(name).matchAll(/`((?:references|templates)\/[^`]+)`/g)].map(match => match[1] ?? match[0])
+      const referenced = [...body(name).matchAll(/`((?:references|templates)\/[^`]+)`/g)].map((match) => match[1] ?? match[0])
       for (const path of referenced) expect(() => statSync(join(skills, name, path)), `${name}: ${path}`).not.toThrow()
     }
   })
@@ -96,7 +100,7 @@ describe('the shipped creator skills', () => {
       const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string } } }
       const patch = yaml.load(readFileSync(join(dir, manifest.dsh.bundle.patch), 'utf8'), { schema: entryListSchema })
       expect(Array.isArray(patch)).toBe(true)
-      for (const file of readdirSync(dir).filter(entry => entry.endsWith('.js'))) {
+      for (const file of readdirSync(dir).filter((entry) => entry.endsWith('.js'))) {
         execFileSync(process.execPath, ['--check', join(dir, file)])
       }
     }
@@ -115,20 +119,27 @@ describe('the shipped creator skills', () => {
       expect(manifest.exports['./locale/*.json']).toBe('./locale/*.json')
       // The package-meta gate validates these resources through the real metadata reader.
       expect(manifest.exports['./icon']).toBe('./icon.svg')
-      const locales = readdirSync(join(dir, 'locale')).map(file => `locale/${file}`)
+      const locales = readdirSync(join(dir, 'locale')).map((file) => `locale/${file}`)
       expect(locales).toContain('locale/en.json')
       for (const file of locales) {
         const locale = JSON.parse(readFileSync(join(dir, file), 'utf8')) as { meta: { title: string; description: string } }
         expect(locale.meta.title).toMatch(/\S/u)
         expect(locale.meta.description).toMatch(/\S/u)
       }
-      const resources = new Set([...Object.values(manifest.exports).filter(file => !file.includes('*')),
-        ...locales, manifest.dsh.bundle.patch])
+      const resources = new Set([
+        ...Object.values(manifest.exports).filter((file) => !file.includes('*')),
+        ...locales,
+        manifest.dsh.bundle.patch,
+      ])
       for (const resource of resources) {
         const file = resource.replace(/^\.\//u, '')
         expect(body('cordis-plugin-development'), file).toContain(`\`templates/${name}/${file}\``)
         expect(statSync(join(dir, file)).isFile(), file).toBe(true)
-        if (file !== 'package.json') expect(manifest.files.some(pattern => matchesGlob(file, pattern)), file).toBe(true)
+        if (file !== 'package.json')
+          expect(
+            manifest.files.some((pattern) => matchesGlob(file, pattern)),
+            file,
+          ).toBe(true)
       }
     }
   })

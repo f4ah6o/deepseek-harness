@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished } from 'vite-plus/test'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
@@ -16,4 +16,4 @@ it('defaults on, persists valid choices and removes its schema on disposal', asy
   await configuration.fiber.dispose()
 })
 
-it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(ctx => ctx.plugin(HostPlugin)))
+it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage((ctx) => ctx.plugin(HostPlugin)))

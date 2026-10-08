@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import LlmRuntime, { createUserMessage, ToolCallId, LlmAdapter  } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -56,7 +56,7 @@ class OverlapAdapter extends LlmAdapter {
     super()
   }
 
-  async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const before = this.ctx.agents.requireInitiator()
     this.starts += 1
     if (this.starts === 2) this.bothStarted.resolve(true)
@@ -92,7 +92,7 @@ class ReloadAdapter extends LlmAdapter {
   calls = 0
   agents: AgentRegistry | undefined
 
-  async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+  async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const agents = this.agents
     if (agents === undefined) throw new Error('agent service missing')
     this.calls += 1
@@ -100,7 +100,9 @@ class ReloadAdapter extends LlmAdapter {
       this.firstStarted.resolve(true)
       try {
         await new Promise<void>((_resolve, reject) => {
-          const abort = (): void => { reject(new Error('aborted')) }
+          const abort = (): void => {
+            reject(new Error('aborted'))
+          }
           if (options.signal?.aborted === true) abort()
           else options.signal?.addEventListener('abort', abort, { once: true })
         })
@@ -139,10 +141,12 @@ describe('AgentLoop initiator scope', () => {
     await Promise.all([idleA, idleB])
 
     expect(adapter.observations).toHaveLength(2)
-    expect(adapter.observations).toEqual(expect.arrayContaining([
-      { sessionId: a.session.id, before: a, after: a },
-      { sessionId: b.session.id, before: b, after: b },
-    ]))
+    expect(adapter.observations).toEqual(
+      expect.arrayContaining([
+        { sessionId: a.session.id, before: a, after: a },
+        { sessionId: b.session.id, before: b, after: b },
+      ]),
+    )
     expect(ctx.agents.currentInitiator()).toBeUndefined()
     await ctx.fiber.dispose()
   })
@@ -181,22 +185,24 @@ describe('AgentLoop initiator scope', () => {
     ctx.on('agent/turn-stopping', ({ agent: subject, signal }) => {
       if (subject === agent) capture(signal)
     })
-    ctx.tools.register(defineContentToolFixture({
-      name: 'observe',
-      description: 'observe explicit turn state',
-      parameters: {},
-      execute: async (_args, exec) => {
-        capture(exec.signal)
-        return [{ type: 'text', text: 'observed' }]
-      },
-    }))
+    ctx.tools.register(
+      defineContentToolFixture({
+        name: 'observe',
+        description: 'observe explicit turn state',
+        parameters: {},
+        execute: async (_args, exec) => {
+          capture(exec.signal)
+          return [{ type: 'text', text: 'observed' }]
+        },
+      }),
+    )
 
     const firstIdle = waitForIdle(ctx, agent)
     send(agent, 'first')
     await firstIdle
     const firstSignal = signals[0]
     expect(firstSignal).toBeDefined()
-    expect(new Set([...signals, ...adapter.requests.slice(0, 2).map(request => request.signal!)])).toEqual(new Set([firstSignal]))
+    expect(new Set([...signals, ...adapter.requests.slice(0, 2).map((request) => request.signal!)])).toEqual(new Set([firstSignal]))
     expect(preStepSignals).toHaveLength(2)
     expect(new Set(preStepSignals)).toEqual(new Set([firstSignal]))
 
@@ -229,39 +235,43 @@ describe('AgentLoop initiator scope', () => {
     let parentWhileChildDriverActive: Agent | undefined
     let child: Agent | undefined
 
-    ctx.tools.register(defineContentToolFixture({
-      name: 'spawn-child',
-      description: 'create one child agent',
-      parameters: {},
-      execute: async (_args, exec) => {
-        if (exec.agent === undefined) throw new Error('parent agent missing')
-        const handle = await exec.agent.ctx.agents.create({
-          sessionId: SessionId('child-session'),
-          agentOptions: { provider: 'mock', model: 'mock' },
-          parentAgent: exec.agent,
-          setup: (agentCtx, childAgent) => {
-            parentDuringSetup = ctx.agents.requireInitiator()
-            explicitChild = childAgent
-            agentCtx.tools.register(defineContentToolFixture({
-              name: 'observe-child',
-              description: 'observe child execution identity',
-              parameters: {},
-              execute: async () => {
-                await Promise.resolve()
-                childDuringDriver = ctx.agents.requireInitiator()
-                return [{ type: 'text', text: 'observed' }]
-              },
-            }))
-          },
-        })
-        child = handle.agent
-        parentWhileChildDriverActive = ctx.agents.requireInitiator()
-        send(handle.agent, 'run child')
-        await handle.agent.whenIdle()
-        await handle.dispose()
-        return [{ type: 'text', text: 'child completed' }]
-      },
-    }))
+    ctx.tools.register(
+      defineContentToolFixture({
+        name: 'spawn-child',
+        description: 'create one child agent',
+        parameters: {},
+        execute: async (_args, exec) => {
+          if (exec.agent === undefined) throw new Error('parent agent missing')
+          const handle = await exec.agent.ctx.agents.create({
+            sessionId: SessionId('child-session'),
+            agentOptions: { provider: 'mock', model: 'mock' },
+            parentAgent: exec.agent,
+            setup: (agentCtx, childAgent) => {
+              parentDuringSetup = ctx.agents.requireInitiator()
+              explicitChild = childAgent
+              agentCtx.tools.register(
+                defineContentToolFixture({
+                  name: 'observe-child',
+                  description: 'observe child execution identity',
+                  parameters: {},
+                  execute: async () => {
+                    await Promise.resolve()
+                    childDuringDriver = ctx.agents.requireInitiator()
+                    return [{ type: 'text', text: 'observed' }]
+                  },
+                }),
+              )
+            },
+          })
+          child = handle.agent
+          parentWhileChildDriverActive = ctx.agents.requireInitiator()
+          send(handle.agent, 'run child')
+          await handle.agent.whenIdle()
+          await handle.dispose()
+          return [{ type: 'text', text: 'child completed' }]
+        },
+      }),
+    )
 
     const parentHandle = await ctx.agents.create({
       sessionId: SessionId('parent-session'),
@@ -290,27 +300,31 @@ describe('AgentLoop initiator scope', () => {
     let directAmbient: Agent | undefined
     let captured: Agent | undefined
 
-    ctx.tools.register(defineContentToolFixture({
-      name: 'agentless-probe',
-      description: 'observe an agentless call',
-      parameters: {},
-      execute: async () => {
-        await Promise.resolve()
-        directAmbient = ctx.agents.currentInitiator()
-        return [{ type: 'text', text: 'ok' }]
-      },
-    }))
-    ctx.tools.register(defineContentToolFixture({
-      name: 'capability-request',
-      description: 'call the test capability transport',
-      parameters: { path: { type: 'string' } },
-      execute: async (args) => {
-        captured = ctx.agents.requireInitiator()
-        const path = (args as { path: string }).path
-        const headers = await transport.request(path)
-        return [{ type: 'text', text: JSON.stringify(headers) }]
-      },
-    }))
+    ctx.tools.register(
+      defineContentToolFixture({
+        name: 'agentless-probe',
+        description: 'observe an agentless call',
+        parameters: {},
+        execute: async () => {
+          await Promise.resolve()
+          directAmbient = ctx.agents.currentInitiator()
+          return [{ type: 'text', text: 'ok' }]
+        },
+      }),
+    )
+    ctx.tools.register(
+      defineContentToolFixture({
+        name: 'capability-request',
+        description: 'call the test capability transport',
+        parameters: { path: { type: 'string' } },
+        execute: async (args) => {
+          captured = ctx.agents.requireInitiator()
+          const path = (args as { path: string }).path
+          const headers = await transport.request(path)
+          return [{ type: 'text', text: JSON.stringify(headers) }]
+        },
+      }),
+    )
 
     const direct = await ctx.tools.execute({
       signal: testToolSignal,
@@ -329,15 +343,16 @@ describe('AgentLoop initiator scope', () => {
     send(handle.agent, 'call transport')
     await idle
 
-    expect(transport.requests).toEqual([{
-      path: '/v1/capability',
-      headers: { 'X-Harness-Session-Id': 'transport-session' },
-    }])
-    const schema = adapter.requests[0]?.tools?.find(tool => tool.name === 'capability-request')
+    expect(transport.requests).toEqual([
+      {
+        path: '/v1/capability',
+        headers: { 'X-Harness-Session-Id': 'transport-session' },
+      },
+    ])
+    const schema = adapter.requests[0]?.tools?.find((tool) => tool.name === 'capability-request')
     expect(JSON.stringify(schema?.parameters)).not.toMatch(/session|harness/i)
-    const call = handle.agent.session.snapshotEvents().find(event => event.type === 'tool/call')
-    expect(call?.type === 'tool/call' ? call.data.arguments : undefined)
-      .toBe(JSON.stringify({ path: '/v1/capability' }))
+    const call = handle.agent.session.snapshotEvents().find((event) => event.type === 'tool/call')
+    expect(call?.type === 'tool/call' ? call.data.arguments : undefined).toBe(JSON.stringify({ path: '/v1/capability' }))
     expect(captured).toBe(handle.agent)
 
     await handle.dispose()

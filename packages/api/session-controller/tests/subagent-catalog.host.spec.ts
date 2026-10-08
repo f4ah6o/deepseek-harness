@@ -6,12 +6,8 @@ import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
-import { describe, expect, it, vi } from 'vitest'
-import {
-  createSessionTestController,
-  installSessionReadTestServices,
-  testSessionPersistence,
-} from './test-remote.ts'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { createSessionTestController, installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 const defaults = {
   defaultModelSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
@@ -27,29 +23,32 @@ const header: SessionHeader = {
   isSeeded: false,
   cwd: '/workspace',
 }
-const events: SessionEvent[] = [{
-  type: 'subagent/catalog',
-  seq: SessionSeq(0),
-  time: 1,
-  data: {
-    version: 0,
-    childId: CHILD,
-    childCreatedAt: 2,
-    mode: 'continuable',
-    label: 'worker',
+const events: SessionEvent[] = [
+  {
+    type: 'subagent/catalog',
+    seq: SessionSeq(0),
+    time: 1,
+    data: {
+      version: 0,
+      childId: CHILD,
+      childCreatedAt: 2,
+      mode: 'continuable',
+      label: 'worker',
+    },
   },
-}]
+]
 
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
-  ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
-    list: () => Promise.resolve([header]),
-    inspect: (sessionId: SessionId) => Promise.resolve(
-      sessionId === PARENT ? { meta: header, events } : undefined,
-    ),
-  }) as never)
+  ctx.provide(
+    'sessionPersistence',
+    testSessionPersistence(ctx, {
+      list: () => Promise.resolve([header]),
+      inspect: (sessionId: SessionId) => Promise.resolve(sessionId === PARENT ? { meta: header, events } : undefined),
+    }) as never,
+  )
   installSessionReadTestServices(ctx)
   await ctx.plugin(SubagentRuntime)
   const controller = createSessionTestController(ctx, defaults)
@@ -65,15 +64,30 @@ describe('SessionController subagent catalog', () => {
       await stream.next()
       const parent = ctx.sessions.create(PARENT, { meta: { createdAt: 7, cwd: '/workspace' } })
       parent.append('subagent/catalog', {
-        version: 0, childId: CHILD, childCreatedAt: 8, mode: 'continuable', label: 'worker',
+        version: 0,
+        childId: CHILD,
+        childCreatedAt: 8,
+        mode: 'continuable',
+        label: 'worker',
       })
       let frame = await stream.next()
-      while (!frame.done && !(frame.value.type === 'projection' && frame.value.key === 'subagentCatalog'
-        && Array.isArray(frame.value.value) && frame.value.value.length === 1)) {
+      while (
+        !frame.done &&
+        !(
+          frame.value.type === 'projection' &&
+          frame.value.key === 'subagentCatalog' &&
+          Array.isArray(frame.value.value) &&
+          frame.value.value.length === 1
+        )
+      ) {
         frame = await stream.next()
       }
-      expect(frame.value).toMatchObject({ type: 'projection', sessionId: PARENT, key: 'subagentCatalog',
-        value: [{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }] })
+      expect(frame.value).toMatchObject({
+        type: 'projection',
+        sessionId: PARENT,
+        key: 'subagentCatalog',
+        value: [{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }],
+      })
     } finally {
       signal.abort()
       await stream.return?.()
@@ -85,11 +99,17 @@ describe('SessionController subagent catalog', () => {
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
     const signal = new AbortController().signal
 
-    await expect(controller.projections({ sessionId: PARENT }, signal)).resolves.toMatchObject({ values: { subagentCatalog: [{
-      id: CHILD,
-      mode: 'continuable',
-      label: 'worker',
-    }] } })
+    await expect(controller.projections({ sessionId: PARENT }, signal)).resolves.toMatchObject({
+      values: {
+        subagentCatalog: [
+          {
+            id: CHILD,
+            mode: 'continuable',
+            label: 'worker',
+          },
+        ],
+      },
+    })
     expect(observe).toHaveBeenCalledOnce()
     expect(observe).toHaveBeenCalledWith(PARENT, {
       signal,
@@ -111,11 +131,17 @@ describe('SessionController subagent catalog', () => {
     const hydrate = vi.spyOn(ctx.sessionProjections, 'hydrate')
 
     const result = await controller.projections({ sessionId: PARENT }, new AbortController().signal)
-    expect(result).toMatchObject({ values: { subagentCatalog: [{
-      id: CHILD,
-      mode: 'one-shot',
-      label: 'live worker',
-    }] } })
+    expect(result).toMatchObject({
+      values: {
+        subagentCatalog: [
+          {
+            id: CHILD,
+            mode: 'one-shot',
+            label: 'live worker',
+          },
+        ],
+      },
+    })
     expect(snapshot).toHaveBeenCalledWith(parent)
     expect(hydrate).not.toHaveBeenCalled()
   })
@@ -124,19 +150,24 @@ describe('SessionController subagent catalog', () => {
     const { ctx, controller } = await bench()
     const parent = ctx.sessions.create(PARENT, { meta: { createdAt: 1, cwd: '/workspace' } })
     parent.append('subagent/catalog', {
-      version: 0, childId: CHILD, childCreatedAt: 8, mode: 'one-shot',
+      version: 0,
+      childId: CHILD,
+      childCreatedAt: 8,
+      mode: 'one-shot',
     })
     const summaries: boolean[] = []
-    ctx.on('api-session/added', (summary) => { summaries.push(summary.agentAvailable) })
+    ctx.on('api-session/added', (summary) => {
+      summaries.push(summary.agentAvailable)
+    })
     const dispose = ctx.agents.register({ id: PARENT, session: parent, status: 'idle', ctx } as Agent)
     await dispose
     expect(summaries).toEqual([true])
     const available = await controller.list({}, new AbortController().signal)
-    expect(available.items.find(item => item.sessionId === PARENT)?.agentAvailable).toBe(true)
+    expect(available.items.find((item) => item.sessionId === PARENT)?.agentAvailable).toBe(true)
     await dispose()
     expect(summaries).toEqual([true, false])
     const unavailable = await controller.list({}, new AbortController().signal)
-    expect(unavailable.items.find(item => item.sessionId === PARENT)?.agentAvailable).toBe(false)
+    expect(unavailable.items.find((item) => item.sessionId === PARENT)?.agentAvailable).toBe(false)
     const result = await controller.projections({ sessionId: PARENT }, new AbortController().signal)
     expect(result).toMatchObject({ asOfSeq: 0, values: { subagentCatalog: [{ id: CHILD, createdAt: 8, mode: 'one-shot' }] } })
   })
@@ -184,10 +215,7 @@ describe('SessionController subagent catalog', () => {
   it('maps query cancellation, missing projections, and unexpected failures', async () => {
     const { ctx, controller } = await bench()
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
-    observe.mockRejectedValueOnce(new SessionQueryError(
-      'query cancelled',
-      'SESSION_QUERY_ABORTED',
-    ))
+    observe.mockRejectedValueOnce(new SessionQueryError('query cancelled', 'SESSION_QUERY_ABORTED'))
     await expect(controller.projections({ sessionId: PARENT }, new AbortController().signal)).rejects.toMatchObject({
       code: 'gateway/cancelled',
     })

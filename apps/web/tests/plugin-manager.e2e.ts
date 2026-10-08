@@ -10,11 +10,17 @@ import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
 import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vite-plus/test'
 import { join } from 'node:path'
 import {
-  SCAFFOLD_DEFAULTS_BUNDLE, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
-  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
+  SCAFFOLD_DEFAULTS_BUNDLE,
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, openSettings, saveFailureShot } from './support.ts'
 
@@ -53,7 +59,7 @@ describe('web e2e: plugin manager', () => {
 
   /** Close any open settings dialog, so the sidebar and the main column are clickable. */
   async function closeSettings() {
-    if (await page.getByRole('dialog', { name: '设置' }).count() > 0) {
+    if ((await page.getByRole('dialog', { name: '设置' }).count()) > 0) {
       await page.keyboard.press('Escape')
       await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
     }
@@ -61,11 +67,11 @@ describe('web e2e: plugin manager', () => {
 
   /** Change the UI language through Settings and close the dialog. */
   async function setLanguage(language: 'en' | 'zh'): Promise<void> {
-    if (await page.locator('html').getAttribute('lang') === language) return
+    if ((await page.locator('html').getAttribute('lang')) === language) return
     const settings = language === 'en' ? '设置' : 'Settings'
     const source = language === 'en' ? '中文' : 'English'
     const target = language === 'en' ? 'English' : '中文'
-    if (await page.getByRole('dialog', { name: settings }).count() === 0) {
+    if ((await page.getByRole('dialog', { name: settings }).count()) === 0) {
       await openSettings(page, language === 'en' ? 'zh' : 'en')
     }
     await page.getByRole('dialog', { name: settings }).getByRole('button', { name: source }).click()
@@ -82,8 +88,11 @@ describe('web e2e: plugin manager', () => {
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
     await panel.waitFor({ timeout: 10_000 })
-    while (await panel.getByRole('button', { name: /^返回/ }).count() > 0) {
-      await panel.getByRole('button', { name: /^返回/ }).first().click()
+    while ((await panel.getByRole('button', { name: /^返回/ }).count()) > 0) {
+      await panel
+        .getByRole('button', { name: /^返回/ })
+        .first()
+        .click()
     }
     await panel.getByRole('heading', { name: '插件', exact: true }).waitFor({ timeout: 10_000 })
     return panel
@@ -131,34 +140,46 @@ describe('web e2e: plugin manager', () => {
         if (aria === '') aria = loadingAria
         else expect(loadingAria).toBe(aria)
 
-        const measure = (group: Locator, rowSelector = ':scope > ul > li') => group.evaluate((element, selector) => {
-          const rect = (node: Element | null | undefined) => {
-            if (node === null || node === undefined) throw new Error('Missing plugin layout element')
-            const { x, y, width, height } = node.getBoundingClientRect()
-            return { x, y, width, height }
-          }
-          return {
-            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
-            groupHeader: rect(element.firstElementChild),
-            rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
-              const head = row.firstElementChild
-              const main = head?.children[1]
-              return {
-                row: rect(row), head: rect(head), icon: rect(head?.children[0]), main: rect(main),
-                titleRow: rect(main?.children[0]), title: rect(main?.children[0]?.firstElementChild),
-                description: rect(main?.children[1]), actions: rect(head?.children[2]),
-              }
-            }),
-          }
-        }, rowSelector)
+        const measure = (group: Locator, rowSelector = ':scope > ul > li') =>
+          group.evaluate((element, selector) => {
+            const rect = (node: Element | null | undefined) => {
+              if (node === null || node === undefined) throw new Error('Missing plugin layout element')
+              const { x, y, width, height } = node.getBoundingClientRect()
+              return { x, y, width, height }
+            }
+            return {
+              pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
+              groupHeader: rect(element.firstElementChild),
+              rows: Array.from(element.querySelectorAll(selector))
+                .slice(0, 4)
+                .map((row) => {
+                  const head = row.firstElementChild
+                  const main = head?.children[1]
+                  return {
+                    row: rect(row),
+                    head: rect(head),
+                    icon: rect(head?.children[0]),
+                    main: rect(main),
+                    titleRow: rect(main?.children[0]),
+                    title: rect(main?.children[0]?.firstElementChild),
+                    description: rect(main?.children[1]),
+                    actions: rect(head?.children[2]),
+                  }
+                }),
+            }
+          }, rowSelector)
         const loading = await measure(skeleton)
-        const blankActions = await skeleton.locator(':scope > ul > li > div > div:last-child').evaluateAll(nodes => nodes.map(node => ({
-          children: node.childElementCount,
-          background: getComputedStyle(node).backgroundColor,
-          width: node.getBoundingClientRect().width,
-          height: node.getBoundingClientRect().height,
-        })))
-        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })))
+        const blankActions = await skeleton.locator(':scope > ul > li > div > div:last-child').evaluateAll((nodes) =>
+          nodes.map((node) => ({
+            children: node.childElementCount,
+            background: getComputedStyle(node).backgroundColor,
+            width: node.getBoundingClientRect().width,
+            height: node.getBoundingClientRect().height,
+          })),
+        )
+        expect(blankActions).toEqual(
+          Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })),
+        )
         if (shots !== undefined) {
           for (const colorScheme of ['light', 'dark'] as const) {
             await probe.emulateMedia({ colorScheme })
@@ -167,15 +188,18 @@ describe('web e2e: plugin manager', () => {
             console.log(`Plugin loading screenshot: ${path}`)
           }
         }
-        const motion = await skeleton.evaluate(element => element.getAnimations({ subtree: true }).map(animation => ({
-          duration: animation.effect?.getTiming().duration,
-          opacityOnly: animation.effect instanceof KeyframeEffect
-            && animation.effect.getKeyframes().every(frame => frame.opacity !== undefined && frame.transform === undefined),
-        })))
+        const motion = await skeleton.evaluate((element) =>
+          element.getAnimations({ subtree: true }).map((animation) => ({
+            duration: animation.effect?.getTiming().duration,
+            opacityOnly:
+              animation.effect instanceof KeyframeEffect &&
+              animation.effect.getKeyframes().every((frame) => frame.opacity !== undefined && frame.transform === undefined),
+          })),
+        )
         expect(motion.length).toBe(13)
-        expect(motion.every(animation => animation.duration === 2000 && animation.opacityOnly)).toBe(true)
+        expect(motion.every((animation) => animation.duration === 2000 && animation.opacityOnly)).toBe(true)
         await probe.emulateMedia({ reducedMotion: 'reduce' })
-        await expect.poll(() => skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0)
+        await expect.poll(() => skeleton.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0)
         await probe.emulateMedia({ reducedMotion: 'no-preference', colorScheme: null })
 
         release.resolve(undefined)
@@ -189,9 +213,16 @@ describe('web e2e: plugin manager', () => {
         // placeholder rows model the bundle cards alone.
         const loaded = await measure(official, ':scope > ul > li[data-plugin-package]')
         expect(loaded.rows).toHaveLength(OPTIONAL_BUNDLES.length)
-        const compare = (name: string, a: typeof loading.pageHeader, b: typeof loaded.pageHeader, axes: readonly (keyof typeof a)[] = ['x', 'y', 'width', 'height']) => {
+        const compare = (
+          name: string,
+          a: typeof loading.pageHeader,
+          b: typeof loaded.pageHeader,
+          axes: readonly (keyof typeof a)[] = ['x', 'y', 'width', 'height'],
+        ) => {
           for (const axis of axes) {
-            expect(Math.abs(a[axis] - b[axis]), `${width}px ${name}.${axis}: loading=${a[axis]}, loaded=${b[axis]}`).toBeLessThanOrEqual(0.1)
+            expect(Math.abs(a[axis] - b[axis]), `${width}px ${name}.${axis}: loading=${a[axis]}, loaded=${b[axis]}`).toBeLessThanOrEqual(
+              0.1,
+            )
           }
         }
         compare('pageHeader', loading.pageHeader, loaded.pageHeader)
@@ -199,11 +230,15 @@ describe('web e2e: plugin manager', () => {
         for (const [index, row] of loading.rows.entries()) {
           const real = loaded.rows[index]
           if (real === undefined) break
-          for (const part of ['row', 'head', 'icon', 'main', 'titleRow', 'actions'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part])
+          for (const part of ['row', 'head', 'icon', 'main', 'titleRow', 'actions'] as const)
+            compare(`row ${index + 1} ${part}`, row[part], real[part])
           // Painted text bars are deliberately shorter than real copy; their line origins and heights align.
-          for (const part of ['title', 'description'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part], ['x', 'y', 'height'])
+          for (const part of ['title', 'description'] as const)
+            compare(`row ${index + 1} ${part}`, row[part], real[part], ['x', 'y', 'height'])
         }
-        facts.push(`${width}px: ${loaded.rows.length} rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px`)
+        facts.push(
+          `${width}px: ${loaded.rows.length} rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px`,
+        )
         expect(consoleWatch.pageErrors).toEqual([])
       } finally {
         release.resolve(undefined)
@@ -215,12 +250,18 @@ describe('web e2e: plugin manager', () => {
         }
       }
     }
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'loading.expected.md'), [
-      aria, '', ...facts,
-      'Loading: header actions disabled; action spaces are empty 36×20 areas, with no switch placeholders',
-      'Loaded: skeleton removed; header actions enabled',
-      'Motion: 13 opacity-only pulses, 2000ms; reduced motion stops all pulses',
-    ].join('\n'), MODE)
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'loading.expected.md'),
+      [
+        aria,
+        '',
+        ...facts,
+        'Loading: header actions disabled; action spaces are empty 36×20 areas, with no switch placeholders',
+        'Loaded: skeleton removed; header actions enabled',
+        'Motion: 13 opacity-only pulses, 2000ms; reduced motion stops all pulses',
+      ].join('\n'),
+      MODE,
+    )
   })
 
   it('delays refresh hints and keeps cards through manual refresh, failure, and retry', async () => {
@@ -246,15 +287,19 @@ describe('web e2e: plugin manager', () => {
       const tooltip = probe.getByRole('tooltip').filter({ hasText: '刷新' })
       const trace: string[] = []
       const recordRefresh = async (phase: string) => {
-        trace.push(phase, await refresh.ariaSnapshot(), JSON.stringify({
-          busy: await panel.getAttribute('aria-busy'),
-          spinners: await refresh.locator('[data-state="ongoing"]').count(),
-          cards: await cards.count(),
-          skeletons: await panel.locator('[data-plugin-loading]').count(),
-          alerts: await panel.getByRole('alert').allTextContents(),
-          retry: await panel.getByRole('button', { name: '重试', exact: true }).count(),
-          toasts: await probe.locator('body > [role="alert"]').allTextContents(),
-        }))
+        trace.push(
+          phase,
+          await refresh.ariaSnapshot(),
+          JSON.stringify({
+            busy: await panel.getAttribute('aria-busy'),
+            spinners: await refresh.locator('[data-state="ongoing"]').count(),
+            cards: await cards.count(),
+            skeletons: await panel.locator('[data-plugin-loading]').count(),
+            alerts: await panel.getByRole('alert').allTextContents(),
+            retry: await panel.getByRole('button', { name: '重试', exact: true }).count(),
+            toasts: await probe.locator('body > [role="alert"]').allTextContents(),
+          }),
+        )
       }
       const bounds = await refresh.boundingBox()
       if (bounds === null) throw new Error('Refresh button has no visible bounds')
@@ -272,7 +317,7 @@ describe('web e2e: plugin manager', () => {
 
         await add.focus()
         await probe.keyboard.press('Shift+Tab')
-        expect(await refresh.evaluate(element => element === document.activeElement)).toBe(true)
+        expect(await refresh.evaluate((element) => element === document.activeElement)).toBe(true)
         await probe.clock.runFor(499)
         expect(await tooltip.count()).toBe(0)
         trace.push(`Focus at 499ms: ${await tooltip.count()} tooltips`)
@@ -296,7 +341,9 @@ describe('web e2e: plugin manager', () => {
           const release = Promise.withResolvers<undefined>()
           const called = spy.mock.calls.length
           spy.mockImplementationOnce(() => {
-            const read = release.promise.then(() => { throw new Error('Fixture plugin refresh failed') })
+            const read = release.promise.then(() => {
+              throw new Error('Fixture plugin refresh failed')
+            })
             reads.push(read)
             return read
           })
@@ -308,7 +355,7 @@ describe('web e2e: plugin manager', () => {
             expect(await panel.getAttribute('aria-busy')).toBe('true')
             const spinner = refresh.locator('[data-state="ongoing"]')
             await spinner.waitFor()
-            expect(await spinner.evaluate(element => element.getAnimations({ subtree: true }).length)).toBeGreaterThan(0)
+            expect(await spinner.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBeGreaterThan(0)
             expect(await cards.allTextContents()).toEqual(cardText)
             expect(await panel.locator('[data-plugin-loading]').count()).toBe(0)
             expect(await tooltip.count()).toBe(0)
@@ -357,22 +404,38 @@ describe('web e2e: plugin manager', () => {
     expect(await toggle.getAttribute('aria-checked')).toBe('true')
     expect(await toggle.isDisabled()).toBe(false)
     await panel.getByText(/cannot resolve profile bundle/).waitFor({ timeout: 10_000 })
-    expect((await scaffold.ctx.pluginManager.listBundles()).find(row => row.name === '@fixture/missing-bundle'))
-      .toMatchObject({ enabled: true, installed: false, removable: true, error: { code: 'operation-error' }, rows: [] })
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'missing-bundle.expected.md'),
+    expect((await scaffold.ctx.pluginManager.listBundles()).find((row) => row.name === '@fixture/missing-bundle')).toMatchObject({
+      enabled: true,
+      installed: false,
+      removable: true,
+      error: { code: 'operation-error' },
+      rows: [],
+    })
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'missing-bundle.expected.md'),
       await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
         replacements: [[scaffold.harnessHome, '{{home}}']],
-      }), MODE)
+      }),
+      MODE,
+    )
     await toggle.click()
-    await expect.poll(async () => (JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
-      dsh: { profile: { bundles: string[] } }
-    }).dsh.profile.bundles, { timeout: 10_000 }).toEqual(SCAFFOLD_BUNDLES)
+    await expect
+      .poll(
+        async () =>
+          (
+            JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
+              dsh: { profile: { bundles: string[] } }
+            }
+          ).dsh.profile.bundles,
+        { timeout: 10_000 },
+      )
+      .toEqual(SCAFFOLD_BUNDLES)
     await expect.poll(() => panel.getByText(/cannot resolve profile bundle/).count(), { timeout: 10_000 }).toBe(0)
-    expect((await scaffold.ctx.pluginManager.listBundles()).some(row => row.name === '@fixture/missing-bundle')).toBe(false)
+    expect((await scaffold.ctx.pluginManager.listBundles()).some((row) => row.name === '@fixture/missing-bundle')).toBe(false)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('lists the installed bundles with their switches and leaves the installation\'s own to Settings', async () => {
+  it("lists the installed bundles with their switches and leaves the installation's own to Settings", async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-list'))
     const panel = await openPluginsPanel()
 
@@ -392,7 +455,9 @@ describe('web e2e: plugin manager', () => {
     await info.hover()
     const hoverHelp = page.getByRole('tooltip')
     await hoverHelp.waitFor()
-    expect(await hoverHelp.textContent()).toBe('在这里配置官方插件，安装和管理其他插件。内置插件列表及运行状态可在「设置 → 内置插件」中查看')
+    expect(await hoverHelp.textContent()).toBe(
+      '在这里配置官方插件，安装和管理其他插件。内置插件列表及运行状态可在「设置 → 内置插件」中查看',
+    )
     await panel.getByRole('heading', { name: '插件', exact: true }).hover()
     await hoverHelp.waitFor({ state: 'hidden' })
     await info.focus()
@@ -402,7 +467,7 @@ describe('web e2e: plugin manager', () => {
     expect(await help.textContent()).toContain('设置 → 内置插件')
     await page.keyboard.press('Escape')
     expect(await help.count()).toBe(0)
-    expect(await info.evaluate(element => element === document.activeElement)).toBe(true)
+    expect(await info.evaluate((element) => element === document.activeElement)).toBe(true)
     await info.click()
     await panel.getByRole('heading', { name: '插件', exact: true }).hover()
     await help.hover()
@@ -416,10 +481,10 @@ describe('web e2e: plugin manager', () => {
     const card = panel.locator('[data-plugin-package="@fixture/bundle"]')
     const open = card.getByRole('button', { name: '查看 @fixture/bundle', exact: true })
     await open.hover()
-    const hoverRadius = await card.evaluate(element => getComputedStyle(element).borderRadius)
+    const hoverRadius = await card.evaluate((element) => getComputedStyle(element).borderRadius)
     await toggle.focus()
     await page.keyboard.press('Shift+Tab')
-    expect(await open.evaluate(element => element.matches(':focus-visible'))).toBe(true)
+    expect(await open.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
     const focusRing = await open.evaluate((element) => {
       const style = getComputedStyle(element, '::after')
       return {
@@ -439,8 +504,9 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
     expect(await panel.locator('[data-plugin-group="official"] [data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length)
     expect(await panel.locator('[data-plugin-group="official"] [data-plugin-item]').count()).toBe(4)
-    expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+    expect(await panel.getByText('实验性', { exact: true }).count()).toBe(
+      OPTIONAL_BUNDLES.filter((name) => name.startsWith('@deepseek-ai/dsh-experimental-')).length,
+    )
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
     expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).getAttribute('aria-checked')).toBe('false')
@@ -462,7 +528,10 @@ describe('web e2e: plugin manager', () => {
   it('keeps off-state switch thumbs light in both themes', async () => {
     // The off-state thumb must stay light so an operable toggle cannot read as
     // disabled, whose only other difference is reduced opacity.
-    for (const [theme, label] of [['light', '浅色'], ['dark', '深色']] as const) {
+    for (const [theme, label] of [
+      ['light', '浅色'],
+      ['dark', '深色'],
+    ] as const) {
       await openSettings(page, 'zh')
       const settings = page.getByRole('dialog', { name: '设置', exact: true })
       await settings.getByRole('button', { name: '通用设置', exact: true }).click()
@@ -509,9 +578,13 @@ describe('web e2e: plugin manager', () => {
       const image = panel.locator(`${selector} img`).first()
       await image.waitFor()
       expect(await image.getAttribute('src')).toBe(source)
-      await image.evaluate(async (node: HTMLImageElement) => { await node.decode() })
+      await image.evaluate(async (node: HTMLImageElement) => {
+        await node.decode()
+      })
       const size = await image.evaluate((node: HTMLImageElement) => ({
-        width: node.width, height: node.height, naturalWidth: node.naturalWidth,
+        width: node.width,
+        height: node.height,
+        naturalWidth: node.naturalWidth,
       }))
       expect(size.naturalWidth).toBeGreaterThan(0)
       images.push(`${label}: image, ${size.width}×${size.height}, decoded`)
@@ -559,19 +632,27 @@ describe('web e2e: plugin manager', () => {
     expect(await search.getByText('搜索工作区中的文件。', { exact: true }).count()).toBe(1)
     expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(1)
     await panel.getByText('Registry description for the fixture bundle.', { exact: true }).first().waitFor()
-    expect([...scaffold.ctx.loader.entries()].some(entry => entry.options.name.startsWith('@fixture/bundle'))).toBe(false)
-    await compareOrRefreshGolden(EXPORTS_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
-      replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
-    }), MODE)
+    expect([...scaffold.ctx.loader.entries()].some((entry) => entry.options.name.startsWith('@fixture/bundle'))).toBe(false)
+    await compareOrRefreshGolden(
+      EXPORTS_EXPECTED,
+      await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+        replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
+      }),
+      MODE,
+    )
     try {
       await setLanguage('en')
       await search.getByText('File Search', { exact: true }).waitFor()
       expect(await review.getByText('@fixture/bundle/review', { exact: true }).count()).toBeGreaterThan(0)
       expect(await search.getByText('Search package introduction.', { exact: true }).count()).toBe(0)
       expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(0)
-      await compareOrRefreshGolden(EXPORTS_EN_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
-        replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
-      }), MODE)
+      await compareOrRefreshGolden(
+        EXPORTS_EN_EXPECTED,
+        await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+          replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
+        }),
+        MODE,
+      )
       expect(await panel.locator('[data-plugin-name]').textContent()).toBe('@fixture/bundle')
     } finally {
       await setLanguage('zh')
@@ -597,7 +678,11 @@ describe('web e2e: plugin manager', () => {
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
       expect(await panel.getByText('Enable team collaboration, team tools, the member roster, and the shared task board.').count()).toBe(1)
       await child.getByText('Team Tools', { exact: true }).waitFor()
-      expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
+      expect(
+        await child
+          .getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true })
+          .count(),
+      ).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
       await panel.getByRole('button', { name: 'View Agent Teams', exact: true }).waitFor()
       expect(await panel.getByRole('switch', { name: 'Enable Agent Teams', exact: true }).count()).toBe(1)
@@ -618,8 +703,8 @@ describe('web e2e: plugin manager', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-team'))
     const panel = await openPluginsPanel()
     const toggle = panel.getByRole('switch', { name: '启用 智能体团队', exact: true })
-    const teamRows = () => [...scaffold.ctx.loader.entries()]
-      .filter(entry => ['agent-team', 'tool-agent-team', 'ui-agent-team'].includes(entry.options.id))
+    const teamRows = () =>
+      [...scaffold.ctx.loader.entries()].filter((entry) => ['agent-team', 'tool-agent-team', 'ui-agent-team'].includes(entry.options.id))
     const teamPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     const teamTripwire = watchConsole(teamPage)
     try {
@@ -629,19 +714,23 @@ describe('web e2e: plugin manager', () => {
       if (agent === undefined) throw new Error('connected Team workspace did not create an Agent')
       // Session actions render only after the conversation leaves its blank state.
       agent.session.append('turn/start', { turn: 1 })
-      agent.session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'Team UI lifecycle' }], source: { kind: 'user' },
-      }), { surfaceOp: 'append' })
+      agent.session.append(
+        'user/message',
+        createUserMessage({
+          content: [{ type: 'text', text: 'Team UI lifecycle' }],
+          source: { kind: 'user' },
+        }),
+        { surfaceOp: 'append' },
+      )
       agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await scaffold.ctx.sessions.flush(agent.session)
       // The current crumb renders as plain text inside the zh-labeled hierarchy nav.
-      await teamPage.getByRole('navigation', { name: '会话层级' })
-        .getByText('Team UI lifecycle', { exact: true }).waitFor()
+      await teamPage.getByRole('navigation', { name: '会话层级' }).getByText('Team UI lifecycle', { exact: true }).waitFor()
       const action = teamPage.locator('[data-team-action]')
       expect(await action.count()).toBe(0)
       await toggle.click()
       try {
-        await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(3)
+        await expect.poll(() => teamRows().filter((entry) => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(3)
         await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
         await action.waitFor({ timeout: 20_000 })
         await action.getByRole('button', { name: '智能体团队', exact: true }).click()
@@ -662,9 +751,9 @@ describe('web e2e: plugin manager', () => {
         await panel.getByRole('button', { name: '返回插件列表' }).click()
       } finally {
         const back = panel.getByRole('button', { name: '返回插件列表' })
-        if (await back.count() > 0) await back.click()
-        if (await toggle.getAttribute('aria-checked') === 'true') await toggle.click()
-        await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(0)
+        if ((await back.count()) > 0) await back.click()
+        if ((await toggle.getAttribute('aria-checked')) === 'true') await toggle.click()
+        await expect.poll(() => teamRows().filter((entry) => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(0)
         await expect.poll(() => action.count(), { timeout: 20_000 }).toBe(0)
       }
       expect(teamTripwire.pageErrors).toEqual([])
@@ -678,12 +767,11 @@ describe('web e2e: plugin manager', () => {
   it('mounts the delivered Automation tasks rows without a bundle switch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-schedule'))
     const panel = await openPluginsPanel()
-    const scheduleRows = () => [...scaffold.ctx.loader.entries()]
-      .filter(entry => ['schedule', 'ui-schedule'].includes(entry.options.id))
+    const scheduleRows = () => [...scaffold.ctx.loader.entries()].filter((entry) => ['schedule', 'ui-schedule'].includes(entry.options.id))
     // The delivered Web composition ships both rows enabled, so no bundle card
     // offers a switch for them.
     expect(scheduleRows()).toHaveLength(2)
-    expect(scheduleRows().every(entry => entry.fiber?.state === FiberState.ACTIVE)).toBe(true)
+    expect(scheduleRows().every((entry) => entry.fiber?.state === FiberState.ACTIVE)).toBe(true)
     expect(await panel.getByRole('button', { name: '查看 自动化任务', exact: true }).count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 自动化任务', exact: true }).count()).toBe(0)
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '自动化任务', exact: true }).waitFor()
@@ -695,13 +783,23 @@ describe('web e2e: plugin manager', () => {
     const manager = scaffold.ctx.pluginManager
     const manifest = await homeFile('profiles', 'scaffold', 'package.json')
     const registrySpy = vi.spyOn(manager, 'registries').mockResolvedValue({
-      registry: null, fallbackRegistries: [], resolved: 'https://registry.npmjs.org/',
+      registry: null,
+      fallbackRegistries: [],
+      resolved: 'https://registry.npmjs.org/',
     })
     const inspectSpy = vi.spyOn(manager, 'inspect').mockImplementation(async (spec, options) => ({
-      status: 'accepted', kind: 'registry', name: spec, version: '1.0.0', bundle: true, registry: options?.registry ?? null,
+      status: 'accepted',
+      kind: 'registry',
+      name: spec,
+      version: '1.0.0',
+      bundle: true,
+      registry: options?.registry ?? null,
     }))
-    const installSpy = vi.spyOn(manager, 'installBundle').mockImplementation(async spec => ({
-      changed: false, application: 'failed', stage: 'install', target: spec,
+    const installSpy = vi.spyOn(manager, 'installBundle').mockImplementation(async (spec) => ({
+      changed: false,
+      application: 'failed',
+      stage: 'install',
+      target: spec,
       error: { code: 'operation-error', diagnostic: 'IME fixture: no package was installed' },
     }))
     try {
@@ -736,32 +834,32 @@ describe('web e2e: plugin manager', () => {
           expect(await custom.isChecked()).toBe(false)
           await offered.focus()
           await probe.keyboard.press('Tab')
-          expect(await field.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await field.evaluate((element) => element === document.activeElement)).toBe(true)
           expect(await offered.isChecked()).toBe(true)
           expect(await custom.isChecked()).toBe(false)
           await probe.keyboard.press('Shift+Tab')
-          expect(await offered.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await offered.evaluate((element) => element === document.activeElement)).toBe(true)
           await probe.keyboard.press('Shift+Tab')
           await registry.waitFor({ state: 'detached' })
-          expect(await registryToggle.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await registryToggle.evaluate((element) => element === document.activeElement)).toBe(true)
           await probe.keyboard.press('Enter')
           await custom.focus()
           await probe.keyboard.press('Space')
           expect(await custom.isChecked()).toBe(true)
           expect(await offered.isChecked()).toBe(false)
-          expect(await field.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await field.evaluate((element) => element === document.activeElement)).toBe(true)
           await field.fill(customRegistry)
           await probe.keyboard.press('Shift+Tab')
-          expect(await custom.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await custom.evaluate((element) => element === document.activeElement)).toBe(true)
           await probe.keyboard.press('Tab')
-          expect(await field.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await field.evaluate((element) => element === document.activeElement)).toBe(true)
           await probe.keyboard.press('Tab')
           await registry.waitFor({ state: 'detached' })
-          expect(await registryToggle.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await registryToggle.evaluate((element) => element === document.activeElement)).toBe(true)
           await probe.keyboard.press('Enter')
           await custom.focus()
           await probe.keyboard.press('Tab')
-          expect(await field.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(await field.evaluate((element) => element === document.activeElement)).toBe(true)
           expect(await custom.isChecked()).toBe(true)
         }
         const value = target === 'package' ? spec : customRegistry
@@ -780,8 +878,12 @@ describe('web e2e: plugin manager', () => {
             { label: 'Safari isComposing=false, keyCode=229', isComposing: false, keyCode: 229 },
           ]) {
             await field.dispatchEvent('keydown', {
-              key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
-              isComposing: event.isComposing, keyCode: event.keyCode,
+              key: 'Enter',
+              code: 'Enter',
+              bubbles: true,
+              cancelable: true,
+              isComposing: event.isComposing,
+              keyCode: event.keyCode,
             })
             await assertUnsubmitted(event.label)
           }
@@ -816,8 +918,9 @@ describe('web e2e: plugin manager', () => {
       trace.push('Profile manifest unchanged; controlled Host result performed no package installation.')
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'ime-enter.expected.md'), trace.join('\n'), MODE)
     } finally {
-      try { await context.close() }
-      finally {
+      try {
+        await context.close()
+      } finally {
         registrySpy.mockRestore()
         inspectSpy.mockRestore()
         installSpy.mockRestore()
@@ -833,7 +936,7 @@ describe('web e2e: plugin manager', () => {
     await dialog.waitFor({ timeout: 10_000 })
     const field = dialog.getByRole('textbox', { name: '包名或地址' })
     expect(await page.getByRole('menu').count()).toBe(0)
-    await expect.poll(() => field.evaluate(element => document.activeElement === element)).toBe(true)
+    await expect.poll(() => field.evaluate((element) => document.activeElement === element)).toBe(true)
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
     await panel.getByRole('button', { name: '选择添加插件方式', exact: true }).click()
@@ -841,7 +944,7 @@ describe('web e2e: plugin manager', () => {
     await menu.getByRole('menuitem', { name: /^安装第三方插件/ }).click()
     await menu.waitFor({ state: 'hidden' })
     await dialog.waitFor({ state: 'visible' })
-    await expect.poll(() => field.evaluate(element => document.activeElement === element)).toBe(true)
+    await expect.poll(() => field.evaluate((element) => document.activeElement === element)).toBe(true)
     const install = dialog.getByRole('button', { name: '安装', exact: true })
     expect(await install.isDisabled()).toBe(true)
     expect(await dialog.getByRole('note').textContent()).toContain('请确认插件来源可信')
@@ -887,14 +990,17 @@ describe('web e2e: plugin manager', () => {
     const panel = await openPluginsPanel()
     const toggle = panel.getByRole('switch', { name: '启用 @fixture/bundle' })
     await toggle.waitFor({ timeout: 20_000 })
-    const mounted = () => [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'fixture-row')
+    const mounted = () => [...scaffold.ctx.loader.entries()].find((entry) => entry.options.id === 'fixture-row')
     expect(mounted()?.fiber?.state).toBeUndefined()
 
     await toggle.click()
 
-    const bundles = async () => (JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
-      dsh: { profile: { bundles: string[] } }
-    }).dsh.profile.bundles
+    const bundles = async () =>
+      (
+        JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
+          dsh: { profile: { bundles: string[] } }
+        }
+      ).dsh.profile.bundles
     await expect.poll(bundles, { timeout: 10_000 }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
     // A live profile: the row mounts once the whole tree recomposed, the switch is on, and nothing waits for a restart.
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).toBe(2)
@@ -908,7 +1014,9 @@ describe('web e2e: plugin manager', () => {
     await rowSwitch.waitFor({ timeout: 10_000 })
     expect(await rowSwitch.getAttribute('aria-checked')).toBe('true')
     await rowSwitch.click()
-    await expect.poll(async () => (await homeFile('profiles', 'scaffold', 'cordis.patch.yml')).includes('fixture-row'), { timeout: 10_000 }).toBe(true)
+    await expect
+      .poll(async () => (await homeFile('profiles', 'scaffold', 'cordis.patch.yml')).includes('fixture-row'), { timeout: 10_000 })
+      .toBe(true)
     await expect.poll(() => rowSwitch.getAttribute('aria-checked'), { timeout: 10_000 }).toBe('false')
     // A disabled entry keeps its disposed fiber; only an active one counts as mounted.
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).not.toBe(2)
@@ -925,12 +1033,18 @@ describe('web e2e: plugin manager', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
+      'manager.expected.md',
+      'live-enabled.expected.md',
+      'missing-bundle.expected.md',
+      'exports.expected.md',
+      'exports-en.expected.md',
+      'icons.expected.md',
+      'loading.expected.md',
+      'refresh.expected.md',
       'ime-enter.expected.md',
     ])
   })
 })
-
 
 describe('web e2e: startup-applied plugin management', () => {
   it('saves a bundle selection that waits for the next start and keeps its rows read-only', async () => {
@@ -949,7 +1063,7 @@ describe('web e2e: startup-applied plugin management', () => {
       const panel = page.locator('[data-plugin-panel]')
       const toggle = panel.getByRole('switch', { name: '启用 @fixture/bundle' })
       await toggle.waitFor({ timeout: 20_000 })
-      const mounted = () => [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'fixture-row')
+      const mounted = () => [...scaffold.ctx.loader.entries()].find((entry) => entry.options.id === 'fixture-row')
       const bundles = async () => {
         const text = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'package.json'), 'utf8')
         return (JSON.parse(text) as { dsh: { profile: { bundles: string[] } } }).dsh.profile.bundles

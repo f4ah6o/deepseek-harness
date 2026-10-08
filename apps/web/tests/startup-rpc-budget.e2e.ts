@@ -2,7 +2,7 @@
 // plugin count. No model call or replay fixture is involved.
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
 
@@ -38,7 +38,7 @@ describe('startup RPC budget', () => {
     // absorbs the first-connection reset wave the budget must include.
     await page.getByRole('textbox', { name: 'Choose workspace' }).waitFor({ timeout: 30_000 })
     await page.waitForTimeout(3000)
-    const describeCount = calls.filter(method => method === 'settings/describe').length
+    const describeCount = calls.filter((method) => method === 'settings/describe').length
     expect(describeCount, `startup /api calls:\n${calls.join('\n')}`).toBe(DESCRIBE_BUDGET)
   })
 })

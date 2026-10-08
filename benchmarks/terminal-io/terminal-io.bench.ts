@@ -1,6 +1,6 @@
 /** Bounded terminal output must not rescan a full retained window on every chunk. */
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { runBuiltBenchmarkWorker } from '../support/built-worker.ts'
 import { ciTimeBudget } from '../support/calibration.ts'
 import type { TerminalIoReport } from './terminal-io.worker.ts'
@@ -19,7 +19,10 @@ function median(values: readonly number[]): number {
 
 async function sample(capacity: number, mode: 'steady' | 'full' | 'tiny' | 'filtered'): Promise<TerminalIoReport> {
   const outcome = await runBuiltBenchmarkWorker<TerminalIoReport>({
-    worker: WORKER, args: [String(capacity), mode], timeoutMs: 120_000, exposeGc: true,
+    worker: WORKER,
+    args: [String(capacity), mode],
+    timeoutMs: 120_000,
+    exposeGc: true,
   })
   if (outcome.timedOut || outcome.signal !== null || outcome.exitCode !== 0 || outcome.report === undefined) {
     throw new Error('terminal I/O worker failed: ' + JSON.stringify(outcome))
@@ -34,15 +37,15 @@ it('bounds steady overflow cost as retained terminal capacity grows 32 times', a
     small.push(await sample(128 * 1024, 'steady'))
     large.push(await sample(4 * MIB, 'steady'))
   }
-  const capacityRatio = median(large.map(row => row.ingestMs)) / median(small.map(row => row.ingestMs))
+  const capacityRatio = median(large.map((row) => row.ingestMs)) / median(small.map((row) => row.ingestMs))
   const ingestBudgetMs = ciTimeBudget(EXPECTED_MS.steadyIngest)
   const completeBudgetMs = ciTimeBudget(EXPECTED_MS.steadyComplete)
   console.log(JSON.stringify({ scenario: 'terminal-steady', small, large, capacityRatio, ingestBudgetMs, completeBudgetMs }))
   expect(capacityRatio).toBeLessThanOrEqual(MAX_CAPACITY_RATIO)
   for (const rows of [small, large]) {
-    expect(median(rows.map(row => row.ingestMs))).toBeLessThanOrEqual(ingestBudgetMs)
-    expect(median(rows.map(row => row.completeMs))).toBeLessThanOrEqual(completeBudgetMs)
-    expect(Math.max(...rows.map(row => row.retainedHeapBytes))).toBeLessThanOrEqual(MAX_RETAINED_HEAP_BYTES)
+    expect(median(rows.map((row) => row.ingestMs))).toBeLessThanOrEqual(ingestBudgetMs)
+    expect(median(rows.map((row) => row.completeMs))).toBeLessThanOrEqual(completeBudgetMs)
+    expect(Math.max(...rows.map((row) => row.retainedHeapBytes))).toBeLessThanOrEqual(MAX_RETAINED_HEAP_BYTES)
   }
 })
 
@@ -61,9 +64,9 @@ it('releases filtered OSC storage behind retained visible string slices', async 
 it('completes a five MiB terminal send with bounded retained output', async () => {
   const samples: TerminalIoReport[] = []
   for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) samples.push(await sample(4 * MIB, 'full'))
-  const completeMedianMs = median(samples.map(row => row.completeMs))
+  const completeMedianMs = median(samples.map((row) => row.completeMs))
   const completeBudgetMs = ciTimeBudget(EXPECTED_MS.fullComplete)
   console.log(JSON.stringify({ scenario: 'terminal-five-mib', samples, completeMedianMs, completeBudgetMs }))
   expect(completeMedianMs).toBeLessThanOrEqual(completeBudgetMs)
-  expect(Math.max(...samples.map(row => row.retainedHeapBytes))).toBeLessThanOrEqual(MAX_RETAINED_HEAP_BYTES)
+  expect(Math.max(...samples.map((row) => row.retainedHeapBytes))).toBeLessThanOrEqual(MAX_RETAINED_HEAP_BYTES)
 })

@@ -3,22 +3,13 @@
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import {
-  runBuiltBenchmarkWorker,
-  type BuiltBenchmarkWorkerRun,
-} from '../support/built-worker.ts'
-import {
-  ciTimeBudget,
-  PERFORMANCE_BUDGET_HEADROOM,
-} from '../support/calibration.ts'
-import type {
-  SessionOpenBenchmarkScenario,
-  SessionOpenWorkerReport,
-} from './session-open.worker.ts'
+import { runBuiltBenchmarkWorker, type BuiltBenchmarkWorkerRun } from '../support/built-worker.ts'
+import { ciTimeBudget, PERFORMANCE_BUDGET_HEADROOM } from '../support/calibration.ts'
+import type { SessionOpenBenchmarkScenario, SessionOpenWorkerReport } from './session-open.worker.ts'
 import {
   SYNTHETIC_CURRENT_GENERATION,
   SYNTHETIC_SESSION_ID,
@@ -71,9 +62,7 @@ const FIRST_OPEN_AGENT_RESUME_BUDGET_MS = 562
 const REOPEN_AGENT_RESUME_BUDGET_MS = ciTimeBudget(EXPECTED_MS.reopenAgentResume)
 /** Historical-reference retained heap before variance headroom. */
 const EXPECTED_AGENT_RETAINED_HEAP_MB = 26.1
-const AGENT_RETAINED_HEAP_BUDGET_MB = Math.ceil(
-  EXPECTED_AGENT_RETAINED_HEAP_MB * PERFORMANCE_BUDGET_HEADROOM,
-)
+const AGENT_RETAINED_HEAP_BUDGET_MB = Math.ceil(EXPECTED_AGENT_RETAINED_HEAP_MB * PERFORMANCE_BUDGET_HEADROOM)
 
 const WORKER = join(import.meta.dirname, '..', '.dsh-build', 'session-open', 'session-open.worker.js')
 
@@ -113,14 +102,14 @@ function phaseMetric(
 
 function summarize(reports: readonly SessionOpenWorkerReport[]) {
   return {
-    totalMs: metric(reports, report => report.totalMs),
-    cpuUserMs: metric(reports, report => report.cpuUserMs),
-    cpuSystemMs: metric(reports, report => report.cpuSystemMs),
-    retainedHeapMb: metric(reports, report => report.retained.heapUsedMb),
-    retainedExternalMb: metric(reports, report => report.retained.externalMb),
-    retainedArrayBuffersMb: metric(reports, report => report.retained.arrayBuffersMb),
-    retainedRssMb: metric(reports, report => report.retained.rssMb),
-    peakRssMb: metric(reports, report => report.afterGc.peakRssMb),
+    totalMs: metric(reports, (report) => report.totalMs),
+    cpuUserMs: metric(reports, (report) => report.cpuUserMs),
+    cpuSystemMs: metric(reports, (report) => report.cpuSystemMs),
+    retainedHeapMb: metric(reports, (report) => report.retained.heapUsedMb),
+    retainedExternalMb: metric(reports, (report) => report.retained.externalMb),
+    retainedArrayBuffersMb: metric(reports, (report) => report.retained.arrayBuffersMb),
+    retainedRssMb: metric(reports, (report) => report.retained.rssMb),
+    peakRssMb: metric(reports, (report) => report.afterGc.peakRssMb),
   }
 }
 
@@ -134,11 +123,7 @@ function summarizePhases(reports: readonly SessionOpenWorkerReport[]) {
   }
 }
 
-function runWorker(
-  root: string,
-  scenario: SessionOpenBenchmarkScenario,
-  heapLimitMb?: number,
-): Promise<WorkerRun> {
+function runWorker(root: string, scenario: SessionOpenBenchmarkScenario, heapLimitMb?: number): Promise<WorkerRun> {
   return runBuiltBenchmarkWorker({
     worker: WORKER,
     args: [root, scenario],
@@ -148,22 +133,17 @@ function runWorker(
   })
 }
 
-function requireReport(
-  run: WorkerRun,
-  scenario: SessionOpenBenchmarkScenario,
-  heapLimitMb?: number,
-): SessionOpenWorkerReport {
+function requireReport(run: WorkerRun, scenario: SessionOpenBenchmarkScenario, heapLimitMb?: number): SessionOpenWorkerReport {
   if (run.report !== undefined) return run.report
   const stderrLines = run.stderr.trim().split('\n')
-  const fatal = stderrLines.filter(line => /FATAL ERROR|heap limit|out of memory/i.test(line))
-  const context = stderrLines.length <= 20
-    ? stderrLines
-    : [...stderrLines.slice(0, 10), '... stderr middle omitted ...', ...stderrLines.slice(-10)]
+  const fatal = stderrLines.filter((line) => /FATAL ERROR|heap limit|out of memory/i.test(line))
+  const context =
+    stderrLines.length <= 20 ? stderrLines : [...stderrLines.slice(0, 10), '... stderr middle omitted ...', ...stderrLines.slice(-10)]
   const detail = (fatal.length > 0 ? fatal : context).join('\n')
   const limit = heapLimitMb === undefined ? 'normal heap' : `${String(heapLimitMb)} MB old space`
   throw new Error(
-    `${scenario} failed under ${limit}: exit=${String(run.exitCode)}, signal=${String(run.signal)}, `
-    + `timedOut=${String(run.timedOut)}\n${detail}`,
+    `${scenario} failed under ${limit}: exit=${String(run.exitCode)}, signal=${String(run.signal)}, ` +
+      `timedOut=${String(run.timedOut)}\n${detail}`,
   )
 }
 
@@ -182,11 +162,7 @@ class SessionOpenBenchmarkSuite {
     // Produce one real post-upgrade directory outside every measured interval.
     const templateRoot = await this.createRoot('first-open', 'post-upgrade-template')
     requireReport(await runWorker(templateRoot, 'agent-resume'), 'agent-resume')
-    this.currentSourcePath = join(
-      templateRoot,
-      SYNTHETIC_SESSION_DIRECTORY,
-      SYNTHETIC_CURRENT_FILENAME,
-    )
+    this.currentSourcePath = join(templateRoot, SYNTHETIC_SESSION_DIRECTORY, SYNTHETIC_CURRENT_FILENAME)
   }
 
   async dispose(): Promise<void> {
@@ -206,10 +182,7 @@ class SessionOpenBenchmarkSuite {
     }
   }
 
-  async sample(
-    accessKind: SessionAccessKind,
-    endpoint: SessionBenchmarkEndpoint,
-  ): Promise<SessionOpenWorkerReport[]> {
+  async sample(accessKind: SessionAccessKind, endpoint: SessionBenchmarkEndpoint): Promise<SessionOpenWorkerReport[]> {
     const reports: SessionOpenWorkerReport[] = []
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
       reports.push(await this.run(accessKind, endpoint))
@@ -217,24 +190,14 @@ class SessionOpenBenchmarkSuite {
     return reports
   }
 
-  async run(
-    accessKind: SessionAccessKind,
-    endpoint: SessionBenchmarkEndpoint,
-    heapLimitMb?: number,
-  ): Promise<SessionOpenWorkerReport> {
+  async run(accessKind: SessionAccessKind, endpoint: SessionBenchmarkEndpoint, heapLimitMb?: number): Promise<SessionOpenWorkerReport> {
     const scenario = this.workerScenario(accessKind, endpoint)
-    const root = await this.createRoot(
-      accessKind,
-      `${accessKind}-${endpoint}-${String(this.rootIndex++)}`,
-    )
+    const root = await this.createRoot(accessKind, `${accessKind}-${endpoint}-${String(this.rootIndex++)}`)
     const report = requireReport(await runWorker(root, scenario, heapLimitMb), scenario, heapLimitMb)
     return report
   }
 
-  private workerScenario(
-    accessKind: SessionAccessKind,
-    endpoint: SessionBenchmarkEndpoint,
-  ): SessionOpenBenchmarkScenario {
+  private workerScenario(accessKind: SessionAccessKind, endpoint: SessionBenchmarkEndpoint): SessionOpenBenchmarkScenario {
     if (endpoint !== 'phases') return endpoint
     return accessKind === 'first-open' ? 'phase-migrate' : 'phase-steady'
   }
@@ -319,8 +282,7 @@ describe('Session opening benchmark prerequisites', () => {
     expect(() => requireReport(run, 'agent-resume')).toThrow(headline)
     expect(() => requireReport(run, 'agent-resume')).toThrow('Node.js test')
     expect(() => requireReport(run, 'agent-resume')).not.toThrow('stack frame 15')
-    expect(() => requireReport({ ...run, stderr: 'FATAL ERROR: heap limit' }, 'agent-resume', 128))
-      .toThrow('128 MB old space')
+    expect(() => requireReport({ ...run, stderr: 'FATAL ERROR: heap limit' }, 'agent-resume', 128)).toThrow('128 MB old space')
   })
 
   it('migrates the generated workload and reopens its successor without changing V0', async () => {
@@ -342,14 +304,18 @@ describe('Session opening benchmark prerequisites', () => {
       const initial = await read.read()
       const session = Session.fromRestore(read.header.id, initial.events, read.header, read.inheritedEventCount, initial.eventState)
       expect(read.header.version).toBe(SESSION_FORMAT_VERSION)
-      expect(initial.events.filter(event => event.type === 'system/message')).toHaveLength(1)
+      expect(initial.events.filter((event) => event.type === 'system/message')).toHaveLength(1)
       expect(session.deriveMessages().map(({ id, role, content }) => ({ id, role, content }))).toEqual(
-        [1, 2].flatMap(turn => [
+        [1, 2].flatMap((turn) => [
           { id: 'user-' + String(turn), role: 'user', content: [{ type: 'text', text: 'prompt ' + String(turn) }] },
-          { id: 'assistant-' + String(turn), role: 'assistant', content: [
-            { type: 'reasoning', text: 'r0 r1 r2 ' },
-            { type: 'text', text: Array.from({ length: 12 }, (_, index) => 'w' + String(index) + ' ').join('') },
-          ] },
+          {
+            id: 'assistant-' + String(turn),
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'r0 r1 r2 ' },
+              { type: 'text', text: Array.from({ length: 12 }, (_, index) => 'w' + String(index) + ' ').join('') },
+            ],
+          },
         ]),
       )
       await read.close()
@@ -375,24 +341,30 @@ describe('Session opening benchmark prerequisites', () => {
 describe('opening a large Session for first open and post-upgrade reopen', () => {
   const suite = new SessionOpenBenchmarkSuite()
 
-  beforeAll(async () => { await suite.prepare() })
-  afterAll(async () => { await suite.dispose() })
+  beforeAll(async () => {
+    await suite.prepare()
+  })
+  afterAll(async () => {
+    await suite.dispose()
+  })
 
   for (const access of ACCESS_BENCHMARKS) {
     describe(access.label, () => {
       it('profiles all four phases under normal heap', async () => {
         const result = summarizePhases(await suite.sample(access.accessKind, 'phases'))
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/phases`,
-          ...suite.workload(access.accessKind),
-          result,
-          budgetsMs: {
-            open: access.openBudgetMs,
-            read: READ_BUDGET_MS,
-            sessionRestore: SESSION_RESTORE_BUDGET_MS,
-            projection: PROJECTION_BUDGET_MS,
-          },
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/phases`,
+            ...suite.workload(access.accessKind),
+            result,
+            budgetsMs: {
+              open: access.openBudgetMs,
+              read: READ_BUDGET_MS,
+              sessionRestore: SESSION_RESTORE_BUDGET_MS,
+              projection: PROJECTION_BUDGET_MS,
+            },
+          }),
+        )
         expectOpenWithinBudget(result.openMs.median, access.openBudgetMs)
         expect(result.readMs.median).toBeLessThanOrEqual(READ_BUDGET_MS)
         expect(result.sessionRestoreMs.median).toBeLessThanOrEqual(SESSION_RESTORE_BUDGET_MS)
@@ -401,56 +373,66 @@ describe('opening a large Session for first open and post-upgrade reopen', () =>
 
       it(`completes all four phases under a ${String(CONSTRAINED_HEAP_MB)} MB old-space limit`, async () => {
         const report = await suite.run(access.accessKind, 'phases', CONSTRAINED_HEAP_MB)
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/phases-constrained`,
-          ...suite.workload(access.accessKind),
-          heapLimitMb: CONSTRAINED_HEAP_MB,
-          report,
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/phases-constrained`,
+            ...suite.workload(access.accessKind),
+            heapLimitMb: CONSTRAINED_HEAP_MB,
+            report,
+          }),
+        )
       })
 
       it(`produces first Host history within ${String(access.firstHistoryBudgetMs)} ms`, async () => {
         const result = summarize(await suite.sample(access.accessKind, 'first-history'))
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/first-history`,
-          ...suite.workload(access.accessKind),
-          result,
-          budgetMs: access.firstHistoryBudgetMs,
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/first-history`,
+            ...suite.workload(access.accessKind),
+            result,
+            budgetMs: access.firstHistoryBudgetMs,
+          }),
+        )
         expect(result.totalMs.median).toBeLessThanOrEqual(access.firstHistoryBudgetMs)
       })
 
       it(`produces first Host history under a ${String(CONSTRAINED_HEAP_MB)} MB old-space limit`, async () => {
         const report = await suite.run(access.accessKind, 'first-history', CONSTRAINED_HEAP_MB)
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/first-history-constrained`,
-          ...suite.workload(access.accessKind),
-          heapLimitMb: CONSTRAINED_HEAP_MB,
-          report,
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/first-history-constrained`,
+            ...suite.workload(access.accessKind),
+            heapLimitMb: CONSTRAINED_HEAP_MB,
+            report,
+          }),
+        )
       })
 
       it(`resumes a cold Agent within ${String(access.agentResumeBudgetMs)} ms`, async () => {
         const result = summarize(await suite.sample(access.accessKind, 'agent-resume'))
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/agent-resume`,
-          ...suite.workload(access.accessKind),
-          result,
-          budgetMs: access.agentResumeBudgetMs,
-          retainedHeapBudgetMb: AGENT_RETAINED_HEAP_BUDGET_MB,
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/agent-resume`,
+            ...suite.workload(access.accessKind),
+            result,
+            budgetMs: access.agentResumeBudgetMs,
+            retainedHeapBudgetMb: AGENT_RETAINED_HEAP_BUDGET_MB,
+          }),
+        )
         expect(result.totalMs.median).toBeLessThanOrEqual(access.agentResumeBudgetMs)
         expect(result.retainedHeapMb.median).toBeLessThanOrEqual(AGENT_RETAINED_HEAP_BUDGET_MB)
       })
 
       it(`resumes a cold Agent under a ${String(CONSTRAINED_HEAP_MB)} MB old-space limit`, async () => {
         const report = await suite.run(access.accessKind, 'agent-resume', CONSTRAINED_HEAP_MB)
-        console.log(JSON.stringify({
-          benchmark: `session-open/${access.accessKind}/agent-resume-constrained`,
-          ...suite.workload(access.accessKind),
-          heapLimitMb: CONSTRAINED_HEAP_MB,
-          report,
-        }))
+        console.log(
+          JSON.stringify({
+            benchmark: `session-open/${access.accessKind}/agent-resume-constrained`,
+            ...suite.workload(access.accessKind),
+            heapLimitMb: CONSTRAINED_HEAP_MB,
+            report,
+          }),
+        )
       })
     })
   }

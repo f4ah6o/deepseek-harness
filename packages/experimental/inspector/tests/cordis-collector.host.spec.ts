@@ -1,7 +1,7 @@
 /** Context and Fiber identities collected from live Cordis plugins. */
 
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis'
-import { assert, describe, expect, it, type TestContext } from 'vitest'
+import { assert, describe, expect, it, type TestContext } from 'vite-plus/test'
 import { CordisTreeCollector } from '../src/shared/cordis/collector.ts'
 import type { CordisTreeNode } from '../src/shared/cordis/snapshot.ts'
 
@@ -27,9 +27,13 @@ class CollectorSpawner extends Service {
 
 function setup(test: TestContext): { root: Context; collector: CordisTreeCollector } {
   const root = new Context()
-  test.onTestFinished(async () => { await root.fiber.dispose() })
+  test.onTestFinished(async () => {
+    await root.fiber.dispose()
+  })
   const collector = new CordisTreeCollector(root, { maxNodes: 100, maxBytes: 100_000 })
-  test.onTestFinished(() => { collector.close() })
+  test.onTestFinished(() => {
+    collector.close()
+  })
   return { root, collector }
 }
 
@@ -65,12 +69,12 @@ describe('Cordis collector live object identities', () => {
     const snapshot = collector.snapshot()
     expect(snapshot.truncated).toBe(false)
     const nodes = [...walk(snapshot.root)]
-    const fibers = nodes.filter(node => node.kind === 'fiber')
-    const owned = fibers.find(node => node.uid === fiber.uid)
+    const fibers = nodes.filter((node) => node.kind === 'fiber')
+    const owned = fibers.find((node) => node.uid === fiber.uid)
     assert(owned, 'Fiber missing from collector snapshot')
     // The repository test setup also mounts an invariant-service Fiber at the root.
     for (const expected of [provider, consumer, fiber]) {
-      expect(fibers.filter(node => collector.objects.resolve(node.objectHandle) === expected)).toHaveLength(1)
+      expect(fibers.filter((node) => collector.objects.resolve(node.objectHandle) === expected)).toHaveLength(1)
     }
     expect(collector.objects.resolve(owned.objectHandle)).toBe(fiber)
     const reference = { registryId: snapshot.objectRegistryId, handle: owned.objectHandle }
@@ -82,7 +86,7 @@ describe('Cordis collector live object identities', () => {
       registryId: snapshot.objectRegistryId,
       handle: context.objectHandle,
     })
-    const retained = nodes.map(node => collector.objects.resolve(node.objectHandle))
+    const retained = nodes.map((node) => collector.objects.resolve(node.objectHandle))
     expect(new Set(retained).size).toBe(nodes.length)
   })
 
@@ -103,13 +107,19 @@ describe('Cordis collector live object identities', () => {
     expect(derived.fiber).toBe(fiber)
     const snapshot = collector.snapshot()
     expect(snapshot.truncated).toBe(false)
-    const subtree = [...walk(snapshot.root)].find(node =>
-      node.kind === 'context' && collector.objects.resolve(node.objectHandle) === extended)
+    const subtree = [...walk(snapshot.root)].find(
+      (node) => node.kind === 'context' && collector.objects.resolve(node.objectHandle) === extended,
+    )
     assert(subtree)
     const nodes = [...walk(subtree)]
-    expect(nodes.filter(node => node.kind === 'fiber')).toHaveLength(1)
-    expect(nodes.map(node => collector.objects.resolve(node.objectHandle))).toEqual([
-      extended, isolated, intercepted, fiber, fiber.ctx, derived,
+    expect(nodes.filter((node) => node.kind === 'fiber')).toHaveLength(1)
+    expect(nodes.map((node) => collector.objects.resolve(node.objectHandle))).toEqual([
+      extended,
+      isolated,
+      intercepted,
+      fiber,
+      fiber.ctx,
+      derived,
     ])
     const reference = collector.objects.identify(fiber)
     assert(reference)

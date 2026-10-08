@@ -1,15 +1,19 @@
 {
   "name": "@deepseek-ai/dsh-typert-registry",
-  "description": "Runtime registry for generated package reflection and Zod schemas",
   "version": "0.2.1-alpha.1",
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Runtime registry for generated package reflection and Zod schemas",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/typert/registry"
   },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -29,32 +33,28 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "bundle": "vp pack",
+    "watch": "vp pack --watch"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
   "dsh": {
     "client": {
       "inject": [],
       "platform": "web",
       "immediately": true
     }
-  },
-  "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
-  },
-  "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.js",
-    "lib/types/**/*.d.ts"
-  ],
-  "license": "MIT",
-  "dependencies": {
-    "zod": "^4.4.3"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~"
-  },
-  "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   }
 }

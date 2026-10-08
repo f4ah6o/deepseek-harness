@@ -10,7 +10,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { atRuleBlock, type CssRule, packageStylesheets, parseRules, varReferences } from './stylesheet-scan.ts'
 
 const STYLES = new URL('../src/styles/', import.meta.url)
@@ -30,17 +30,16 @@ const TOKEN_PREFIX = '--dsw-alias-scrollbar-'
 /** Prefix of the rebindable indirection scrollbar.css owns. */
 const INDIRECTION_PREFIX = '--dsh-scrollbar-'
 /** The elevation-aware colour variables surfaces rebind as one pair. */
-const COLOUR_INDIRECTIONS = new Set([
-  `${INDIRECTION_PREFIX}thumb`,
-  `${INDIRECTION_PREFIX}thumb-hover`,
-])
+const COLOUR_INDIRECTIONS = new Set([`${INDIRECTION_PREFIX}thumb`, `${INDIRECTION_PREFIX}thumb-hover`])
 /** The one non-token rebind value: a surface that draws no thumb at all. */
 const HIDDEN_THUMB = 'transparent'
 /** The elevation rebind, spelled per property: value-wholeness, not token shape. */
-const ELEVATED_REBIND = new Map([
-  ['--dsh-scrollbar-thumb', '--dsw-alias-scrollbar-bg-l2'],
-  ['--dsh-scrollbar-thumb-hover', '--dsw-alias-scrollbar-hover-l2'],
-].map(([property, token]) => [property!, `var(${token!})`]))
+const ELEVATED_REBIND = new Map(
+  [
+    ['--dsh-scrollbar-thumb', '--dsw-alias-scrollbar-bg-l2'],
+    ['--dsh-scrollbar-thumb-hover', '--dsw-alias-scrollbar-hover-l2'],
+  ].map(([property, token]) => [property!, `var(${token!})`]),
+)
 
 /**
  * Tokens a stylesheet reads through its rendering declarations, following its
@@ -80,8 +79,8 @@ const sorted = (names: Iterable<string>): string[] => [...names].sort()
 /** Last value one selector declares for a property. */
 function declaration(rules: CssRule[], property: string, selectorPart: string): string | undefined {
   return rules
-    .filter(rule => rule.selectors.includes(selectorPart))
-    .flatMap(rule => rule.declarations)
+    .filter((rule) => rule.selectors.includes(selectorPart))
+    .flatMap((rule) => rule.declarations)
     .findLast(([name]) => name === property)?.[1]
 }
 
@@ -94,7 +93,7 @@ function declaration(rules: CssRule[], property: string, selectorPart: string): 
 function definedTokens(dark: boolean): Set<string> {
   const names = new Set<string>()
   for (const rule of platformRules) {
-    if (rule.selectors.every(selector => selector.includes(DARK_ATTRIBUTE)) !== dark) continue
+    if (rule.selectors.every((selector) => selector.includes(DARK_ATTRIBUTE)) !== dark) continue
     for (const [property] of rule.declarations) {
       if (property.startsWith(TOKEN_PREFIX)) names.add(property)
     }
@@ -202,7 +201,7 @@ for (const file of packageStylesheets()) {
       if (SURFACE_PROPERTIES.includes(property)) ruleSurfaces.push(...varReferences(value))
       for (const token of varReferences(value)) {
         if (!token.startsWith(TOKEN_PREFIX)) continue
-        referencedTokens.set(token, [...referencedTokens.get(token) ?? [], file])
+        referencedTokens.set(token, [...(referencedTokens.get(token) ?? []), file])
       }
     }
     for (const token of ruleSurfaces) {
@@ -282,10 +281,12 @@ describe('scrollbar.css geometry variables', () => {
   const GEOMETRY_VARIABLES = [WIDTH_VARIABLE, THUMB_BORDER_VARIABLE, TRACK_MARGIN_VARIABLE]
 
   it('defines each geometry variable on body as a static length', () => {
-    const definitions = new Map(scrollbarRules
-      .filter(rule => rule.selectors.includes('body'))
-      .flatMap(rule => rule.declarations)
-      .filter(([property]) => GEOMETRY_VARIABLES.includes(property)))
+    const definitions = new Map(
+      scrollbarRules
+        .filter((rule) => rule.selectors.includes('body'))
+        .flatMap((rule) => rule.declarations)
+        .filter(([property]) => GEOMETRY_VARIABLES.includes(property)),
+    )
     for (const property of GEOMETRY_VARIABLES) {
       expect(definitions.get(property), property).toMatch(/^\d+(?:\.\d+)?px$/)
     }
@@ -293,8 +294,8 @@ describe('scrollbar.css geometry variables', () => {
 
   it('routes WebKit scrollbar geometry through those variables', () => {
     const webkitWidth = scrollbarRules
-      .filter(rule => rule.selectors.includes('::-webkit-scrollbar'))
-      .flatMap(rule => rule.declarations)
+      .filter((rule) => rule.selectors.includes('::-webkit-scrollbar'))
+      .flatMap((rule) => rule.declarations)
       .findLast(([property]) => property === 'width')?.[1]
     expect(webkitWidth, '::-webkit-scrollbar width').toBeDefined()
     expect(varReferences(webkitWidth!)).toEqual([WIDTH_VARIABLE])
@@ -311,7 +312,7 @@ describe('scrollbar.css geometry variables', () => {
     // contract states it here.
     const defined = new Set(
       scrollbarRules
-        .flatMap(rule => rule.declarations)
+        .flatMap((rule) => rule.declarations)
         .filter(([property]) => property.startsWith(INDIRECTION_PREFIX))
         .map(([property]) => property),
     )
@@ -333,8 +334,8 @@ describe('scrollbar.css geometry variables', () => {
 
 describe('scrollbar.css selectors', () => {
   const scrollbarColorSelectors = scrollbarRules
-    .filter(rule => rule.declarations.some(([property]) => property === 'scrollbar-color'))
-    .flatMap(rule => rule.selectors)
+    .filter((rule) => rule.declarations.some(([property]) => property === 'scrollbar-color'))
+    .flatMap((rule) => rule.selectors)
 
   it('declares scrollbar-color only where the body-scoped tokens are visible', () => {
     // design-platform.css defines the alias tokens on `body`, and custom
@@ -350,9 +351,7 @@ describe('scrollbar.css selectors', () => {
   it('defines the indirection where the alias tokens are visible', () => {
     const definesIndirection = ([property, value]: [string, string]): boolean =>
       property.startsWith(INDIRECTION_PREFIX) && value.includes(TOKEN_PREFIX)
-    const hosts = scrollbarRules
-      .filter(rule => rule.declarations.some(definesIndirection))
-      .flatMap(rule => rule.selectors)
+    const hosts = scrollbarRules.filter((rule) => rule.declarations.some(definesIndirection)).flatMap((rule) => rule.selectors)
     expect(hosts.length).toBeGreaterThan(0)
     for (const selector of hosts) expect(selector, selector).toMatch(/^body\b/)
   })
@@ -363,8 +362,8 @@ describe('scrollbar.css selectors', () => {
     // a descendant rebinding the indirection could no longer change.
     expect(scrollbarColorSelectors).toContain('body *')
     const widthSelectors = scrollbarRules
-      .filter(rule => rule.declarations.some(([property]) => property === 'scrollbar-width'))
-      .flatMap(rule => rule.selectors)
+      .filter((rule) => rule.declarations.some(([property]) => property === 'scrollbar-width'))
+      .flatMap((rule) => rule.selectors)
     expect(widthSelectors).toContain('body *')
   })
 })
@@ -386,8 +385,7 @@ describe('scrollbar.css rendering paths', () => {
     // properties silence, and Firefox has no hover pseudo-element at all.
     expect(gate, GATE).toBeDefined()
     for (const property of STANDARD_PROPERTIES) {
-      const offsets = [...withoutComments.matchAll(new RegExp(String.raw`(^|[;{\s])${property}\s*:`, 'g'))]
-        .map(match => match.index)
+      const offsets = [...withoutComments.matchAll(new RegExp(String.raw`(^|[;{\s])${property}\s*:`, 'g'))].map((match) => match.index)
       expect(offsets.length, property).toBeGreaterThan(0)
       for (const offset of offsets) {
         expect(offset, `${property} outside ${GATE}`).toBeGreaterThan(gate!.start)
@@ -402,8 +400,8 @@ describe('scrollbar.css rendering paths', () => {
     // the gate they would be dropped by the engines that do implement them,
     // which is every engine that can render them.
     const offsets = [...withoutComments.matchAll(/::-webkit-scrollbar/g)]
-      .map(match => match.index)
-      .filter(offset => withoutComments.slice(offset).search(/^[\w:-]*\s*[,{]/) === 0)
+      .map((match) => match.index)
+      .filter((offset) => withoutComments.slice(offset).search(/^[\w:-]*\s*[,{]/) === 0)
     expect(offsets.length).toBeGreaterThan(0)
     for (const offset of offsets) {
       expect(offset > gate!.start && offset < gate!.end, `::-webkit-scrollbar rule inside ${GATE}`).toBe(false)
@@ -414,8 +412,9 @@ describe('scrollbar.css rendering paths', () => {
     // The standard path has no hover counterpart — scrollbar-color states one
     // thumb colour and the engine derives its own hover treatment — so the
     // hover indirection has to be read outside the gate or it renders nowhere.
-    const hoverOffsets = [...withoutComments.matchAll(new RegExp(String.raw`var\(\s*${INDIRECTION_PREFIX}thumb-hover`, 'g'))]
-      .map(match => match.index)
+    const hoverOffsets = [...withoutComments.matchAll(new RegExp(String.raw`var\(\s*${INDIRECTION_PREFIX}thumb-hover`, 'g'))].map(
+      (match) => match.index,
+    )
     expect(hoverOffsets.length).toBeGreaterThan(0)
     for (const offset of hoverOffsets) {
       expect(offset > gate!.start && offset < gate!.end, 'hover indirection read inside the gate').toBe(false)
@@ -432,7 +431,7 @@ describe('elevated surface rebinds', () => {
     // A surface rebinding only the resting colour keeps the l1 hover colour,
     // so the elevation is wrong only while the pointer is over the thumb.
     for (const { file, rule } of rebindRules) {
-      const properties = rule.declarations.map(([property]) => property).filter(property => COLOUR_INDIRECTIONS.has(property))
+      const properties = rule.declarations.map(([property]) => property).filter((property) => COLOUR_INDIRECTIONS.has(property))
       expect(sorted(properties), `${file} ${rule.selectors.join(', ')}`).toEqual(sorted(COLOUR_INDIRECTIONS))
     }
   })
@@ -442,10 +441,10 @@ describe('elevated surface rebinds', () => {
     // silently keeps the base-surface colour.
     const rendered = new Set(
       scrollbarRules
-        .flatMap(rule => rule.declarations)
+        .flatMap((rule) => rule.declarations)
         .filter(([property]) => !property.startsWith('--'))
         .flatMap(([, value]) => varReferences(value))
-        .filter(name => name.startsWith(INDIRECTION_PREFIX)),
+        .filter((name) => name.startsWith(INDIRECTION_PREFIX)),
     )
     for (const { file, rule } of rebindRules) {
       for (const [property] of rule.declarations) {
@@ -470,7 +469,10 @@ describe('elevated surface rebinds', () => {
       const rebinds = rule.declarations.filter(([property]) => COLOUR_INDIRECTIONS.has(property))
       const where = `${file} ${rule.selectors.join(', ')}`
       if (rebinds.every(([, value]) => value === HIDDEN_THUMB)) continue
-      expect(rebinds.some(([, value]) => value === HIDDEN_THUMB), `${where}: mixes ${HIDDEN_THUMB} with an elevation`).toBe(false)
+      expect(
+        rebinds.some(([, value]) => value === HIDDEN_THUMB),
+        `${where}: mixes ${HIDDEN_THUMB} with an elevation`,
+      ).toBe(false)
       for (const [property, value] of rebinds) {
         expect(value, `${where}: ${property}`).toBe(ELEVATED_REBIND.get(property))
       }

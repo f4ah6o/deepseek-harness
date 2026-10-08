@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -57,7 +57,7 @@ interface FakeChokidar {
 }
 
 async function fakeInstances(): Promise<FakeChokidar['__instances']> {
-  const chokidar = await import('chokidar') as unknown as FakeChokidar
+  const chokidar = (await import('chokidar')) as unknown as FakeChokidar
   return chokidar.__instances
 }
 
@@ -122,7 +122,7 @@ describe('watcher pipeline', () => {
     const [instance] = await fakeInstances()
     instance!.watcher.emit('all', 'change', path)
     // The warn-and-keep path is asynchronous; give the serialized refresh a turn.
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'good', source: 'file' })
   })
 
@@ -164,7 +164,7 @@ describe('watcher pipeline', () => {
     disposed = true
     instance!.watcher.emit('all', 'change', path)
     instance!.watcher.emit('ready')
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
     expect(postDisposeCommits).toBe(0)
   })
 
@@ -204,7 +204,7 @@ describe('watcher pipeline', () => {
     await writeCredentials(path, 'version: 1\nrefs:\n  BAD-KEY: 2\n  DSH_CRED_PIPE: b\n')
     const [instance] = await fakeInstances()
     instance!.watcher.emit('all', 'change', path)
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'a', source: 'file' })
     expect(seen).toEqual([])
 
@@ -223,7 +223,7 @@ describe('watcher pipeline', () => {
     const ctx = await boot({ path, debounceMs: 5 })
     const [instance] = await fakeInstances()
     instance!.watcher.emit('all', 'add', path)
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(await ctx.credentials.resolve(KEY)).toBeUndefined()
   })
 

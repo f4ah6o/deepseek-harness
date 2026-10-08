@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 
 /**
@@ -36,7 +36,9 @@ function fakeChildWithThrowingFd3(): EventEmitter {
   // A duplex whose `write` throws synchronously, standing in for an fd-3 pipe
   // that fails the moment the boot frame is issued.
   const proto = new PassThrough()
-  proto.write = () => { throw Object.assign(new Error('EPIPE: broken pipe, write'), { code: 'EPIPE' }) }
+  proto.write = () => {
+    throw Object.assign(new Error('EPIPE: broken pipe, write'), { code: 'EPIPE' })
+  }
   child.stdio = [new PassThrough(), child.stdout, child.stderr, proto]
   return child
 }
@@ -142,23 +144,39 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
       written.resolve(undefined)
       return false
     }
-    spawnMock.mockImplementation(() => { spawned.resolve(undefined); return child })
+    spawnMock.mockImplementation(() => {
+      spawned.resolve(undefined)
+      return child
+    })
     const ctx = new Context()
     const fiber = await ctx.plugin(PythonPtcRuntime)
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
-    const run = runtime.run(runtime.resolve({
-      program: 'return 1',
-      bindings: [{ global: 'tools', functions: { echo: async (value: unknown) => value as number } }],
-    }))
+    const run = runtime.run(
+      runtime.resolve({
+        program: 'return 1',
+        bindings: [{ global: 'tools', functions: { echo: async (value: unknown) => value as number } }],
+      }),
+    )
     onTestFinished(async () => {
       await fiber.dispose()
       await run
       for (const stream of [stdin, stdout, stderr, proto]) stream.destroy()
     })
     const calls = (start: number): void => {
-      proto.emit('data', Buffer.from(Array.from({ length: 512 }, (_, offset) => JSON.stringify({
-        type: 'call', id: start + offset, global: 'tools', name: 'echo', args: start + offset,
-      })).join('\n') + '\n'))
+      proto.emit(
+        'data',
+        Buffer.from(
+          Array.from({ length: 512 }, (_, offset) =>
+            JSON.stringify({
+              type: 'call',
+              id: start + offset,
+              global: 'tools',
+              name: 'echo',
+              args: start + offset,
+            }),
+          ).join('\n') + '\n',
+        ),
+      )
     }
     const drainThrough = async (count: number): Promise<void> => {
       while (replies.length < count) {
@@ -302,10 +320,12 @@ describe('PythonPtcRuntime — controlled subprocess pipes', () => {
     const fiber = await ctx.plugin(PythonPtcRuntime, { maxWallMs: 3000 })
     const runtime = ctx.ptcRuntime as InstanceType<typeof PythonPtcRuntime>
 
-    const result = await runtime.run(runtime.resolve({
-      program: 'return 1',
-      bindings: [{ global: 'tools', functions: { f: async () => 'x'.repeat(4 * 1024 * 1024) } }],
-    }))
+    const result = await runtime.run(
+      runtime.resolve({
+        program: 'return 1',
+        bindings: [{ global: 'tools', functions: { f: async () => 'x'.repeat(4 * 1024 * 1024) } }],
+      }),
+    )
 
     expect(result.error?.kind).toBe('timeout')
     // The drain wait settled on `close` and cleaned up after itself. The

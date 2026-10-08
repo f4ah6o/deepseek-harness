@@ -5,7 +5,7 @@
  * of decoded text chunks (so one code path serves whole-file and streamed reads).
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { languageForPath } from '@deepseek-ai/dsh-util-code-language'
 import { buildWindow, langFromPath, readMetaFromMeta, READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from '../src/read-render.ts'
 import type { ReadWindow } from '../src/read-render.ts'
@@ -37,13 +37,13 @@ describe('buildWindow', () => {
 
   it('applies offset/limit', async () => {
     const result = await buildWindow(whole('one\ntwo\nthree\nfour'), { offset: 2, limit: 2, ...DEFAULT_CAPS }, 'f')
-    expect(result.lines.map(l => l.number)).toEqual([2, 3])
+    expect(result.lines.map((l) => l.number)).toEqual([2, 3])
     expect(result.totalLines).toBe(4)
   })
 
   it('strips CRLF', async () => {
     const result = await buildWindow(whole('one\r\ntwo\r\n'), READ_ALL, 'f')
-    expect(result.lines.map(l => l.text)).toEqual(['one', 'two'])
+    expect(result.lines.map((l) => l.text)).toEqual(['one', 'two'])
   })
 
   it('truncates an over-long line', async () => {
@@ -64,17 +64,19 @@ describe('buildWindow', () => {
   })
 
   it('rejects an offset past EOF', async () => {
-    await expect(buildWindow(whole('one\ntwo'), { offset: 9, limit: 1, ...DEFAULT_CAPS }, 'f')).rejects.toMatchObject({ code: 'FS_NOT_FOUND' })
+    await expect(buildWindow(whole('one\ntwo'), { offset: 9, limit: 1, ...DEFAULT_CAPS }, 'f')).rejects.toMatchObject({
+      code: 'FS_NOT_FOUND',
+    })
   })
 
   it('flushes a final line with no trailing newline', async () => {
     const result = await buildWindow(whole('one\ntwo'), READ_ALL, 'f')
-    expect(result.lines.map(l => l.text)).toEqual(['one', 'two'])
+    expect(result.lines.map((l) => l.text)).toEqual(['one', 'two'])
   })
 
   it('handles a trailing newline (no dangling empty line)', async () => {
     const result = await buildWindow(whole('one\ntwo\n'), READ_ALL, 'f')
-    expect(result.lines.map(l => l.text)).toEqual(['one', 'two'])
+    expect(result.lines.map((l) => l.text)).toEqual(['one', 'two'])
     expect(result.totalLines).toBe(2)
   })
 
@@ -86,7 +88,7 @@ describe('buildWindow', () => {
 
     it('caps output at a custom maxBytes', async () => {
       const result = await buildWindow(whole('aaaa\nbbbb\ncccc'), { offset: 1, limit: 10, maxLineLength: 2000, maxBytes: 9 }, 'f')
-      expect(result.lines.map(l => l.text)).toEqual(['aaaa', 'bbbb'])
+      expect(result.lines.map((l) => l.text)).toEqual(['aaaa', 'bbbb'])
       expect(result.totalLines).toBe(3)
       expect(result.truncatedByBytes).toBe(true)
     })
@@ -113,7 +115,7 @@ describe('buildWindow', () => {
 
     it('flushes a final newline-terminated line across a chunk boundary', async () => {
       const result = await buildWindow(chunked('one\ntwo\n', 3), READ_ALL, 'f')
-      expect(result.lines.map(l => l.text)).toEqual(['one', 'two'])
+      expect(result.lines.map((l) => l.text)).toEqual(['one', 'two'])
     })
   })
 })
@@ -125,17 +127,49 @@ describe('buildWindow', () => {
  * second read of the implementation's own data.
  */
 const PERSISTED_READ_LANG_BY_EXTENSION: Readonly<Record<string, string>> = {
-  ts: 'ts', tsx: 'tsx', mts: 'ts', cts: 'ts',
-  js: 'js', jsx: 'jsx', mjs: 'js', cjs: 'js',
-  json: 'json', jsonc: 'json',
-  py: 'py', rb: 'rb', go: 'go', rs: 'rs', java: 'java',
-  c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', cxx: 'cpp',
-  cs: 'cs', kt: 'kotlin', swift: 'swift', php: 'php',
-  sh: 'sh', bash: 'sh', zsh: 'sh',
-  yaml: 'yaml', yml: 'yaml', toml: 'toml', ini: 'ini',
-  md: 'md', markdown: 'md', mdx: 'mdx',
-  html: 'html', htm: 'html', css: 'css', scss: 'scss', less: 'less',
-  sql: 'sql', xml: 'xml', lua: 'lua',
+  ts: 'ts',
+  tsx: 'tsx',
+  mts: 'ts',
+  cts: 'ts',
+  js: 'js',
+  jsx: 'jsx',
+  mjs: 'js',
+  cjs: 'js',
+  json: 'json',
+  jsonc: 'json',
+  py: 'py',
+  rb: 'rb',
+  go: 'go',
+  rs: 'rs',
+  java: 'java',
+  c: 'c',
+  h: 'c',
+  cc: 'cpp',
+  cpp: 'cpp',
+  hpp: 'cpp',
+  cxx: 'cpp',
+  cs: 'cs',
+  kt: 'kotlin',
+  swift: 'swift',
+  php: 'php',
+  sh: 'sh',
+  bash: 'sh',
+  zsh: 'sh',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'toml',
+  ini: 'ini',
+  md: 'md',
+  markdown: 'md',
+  mdx: 'mdx',
+  html: 'html',
+  htm: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  sql: 'sql',
+  xml: 'xml',
+  lua: 'lua',
 }
 
 describe('langFromPath', () => {
@@ -269,9 +303,27 @@ describe('readMetaFromMeta', () => {
   it('rejects lines that do not strictly increase or exceed totalLines', () => {
     const twoLines = { path: '/abs/a', offset: 1, lang: 'ts' }
     // Duplicate line numbers.
-    expect(readMetaFromMeta({ ...twoLines, lines: [{ number: 1, text: 'a' }, { number: 1, text: 'b' }], totalLines: 2 })).toBeUndefined()
+    expect(
+      readMetaFromMeta({
+        ...twoLines,
+        lines: [
+          { number: 1, text: 'a' },
+          { number: 1, text: 'b' },
+        ],
+        totalLines: 2,
+      }),
+    ).toBeUndefined()
     // Out-of-order line numbers.
-    expect(readMetaFromMeta({ ...twoLines, lines: [{ number: 2, text: 'b' }, { number: 1, text: 'a' }], totalLines: 2 })).toBeUndefined()
+    expect(
+      readMetaFromMeta({
+        ...twoLines,
+        lines: [
+          { number: 2, text: 'b' },
+          { number: 1, text: 'a' },
+        ],
+        totalLines: 2,
+      }),
+    ).toBeUndefined()
     // A line number past totalLines.
     expect(readMetaFromMeta({ ...twoLines, lines: [{ number: 3, text: 'c' }], totalLines: 2 })).toBeUndefined()
   })

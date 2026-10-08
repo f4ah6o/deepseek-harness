@@ -10,7 +10,7 @@ import { watchConfig } from '../src/watch-config.ts'
 import Hmr from '../src/index.ts'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { FSWatcher, type ChokidarOptions } from 'chokidar'
 
 const configWatch = vi.hoisted(() => ({ create: undefined as ((options?: ChokidarOptions) => FSWatcher) | undefined }))
@@ -24,8 +24,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 vi.mock('chokidar', async (importOriginal) => {
   const native = await importOriginal<typeof import('chokidar')>()
-  return { ...native, watch: (paths: string | string[], options?: ChokidarOptions) =>
-    configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(options) }
+  return {
+    ...native,
+    watch: (paths: string | string[], options?: ChokidarOptions) =>
+      configWatch.create === undefined ? native.watch(paths, options) : configWatch.create(options),
+  }
 })
 
 /** Every per-test tree root, removed once the booted watcher has been disposed. */
@@ -40,7 +43,7 @@ async function bootHmr(dir: string, root: string[] = [], usePolling?: boolean): 
     root,
     ignored: [],
     debounce: 0,
-    ...usePolling === undefined ? {} : { usePolling },
+    ...(usePolling === undefined ? {} : { usePolling }),
   })
   return ctx
 }
@@ -71,7 +74,7 @@ async function eventually(test: () => boolean, message: string, budget: number):
   const deadline = Date.now() + budget
   while (!test()) {
     if (Date.now() >= deadline) throw new Error(message)
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
 
@@ -93,7 +96,9 @@ describe('HMR exact config paths', () => {
     const expected = pathToFileURL(filename).href
     const cacheHas = vi.spyOn(ctx.loader.internal!.loadCache, 'has').mockReturnValue(false)
     const observed: string[] = []
-    ctx.on('hmr/change', (url) => { observed.push(url) })
+    ctx.on('hmr/change', (url) => {
+      observed.push(url)
+    })
     try {
       const deadline = Date.now() + 20_000
       for (let generation = 1; !observed.includes(expected); generation += 1) {
@@ -105,7 +110,7 @@ describe('HMR exact config paths', () => {
         // precision when several generations land inside one filesystem tick.
         writeFileSync(filename, `export const generation = ${generation}\n${' '.repeat(generation)}\n`)
         // Leave Chokidar's atomic-write window idle so one coalesced change can publish.
-        await new Promise(resolve => setTimeout(resolve, 250))
+        await new Promise((resolve) => setTimeout(resolve, 250))
       }
       expect(cacheHas).toHaveBeenCalledWith(expected)
     } finally {
@@ -122,8 +127,9 @@ describe('HMR exact config paths', () => {
     const ctx = await bootHmr(alias)
     try {
       await watchConfig(ctx, join(alias, 'plugins.yml'), {}, () => {})
-      await expect(watchConfig(ctx, join(await realpath(target), 'plugins.yml'), {}, () => {}))
-        .rejects.toThrow('config path already registered')
+      await expect(watchConfig(ctx, join(await realpath(target), 'plugins.yml'), {}, () => {})).rejects.toThrow(
+        'config path already registered',
+      )
     } finally {
       await ctx.fiber.dispose()
       unlinkSync(alias)
@@ -138,7 +144,9 @@ describe('HMR exact config paths', () => {
     const ctx = await bootHmr(dir)
     const observed: string[] = []
     // The case budget fires before eventually() can name the pending step.
-    onTestFailed(() => { console.error(`refresh observed ${JSON.stringify(observed)}`) })
+    onTestFailed(() => {
+      console.error(`refresh observed ${JSON.stringify(observed)}`)
+    })
     try {
       await watchConfig(ctx, filename, {}, () => {
         try {
@@ -169,7 +177,9 @@ describe('HMR exact config paths', () => {
     const ctx = await bootHmr(root)
     const observed: string[] = []
     // The case budget fires before eventually() can name the pending step.
-    onTestFailed(() => { console.error(`refresh observed ${JSON.stringify(observed)}`) })
+    onTestFailed(() => {
+      console.error(`refresh observed ${JSON.stringify(observed)}`)
+    })
     try {
       await watchConfig(ctx, filename, {}, () => {
         observed.push(readFileSync(filename, 'utf8'))
@@ -186,16 +196,24 @@ describe('HMR exact config paths', () => {
   it('processes native events for a watcher registered during a transaction', { timeout: 20_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-transaction-watch-'))
     const filename = join(dir, 'plugins.yml')
-    onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+    onTestFinished(() => {
+      rmSync(dir, { recursive: true, force: true })
+    })
     const ctx = await bootHmr(dir)
     onTestFinished(() => ctx.fiber.dispose())
     const hmr = ctx.hmr
     const observed = Promise.withResolvers<string>()
-    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation((reason) => { observed.reject(new Error(String(reason))) })
-    onTestFinished(() => { warn.mockRestore() })
-    await hmr.runExclusive(() => hmr.watchConfig(filename, async () => {
-      observed.resolve(readFileSync(filename, 'utf8'))
-    }))
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation((reason) => {
+      observed.reject(new Error(String(reason)))
+    })
+    onTestFinished(() => {
+      warn.mockRestore()
+    })
+    await hmr.runExclusive(() =>
+      hmr.watchConfig(filename, async () => {
+        observed.resolve(readFileSync(filename, 'utf8'))
+      }),
+    )
     ensureNativeWatchLive(dir)
     writeFileSync(filename, 'created-after-transaction')
     expect(await observed.promise).toBe('created-after-transaction')
@@ -209,11 +227,20 @@ describe('HMR exact config paths', () => {
     onTestFinished(() => ctx.fiber.dispose())
     const watcher = new FSWatcher()
     const previousFactory = configWatch.create
-    onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
+    onTestFinished(() => {
+      configWatch.create = previousFactory
+    })
+    configWatch.create = () => {
+      queueMicrotask(() => {
+        watcher.emit('ready')
+      })
+      return watcher
+    }
     const started = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    onTestFinished(() => { release.resolve(undefined) })
+    onTestFinished(() => {
+      release.resolve(undefined)
+    })
     let calls = 0
     let active = 0
     let maxActive = 0
@@ -233,7 +260,9 @@ describe('HMR exact config paths', () => {
     watcher.emit('change', filename)
     watcher.emit('unlink', filename)
     let disposed = false
-    const disposal = dispose().then(() => { disposed = true })
+    const disposal = dispose().then(() => {
+      disposed = true
+    })
     await Promise.resolve()
     expect(disposed).toBe(false)
     release.resolve(undefined)
@@ -251,12 +280,16 @@ describe('HMR exact config paths', () => {
     onTestFinished(() => ctx.fiber.dispose())
     let watcher!: FSWatcher
     const previousFactory = configWatch.create
-    onTestFinished(() => { configWatch.create = previousFactory })
+    onTestFinished(() => {
+      configWatch.create = previousFactory
+    })
     configWatch.create = (options) => {
       watcher = new FSWatcher(options)
       // Use Chokidar's real normalization with deterministic event delivery.
       Reflect.set(watcher, '_readyEmitted', true)
-      queueMicrotask(() => { watcher.emit('ready') })
+      queueMicrotask(() => {
+        watcher.emit('ready')
+      })
       return watcher
     }
     const observed: string[] = []
@@ -270,7 +303,12 @@ describe('HMR exact config paths', () => {
     })
     writeFileSync(filename, 'enabled')
     await watcher._emit('change', filename)
-    await vi.waitFor(() => { expect(observed).toEqual(['enabled', 'disabled']) }, { timeout: 6_000 })
+    await vi.waitFor(
+      () => {
+        expect(observed).toEqual(['enabled', 'disabled'])
+      },
+      { timeout: 6_000 },
+    )
   }, 10_000)
 
   it('rejects a patch path whose parent is a regular file', async () => {
@@ -280,14 +318,15 @@ describe('HMR exact config paths', () => {
     writeFileSync(parent, '')
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
-    await expect(watchConfig(ctx, join(parent, 'plugins.yml'), {}, () => {}))
-      .rejects.toThrow('config watch parent is not a directory')
+    await expect(watchConfig(ctx, join(parent, 'plugins.yml'), {}, () => {})).rejects.toThrow('config watch parent is not a directory')
   })
 
   it('stops searching when the filesystem root cannot be read', async () => {
     const failure = Object.assign(new Error('filesystem root unavailable'), { code: 'ENOENT' })
     const read = vi.mocked(fsPromises.stat).mockClear().mockRejectedValueOnce(failure)
-    onTestFinished(() => { read.mockRestore() })
+    onTestFinished(() => {
+      read.mockRestore()
+    })
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await expect(watchConfig(ctx, join(parse(tmpdir()).root, 'plugins.yml'), {}, () => {})).rejects.toBe(failure)
@@ -301,22 +340,33 @@ describe('HMR exact config paths', () => {
     onTestFinished(() => ctx.fiber.dispose())
     const filename = join(dir, 'plugins.yml')
     const previousFactory = configWatch.create
-    onTestFinished(() => { configWatch.create = previousFactory })
+    onTestFinished(() => {
+      configWatch.create = previousFactory
+    })
     const failure = new Error('watcher unavailable')
     const failed = new FSWatcher()
     const closed = vi.spyOn(failed, 'close')
     configWatch.create = () => {
       if (phase === 'creation') throw failure
-      queueMicrotask(() => { failed.emit('error', failure) })
+      queueMicrotask(() => {
+        failed.emit('error', failure)
+      })
       return failed
     }
     await expect(ctx.hmr.watchConfig(filename, async () => {})).rejects.toBe(failure)
     if (phase === 'ready') expect(closed).toHaveBeenCalledOnce()
     const watcher = new FSWatcher()
-    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
+    configWatch.create = () => {
+      queueMicrotask(() => {
+        watcher.emit('ready')
+      })
+      return watcher
+    }
     await ctx.hmr.watchConfig(filename, async () => {})
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-    onTestFinished(() => { warn.mockRestore() })
+    onTestFinished(() => {
+      warn.mockRestore()
+    })
     watcher.emit('error', failure)
     expect(warn).toHaveBeenCalledWith(failure)
   })
@@ -332,10 +382,16 @@ describe('HMR exact config paths', () => {
     const watcher = new FSWatcher()
     const close = vi.spyOn(watcher, 'close')
     const previousFactory = configWatch.create
-    onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
-    await expect(watchConfig(ctx, join(dir, 'plugins.yml'), {}, () => {}))
-      .rejects.toThrow('cannot create effect on inactive context')
+    onTestFinished(() => {
+      configWatch.create = previousFactory
+    })
+    configWatch.create = () => {
+      queueMicrotask(() => {
+        watcher.emit('ready')
+      })
+      return watcher
+    }
+    await expect(watchConfig(ctx, join(dir, 'plugins.yml'), {}, () => {})).rejects.toThrow('cannot create effect on inactive context')
     expect(close).toHaveBeenCalledOnce()
   })
 
@@ -347,10 +403,19 @@ describe('HMR exact config paths', () => {
     onTestFinished(() => ctx.fiber.dispose())
     const watcher = new FSWatcher()
     const previousFactory = configWatch.create
-    onTestFinished(() => { configWatch.create = previousFactory })
-    configWatch.create = () => { queueMicrotask(() => { watcher.emit('ready') }); return watcher }
+    onTestFinished(() => {
+      configWatch.create = previousFactory
+    })
+    configWatch.create = () => {
+      queueMicrotask(() => {
+        watcher.emit('ready')
+      })
+      return watcher
+    }
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-    onTestFinished(() => { warn.mockRestore() })
+    onTestFinished(() => {
+      warn.mockRestore()
+    })
     let calls = 0
     const recovered = Promise.withResolvers<undefined>()
     await watchConfig(ctx, filename, {}, () => {
@@ -367,11 +432,13 @@ describe('HMR exact config paths', () => {
   })
 })
 
-
 it('reports inaccessible configuration paths and missing filesystem roots', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-path-error-'))
   const ctx = await bootHmr(dir)
-  onTestFinished(async () => { await ctx.fiber.dispose(); rmSync(dir, { recursive: true, force: true }) })
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
   const native = await vi.importActual<typeof import('node:fs')>('node:fs')
   const target = join(dir, 'denied.yml')
   const root = parse(dir).root
@@ -380,7 +447,9 @@ it('reports inaccessible configuration paths and missing filesystem roots', asyn
     if (path === root) throw Object.assign(new Error('root missing'), { code: 'ENOENT' })
     return native.realpathSync(path, options)
   })
-  onTestFinished(() => { mocked.mockRestore() })
+  onTestFinished(() => {
+    mocked.mockRestore()
+  })
   await expect(ctx.hmr.watchConfig(target, async () => {})).rejects.toThrow('denied')
   await expect(ctx.hmr.watchConfig(root, async () => {})).rejects.toThrow('root missing')
 })

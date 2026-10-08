@@ -2,7 +2,7 @@
 // boundaries, and the pin (a user-sourced latest title schedules no automatic
 // revision; explicit refresh stays the unpin).
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -19,14 +19,18 @@ const CONFIG = {
 } as const
 
 async function settle(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function appendHumanPrompt(session: ReturnType<Context['sessions']['create']>, text: string) {
-  return session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text }],
-    source: { kind: 'user' },
-  }), { surfaceOp: 'append' })
+  return session.append(
+    'user/message',
+    createUserMessage({
+      content: [{ type: 'text', text }],
+      source: { kind: 'user' },
+    }),
+    { surfaceOp: 'append' },
+  )
 }
 
 describe('SessionTitleService.rename', () => {
@@ -46,7 +50,7 @@ describe('SessionTitleService.rename', () => {
       messageSeqs: [],
       source: { kind: 'user' },
     })
-    const event = session.snapshotEvents().findLast(item => item.type === 'session/title')
+    const event = session.snapshotEvents().findLast((item) => item.type === 'session/title')
     expect(event?.data).toEqual({
       title: 'Hand picked name',
       messageSeqs: [],
@@ -64,8 +68,7 @@ describe('SessionTitleService.rename', () => {
     const session = ctx.sessions.create(SessionId('rename-reject'))
     expect(() => ctx.sessionTitle.rename(session, '  [31m  ')).toThrow(/visible characters/)
 
-    expect(() => ctx.sessionTitle.rename(Session.create(SessionId('detached')), 'name'))
-      .toThrow(/not live in this store/)
+    expect(() => ctx.sessionTitle.rename(Session.create(SessionId('detached')), 'name')).toThrow(/not live in this store/)
   })
 
   it('pins the title: later user messages schedule no automatic revision; refresh unpins', async () => {
@@ -75,7 +78,7 @@ describe('SessionTitleService.rename', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const generate = vi.fn(async (request: SessionTitleProviderRequest) => ({
       title: 'Provider title',
-      messageSeqs: request.messages.map(message => message.seq),
+      messageSeqs: request.messages.map((message) => message.seq),
     }))
     ctx.sessionTitle.register({
       id: SessionTitleProviderId('pin-provider'),
@@ -136,12 +139,16 @@ describe('SessionTitleService.rename', () => {
     // The provider parks on a test-held deferred so rename lands while its
     // generation is ACTIVE (not merely scheduled).
     let releaseProvider: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => { releaseProvider = resolve })
+    const gate = new Promise<void>((resolve) => {
+      releaseProvider = resolve
+    })
     let aborted = false
     const generate = vi.fn(async (request: SessionTitleProviderRequest) => {
-      request.signal.addEventListener('abort', () => { aborted = true })
+      request.signal.addEventListener('abort', () => {
+        aborted = true
+      })
       await gate
-      return { title: 'Late provider title', messageSeqs: request.messages.map(message => message.seq) }
+      return { title: 'Late provider title', messageSeqs: request.messages.map((message) => message.seq) }
     })
     ctx.sessionTitle.register({
       id: SessionTitleProviderId('deferred-provider'),
@@ -164,7 +171,7 @@ describe('SessionTitleService.rename', () => {
     await settle()
     // The released provider result must not append over the user title, and
     // the swallowed abort must not surface as an unhandled rejection.
-    const latest = session.snapshotEvents().findLast(item => item.type === 'session/title')
+    const latest = session.snapshotEvents().findLast((item) => item.type === 'session/title')
     expect(latest?.data).toMatchObject({ title: 'User wins', source: { kind: 'user' } })
   })
 

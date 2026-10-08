@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execa } from 'execa'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { FiberState } from '@deepseek-ai/cordis'
 
 const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url))
@@ -22,7 +22,7 @@ const failures = [
   ['async apply', 'matrix async apply'],
   ['dependency', 'matrixMissingService'],
 ] as const
-type Failure = typeof failures[number][0]
+type Failure = (typeof failures)[number][0]
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'dsh-web-failure-matrix-'))
@@ -36,71 +36,97 @@ function fixture() {
   const patch = join(home, 'cordis.patch.yml')
   const watcher = join(root, 'watcher.patch.yml')
   // Native delivery remains real; completed writes bypass Chokidar's 50 ms change suppression.
-  writeFileSync(watcher, JSON.stringify([{ id: 'hmr', disabled: false, config: {
-    root: [], awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
-  } }]) + '\n')
+  writeFileSync(
+    watcher,
+    JSON.stringify([
+      {
+        id: 'hmr',
+        disabled: false,
+        config: {
+          root: [],
+          awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
+        },
+      },
+    ]) + '\n',
+  )
   writeFileSync(events, '')
   writeFileSync(diagnostics, '')
   writeFileSync(states, '{}')
   const observerPath = join(root, 'observer.mjs')
   // HMR reports through Cordis logger exporters; WARN is above their default INFO threshold.
-  writeFileSync(observerPath, [
-    "import { appendFileSync, writeFileSync, renameSync, rmSync } from 'node:fs'",
-    "import { inspect } from 'node:util'",
-    'export function apply(ctx, config) {',
-    '  const report = message => appendFileSync(config.path, message.args.map(arg => inspect(arg)).join(" ") + "\\n")',
-    '  ctx.logger.buffer.forEach(report)',
-    '  ctx.logger.exporter({ levels: { default: 3 }, export: report })',
-    '  const timer = setInterval(() => {',
-    '    const loader = ctx.get("loader")',
-    '    if (!loader) return',
-    '    writeFileSync(config.states + ".tmp", JSON.stringify(Object.fromEntries([...loader.entries()].map(entry => [entry.options.id, entry.fiber?.state]))))',
-    '    renameSync(config.states + ".tmp", config.states)',
-    '  }, 20)',
-    '  ctx.effect(() => () => { clearInterval(timer) })',
-    '  ctx.inject(["webServer", "connection"], scope => {',
-    '    writeFileSync(config.url, scope.connection.authenticatedUrl(`http://127.0.0.1:${scope.webServer.port}`))',
-    '    scope.effect(() => () => { rmSync(config.url, { force: true }) })',
-    '  })',
-    '}',
-    '',
-  ].join('\n'))
-  const observer = { id: 'matrix-log-observer', name: pathToFileURL(observerPath).href, config: { path: diagnostics, url: serverUrl, states } }
+  writeFileSync(
+    observerPath,
+    [
+      "import { appendFileSync, writeFileSync, renameSync, rmSync } from 'node:fs'",
+      "import { inspect } from 'node:util'",
+      'export function apply(ctx, config) {',
+      '  const report = message => appendFileSync(config.path, message.args.map(arg => inspect(arg)).join(" ") + "\\n")',
+      '  ctx.logger.buffer.forEach(report)',
+      '  ctx.logger.exporter({ levels: { default: 3 }, export: report })',
+      '  const timer = setInterval(() => {',
+      '    const loader = ctx.get("loader")',
+      '    if (!loader) return',
+      '    writeFileSync(config.states + ".tmp", JSON.stringify(Object.fromEntries([...loader.entries()].map(entry => [entry.options.id, entry.fiber?.state]))))',
+      '    renameSync(config.states + ".tmp", config.states)',
+      '  }, 20)',
+      '  ctx.effect(() => () => { clearInterval(timer) })',
+      '  ctx.inject(["webServer", "connection"], scope => {',
+      '    writeFileSync(config.url, scope.connection.authenticatedUrl(`http://127.0.0.1:${scope.webServer.port}`))',
+      '    scope.effect(() => () => { rmSync(config.url, { force: true }) })',
+      '  })',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  const observer = {
+    id: 'matrix-log-observer',
+    name: pathToFileURL(observerPath).href,
+    config: { path: diagnostics, url: serverUrl, states },
+  }
   const plugin = join(root, 'probe.mjs')
-  writeFileSync(plugin, [
-    "import { appendFileSync, existsSync } from 'node:fs'",
-    'export const Config = { "~standard": { version: 1, vendor: "matrix", validate(value) {',
-    '  return value.mode === "schema" ? { issues: [{ message: "matrix schema failure" }] } : { value }',
-    '} } }',
-    'export const apply = (ctx, config) => {',
-    '  if (config.mode === "sync apply") throw new Error("matrix sync apply")',
-    '  return activate(ctx, config)',
-    '}',
-    'async function activate(ctx, config) {',
-    '  if (config.mode === "async apply") { await Promise.resolve(); throw new Error("matrix async apply") }',
-    '  if (config.provider) ctx.provide(config.provider, true)',
-    '  if (config.mode === "detached") setImmediate(() => { void Promise.reject(new Error("matrix detached failure")) })',
-    '  appendFileSync(config.events, `${config.label} apply ${config.generation}\\n`)',
-    '  const timer = setInterval(() => { if (existsSync(config.stop)) process.emit("SIGTERM") }, 20)',
-    '  ctx.effect(() => () => { clearInterval(timer); appendFileSync(config.events, `${config.label} dispose ${config.generation}\\n`) })',
-    '}',
-    '',
-  ].join('\n'))
+  writeFileSync(
+    plugin,
+    [
+      "import { appendFileSync, existsSync } from 'node:fs'",
+      'export const Config = { "~standard": { version: 1, vendor: "matrix", validate(value) {',
+      '  return value.mode === "schema" ? { issues: [{ message: "matrix schema failure" }] } : { value }',
+      '} } }',
+      'export const apply = (ctx, config) => {',
+      '  if (config.mode === "sync apply") throw new Error("matrix sync apply")',
+      '  return activate(ctx, config)',
+      '}',
+      'async function activate(ctx, config) {',
+      '  if (config.mode === "async apply") { await Promise.resolve(); throw new Error("matrix async apply") }',
+      '  if (config.provider) ctx.provide(config.provider, true)',
+      '  if (config.mode === "detached") setImmediate(() => { void Promise.reject(new Error("matrix detached failure")) })',
+      '  appendFileSync(config.events, `${config.label} apply ${config.generation}\\n`)',
+      '  const timer = setInterval(() => { if (existsSync(config.stop)) process.emit("SIGTERM") }, 20)',
+      '  ctx.effect(() => () => { clearInterval(timer); appendFileSync(config.events, `${config.label} dispose ${config.generation}\\n`) })',
+      '}',
+      '',
+    ].join('\n'),
+  )
   writeFileSync(join(root, 'evaluation.mjs'), 'throw new Error("matrix module evaluation")\n')
   const url = pathToFileURL(plugin).href
   const config = (label: string, generation: number, mode = '') => ({ label, generation, mode, events, stop })
   const witness = (generation: number) => ({ id: 'matrix-witness', name: url, config: config('witness', generation) })
   const target = (id: string, failure?: Failure, generation = 1) => ({
     id,
-    name: failure === 'import' ? pathToFileURL(join(root, 'missing.mjs')).href
-      : failure === 'module evaluation' ? pathToFileURL(join(root, 'evaluation.mjs')).href : url,
+    name:
+      failure === 'import'
+        ? pathToFileURL(join(root, 'missing.mjs')).href
+        : failure === 'module evaluation'
+          ? pathToFileURL(join(root, 'evaluation.mjs')).href
+          : url,
     ...(failure === 'dependency' ? { inject: ['matrixMissingService'] } : {}),
     config: config('target', generation, failure),
   })
   const render = (id: string, failure?: Failure, generation = 1) => {
     let text = `- insert: ${JSON.stringify([observer, witness(generation), target(id, failure, generation)])}`
-    if (failure === 'config expression') text += `\n- id: ${id}\n  config: !!js "(() => { throw new Error('matrix config expression') })()"\n`
-    if (failure === 'disabled expression') text += `\n- id: ${id}\n  disabled: !!js "(() => { throw new Error('matrix disabled expression') })()"\n`
+    if (failure === 'config expression')
+      text += `\n- id: ${id}\n  config: !!js "(() => { throw new Error('matrix config expression') })()"\n`
+    if (failure === 'disabled expression')
+      text += `\n- id: ${id}\n  disabled: !!js "(() => { throw new Error('matrix disabled expression') })()"\n`
     return text + '\n'
   }
   writeFileSync(patch, JSON.stringify([{ insert: [observer, witness(0)] }]) + '\n')
@@ -110,22 +136,48 @@ function fixture() {
 function start(f: ReturnType<typeof fixture>, extra: string[] = []) {
   const child = execa(process.execPath, [bin, '--profile', 'web', '--patch', f.watcher, ...extra, '--no-open', '--port', '0'], {
     cwd: f.root,
-    env: { ...process.env, DSH_HOME: f.home, DSH_AGENTS_HOME: join(f.root, '.agents'), DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_API_KEY: 'keyless-matrix-no-call', NODE_NO_WARNINGS: '1' },
-    input: '', reject: false, timeout: 110_000, killSignal: 'SIGKILL',
+    env: {
+      ...process.env,
+      DSH_HOME: f.home,
+      DSH_AGENTS_HOME: join(f.root, '.agents'),
+      DSH_TELEMETRY_DISABLED: '1',
+      DEEPSEEK_API_KEY: 'keyless-matrix-no-call',
+      NODE_NO_WARNINGS: '1',
+    },
+    input: '',
+    reject: false,
+    timeout: 110_000,
+    killSignal: 'SIGKILL',
   })
   let stdout = ''
   let stderr = ''
-  child.stdout?.setEncoding('utf8').on('data', (text: string) => { stdout += text })
-  child.stderr?.setEncoding('utf8').on('data', (text: string) => { stderr += text })
+  child.stdout?.setEncoding('utf8').on('data', (text: string) => {
+    stdout += text
+  })
+  child.stderr?.setEncoding('utf8').on('data', (text: string) => {
+    stderr += text
+  })
   let exited = false
-  void child.then(() => { exited = true })
+  void child.then(() => {
+    exited = true
+  })
   async function wait(predicate: () => boolean) {
     try {
-      await expect.poll(() => {
-        if (exited) throw new Error('Web process exited')
-        return predicate()
-      }, { timeout: 45_000 }).toBe(true)
-    } catch (cause) { throw new Error(`Web condition failed\n${stdout}\n${stderr}\n${readFileSync(f.diagnostics, 'utf8')}\n${readFileSync(f.events, 'utf8')}`, { cause }) }
+      await expect
+        .poll(
+          () => {
+            if (exited) throw new Error('Web process exited')
+            return predicate()
+          },
+          { timeout: 45_000 },
+        )
+        .toBe(true)
+    } catch (cause) {
+      throw new Error(
+        `Web condition failed\n${stdout}\n${stderr}\n${readFileSync(f.diagnostics, 'utf8')}\n${readFileSync(f.events, 'utf8')}`,
+        { cause },
+      )
+    }
   }
   async function serves(currentServer = false) {
     await wait(() => /dsh web: http:\/\//u.test(stdout))
@@ -150,14 +202,29 @@ function start(f: ReturnType<typeof fixture>, extra: string[] = []) {
     const timer = setTimeout(() => child.kill('SIGKILL'), 10_000)
     try {
       const result = await child
-      return { timedOut: result.timedOut, signal: result.signal, exitCode: result.exitCode, stderr: result.stderr, events: readFileSync(f.events, 'utf8') }
+      return {
+        timedOut: result.timedOut,
+        signal: result.signal,
+        exitCode: result.exitCode,
+        stderr: result.stderr,
+        events: readFileSync(f.events, 'utf8'),
+      }
     } finally {
       clearTimeout(timer)
       rmSync(f.root, { recursive: true, force: true })
     }
   }
   const state = (id: string) => (JSON.parse(readFileSync(f.states, 'utf8')) as Record<string, number | undefined>)[id]
-  return { child, wait, serves, close, state, stderr: () => stderr, logs: () => readFileSync(f.diagnostics, 'utf8'), events: () => readFileSync(f.events, 'utf8') }
+  return {
+    child,
+    wait,
+    serves,
+    close,
+    state,
+    stderr: () => stderr,
+    logs: () => readFileSync(f.diagnostics, 'utf8'),
+    events: () => readFileSync(f.events, 'utf8'),
+  }
 }
 
 function exit(result: { timedOut: boolean; signal?: string | undefined; exitCode?: number | undefined; stderr: string }, code: number) {
@@ -200,16 +267,25 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       try {
         await app.serves()
         writeFileSync(f.patch, f.render(id, failure))
-        await app.wait(() => app.events().includes('witness apply 1\n') && (failure === 'dependency' ? app.state(id) === FiberState.PENDING : app.logs().includes(diagnostic)))
+        await app.wait(
+          () =>
+            app.events().includes('witness apply 1\n') &&
+            (failure === 'dependency' ? app.state(id) === FiberState.PENDING : app.logs().includes(diagnostic)),
+        )
         expect(app.events()).not.toContain('witness dispose 1\n')
         expect(app.events()).not.toContain('target apply')
         expect(readFileSync(f.patch, 'utf8')).toBe(f.render(id, failure))
         await app.serves()
         if (failure === 'dependency') {
-          writeFileSync(f.patch, JSON.stringify([
-            { insert: [f.observer, f.witness(1), f.target(id, failure)] },
-            { insert: [{ id: 'matrix-provider', name: f.url, config: { ...f.config('provider', 2), provider: 'matrixMissingService' } }] },
-          ]) + '\n')
+          writeFileSync(
+            f.patch,
+            JSON.stringify([
+              { insert: [f.observer, f.witness(1), f.target(id, failure)] },
+              {
+                insert: [{ id: 'matrix-provider', name: f.url, config: { ...f.config('provider', 2), provider: 'matrixMissingService' } }],
+              },
+            ]) + '\n',
+          )
         } else writeFileSync(f.patch, f.render(id, undefined, 2))
         await app.wait(() => app.events().includes(`target apply ${failure === 'dependency' ? 1 : 2}\n`))
         await app.serves()
@@ -241,7 +317,9 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       expect(result.stderr).toContain(diagnostic)
       expect(result.stdout).not.toContain('dsh web: http://')
       expect(app.events()).toBe('')
-    } finally { exit(await app.close(), 1) }
+    } finally {
+      exit(await app.close(), 1)
+    }
   })
 
   it.each([
@@ -260,7 +338,9 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       writeFileSync(f.patch, f.render('matrix-optional'))
       await app.wait(() => app.events().includes('target apply 1\n'))
       await app.serves()
-    } finally { exit(await app.close(), 0) }
+    } finally {
+      exit(await app.close(), 0)
+    }
   })
 
   it('native HMR schema failure retains the existing config until a valid correction', async () => {
@@ -279,7 +359,9 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       await app.wait(() => app.events().includes('target apply 3\n'))
       expect(app.events()).toContain('target dispose 1\n')
       await app.serves()
-    } finally { exit(await app.close(), 0) }
+    } finally {
+      exit(await app.close(), 0)
+    }
   })
 
   it('ignores absent and explicitly disabled required entries at startup', async () => {
@@ -290,7 +372,9 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       await app.serves()
       expect(app.stderr()).not.toContain('startup failed:')
       expect(app.stderr()).not.toContain('failed to import')
-    } finally { exit(await app.close(), 0) }
+    } finally {
+      exit(await app.close(), 0)
+    }
   })
 
   it('detached rejection from a hot-loaded plugin terminates and disposes the app', async () => {
@@ -298,15 +382,30 @@ describe.skipIf(!built)('Web process failure matrix', () => {
     const app = start(f)
     try {
       await app.serves()
-      writeFileSync(f.patch, JSON.stringify([{ insert: [f.observer, f.witness(0), {
-        id: 'matrix-detached', name: f.url, config: f.config('detached', 1, 'detached'),
-      }] }]) + '\n')
+      writeFileSync(
+        f.patch,
+        JSON.stringify([
+          {
+            insert: [
+              f.observer,
+              f.witness(0),
+              {
+                id: 'matrix-detached',
+                name: f.url,
+                config: f.config('detached', 1, 'detached'),
+              },
+            ],
+          },
+        ]) + '\n',
+      )
       const result = await app.child
       exit(result, 1)
       expect(result.stderr).toContain('fatal load failure: Error: matrix detached failure')
       expect(app.events()).toContain('witness dispose 0\n')
       expect(app.events()).toContain('detached dispose 1\n')
-    } finally { exit(await app.close(), 1) }
+    } finally {
+      exit(await app.close(), 1)
+    }
   })
 
   it('native HMR reports a required Web server bind failure without terminating the process', async () => {
@@ -330,8 +429,15 @@ describe.skipIf(!built)('Web process failure matrix', () => {
       await app.wait(() => app.events().includes('witness apply 2\n') && existsSync(f.serverUrl))
       await app.serves(true)
     } finally {
-      try { exit(await app.close(), 0) } finally {
-        await new Promise<void>((resolve, reject) => blocker.close((error) => { if (error) reject(error); else resolve() }))
+      try {
+        exit(await app.close(), 0)
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          blocker.close((error) => {
+            if (error) reject(error)
+            else resolve()
+          }),
+        )
       }
     }
   })
@@ -340,12 +446,15 @@ describe.skipIf(!built)('Web process failure matrix', () => {
     const f = fixture()
     const observerPath = fileURLToPath(f.observer.name)
     // This sibling mounts after HMR's watchers, before application readiness.
-    writeFileSync(observerPath, readFileSync(observerPath, 'utf8').replace(
-      'export function apply(ctx, config) {',
-      `export const inject = ['hmr']
+    writeFileSync(
+      observerPath,
+      readFileSync(observerPath, 'utf8').replace(
+        'export function apply(ctx, config) {',
+        `export const inject = ['hmr']
 export function apply(ctx, config) {
   writeFileSync(${JSON.stringify(f.patch)}, ${JSON.stringify(f.render('matrix-optional', 'import'))})`,
-    ))
+      ),
+    )
     const app = start(f)
     try {
       await app.wait(() => app.logs().includes('config reload at') && app.logs().includes('missing.mjs'))
@@ -353,7 +462,9 @@ export function apply(ctx, config) {
       writeFileSync(f.patch, f.render('matrix-optional', undefined, 2))
       await app.wait(() => app.events().includes('target apply 2\n'))
       await app.serves()
-    } finally { exit(await app.close(), 0) }
+    } finally {
+      exit(await app.close(), 0)
+    }
   })
 
   it.each(['startup', 'HMR'])('optional HTTP bind failure at %s leaves Web serving', async (phase) => {
@@ -362,24 +473,38 @@ export function apply(ctx, config) {
     let app: ReturnType<typeof start> | undefined
     try {
       const plugin = join(f.root, 'http.mjs')
-      writeFileSync(plugin, [
-        'import { createServer } from "node:http"',
-        'export async function apply(ctx, config) {',
-        '  const server = createServer()',
-        '  ctx.effect(() => () => new Promise(resolve => server.close(() => resolve())))',
-        '  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(config.port, "127.0.0.1", resolve) })',
-        '}',
-        '',
-      ].join('\n'))
+      writeFileSync(
+        plugin,
+        [
+          'import { createServer } from "node:http"',
+          'export async function apply(ctx, config) {',
+          '  const server = createServer()',
+          '  ctx.effect(() => () => new Promise(resolve => server.close(() => resolve())))',
+          '  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(config.port, "127.0.0.1", resolve) })',
+          '}',
+          '',
+        ].join('\n'),
+      )
       await new Promise<void>((resolve, reject) => {
         blocker.once('error', reject)
         blocker.listen(0, '127.0.0.1', resolve)
       })
       const address = blocker.address()
       if (!address || typeof address === 'string') throw new Error('Missing blocker address')
-      const patch = JSON.stringify([{ insert: [f.observer, f.witness(0), {
-        id: 'matrix-optional-http', name: pathToFileURL(plugin).href, config: { port: address.port },
-      }] }]) + '\n'
+      const patch =
+        JSON.stringify([
+          {
+            insert: [
+              f.observer,
+              f.witness(0),
+              {
+                id: 'matrix-optional-http',
+                name: pathToFileURL(plugin).href,
+                config: { port: address.port },
+              },
+            ],
+          },
+        ]) + '\n'
       if (phase === 'startup') writeFileSync(f.patch, patch)
       app = start(f)
       const running = app
@@ -394,7 +519,12 @@ export function apply(ctx, config) {
         else rmSync(f.root, { recursive: true, force: true })
       } finally {
         if (blocker.listening) {
-          await new Promise<void>((resolve, reject) => blocker.close((error) => { if (error) reject(error); else resolve() }))
+          await new Promise<void>((resolve, reject) =>
+            blocker.close((error) => {
+              if (error) reject(error)
+              else resolve()
+            }),
+          )
         }
       }
     }
@@ -414,11 +544,21 @@ export function apply(ctx, config) {
       await app.wait(() => app.state(id) === FiberState.PENDING && app.events().includes('witness apply 2\n'))
       expect(app.events()).not.toContain('witness dispose 2\n')
       expect(app.stderr()).not.toContain('startup failed:')
-      writeFileSync(f.patch, pending + `- insert: ${JSON.stringify([{
-        id: 'matrix-provider', name: f.url, config: { ...f.config('provider', 3), provider: 'matrixMissingWebDependency' },
-      }])}\n`)
+      writeFileSync(
+        f.patch,
+        pending +
+          `- insert: ${JSON.stringify([
+            {
+              id: 'matrix-provider',
+              name: f.url,
+              config: { ...f.config('provider', 3), provider: 'matrixMissingWebDependency' },
+            },
+          ])}\n`,
+      )
       await app.wait(() => app.state(id) === FiberState.ACTIVE && existsSync(f.serverUrl))
       await app.serves(true)
-    } finally { exit(await app.close(), 0) }
+    } finally {
+      exit(await app.close(), 0)
+    }
   })
 })

@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { AssistantMarkdown, localPathMediaUrl } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../src/client/contract/slots.ts'
 import type { AssistantBlock } from '../src/client/contract/snapshot.ts'
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 const t = ((_key: string) => 'label') as ChatViewSlotProps['t']
 const renderMessageImages = (() => null) as ChatNodeOwnerProps['renderMessageImages']
@@ -49,8 +52,7 @@ describe('localPathMediaUrl', () => {
   })
 
   it('encodes the full path including spaces', () => {
-    expect(localPathMediaUrl(BASE, '/tmp/my graph.png'))
-      .toBe(`${BASE}api/file?path=${encodeURIComponent('/tmp/my graph.png')}`)
+    expect(localPathMediaUrl(BASE, '/tmp/my graph.png')).toBe(`${BASE}api/file?path=${encodeURIComponent('/tmp/my graph.png')}`)
   })
 })
 
@@ -58,7 +60,8 @@ describe('AssistantMarkdown local-path images', () => {
   it.each([BASE, 'dsh-app://app/'])('renders a local image in closing prose through %s', (base) => {
     vi.spyOn(document, 'baseURI', 'get').mockReturnValue(base)
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](/tmp/graph.png) for the layout.')]}
         streaming={false}
@@ -76,7 +79,8 @@ describe('AssistantMarkdown local-path images', () => {
 
   it('keeps non-absolute destinations inert', () => {
     const { container } = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown
+        useDisclosure={useDisclosure}
         usePresentation={useDetailedPresentation}
         blocks={[textBlock('See ![diagram](relative.png).')]}
         streaming={false}
@@ -94,6 +98,7 @@ it('decodes Markdown URL escapes once before encoding the file query', () => {
     ['/work/test%20workspace/图.png', '/work/test workspace/图.png'],
     ['/work/100%25%23.png', '/work/100%#.png'],
     ['/work/literal%2520.png', '/work/literal%20.png'],
-  ]) expect(new URL(localPathMediaUrl(BASE, authored!)!).searchParams.get('path')).toBe(path)
+  ])
+    expect(new URL(localPathMediaUrl(BASE, authored!)!).searchParams.get('path')).toBe(path)
   expect(localPathMediaUrl(BASE, '/work/bad%escape.png')).toBeUndefined()
 })

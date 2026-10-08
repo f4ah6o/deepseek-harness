@@ -11,7 +11,7 @@ import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -31,28 +31,23 @@ afterEach(async () => {
 async function loadComposition(port = 0, gzip = false): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
-  await writeFile(configPath, [
-    "- name: '@deepseek-ai/dsh-host-webserver'",
-    '  config:',
-    "    host: '127.0.0.1'",
-    `    port: ${String(port)}`,
-    ...(gzip
-      ? [
-        '    compression: gzip',
-        '    compressionLevel: 1',
-        '    compressionThresholdBytes: 16',
-      ]
-      : []),
-    '',
-  ].join('\n'))
+  await writeFile(
+    configPath,
+    [
+      "- name: '@deepseek-ai/dsh-host-webserver'",
+      '  config:',
+      "    host: '127.0.0.1'",
+      `    port: ${String(port)}`,
+      ...(gzip ? ['    compression: gzip', '    compressionLevel: 1', '    compressionThresholdBytes: 16'] : []),
+      '',
+    ].join('\n'),
+  )
 
   context = new Context()
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
   context.loader.builtins.include = Include
-  const modules = new Map<string, unknown>([
-    ['@deepseek-ai/dsh-host-webserver', HttpServer],
-  ])
+  const modules = new Map<string, unknown>([['@deepseek-ai/dsh-host-webserver', HttpServer]])
   context.loader.internal = {
     version: 'v2',
     async import(specifier: string) {
@@ -69,11 +64,7 @@ async function loadComposition(port = 0, gzip = false): Promise<Context> {
 }
 
 /** GET (by default) one path against the running server; returns status plus a body prefix. */
-async function request(
-  port: number,
-  path: string,
-  init?: RequestInit,
-): Promise<{ status: number; body: string; headers: Headers }> {
+async function request(port: number, path: string, init?: RequestInit): Promise<{ status: number; body: string; headers: Headers }> {
   const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, init)
   return { status: response.status, body: (await response.text()).slice(0, 80), headers: response.headers }
 }
@@ -83,15 +74,8 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
   const socket = connect(port, '127.0.0.1')
   await once(socket, 'connect')
   const response = once(socket, 'data')
-  socket.write([
-    `GET ${path} HTTP/1.1`,
-    `Host: 127.0.0.1:${String(port)}`,
-    'Connection: Upgrade',
-    'Upgrade: dsh-test',
-    '',
-    '',
-  ].join('\r\n'))
-  const [data] = await response as [Buffer]
+  socket.write([`GET ${path} HTTP/1.1`, `Host: 127.0.0.1:${String(port)}`, 'Connection: Upgrade', 'Upgrade: dsh-test', '', ''].join('\r\n'))
+  const [data] = (await response) as [Buffer]
   expect(String(data)).toContain('101 Switching Protocols')
   return socket
 }
@@ -105,9 +89,13 @@ describe('real Loader composition', () => {
       compressionLevel: 1,
       compressionThresholdBytes: 1024,
     })
-    expect(() => HttpServer.Config({
-      host: '127.0.0.1', port: 0, compressionLevel: 10,
-    })).toThrow()
+    expect(() =>
+      HttpServer.Config({
+        host: '127.0.0.1',
+        port: 0,
+        compressionLevel: 10,
+      }),
+    ).toThrow()
 
     const loaded = await loadComposition(0, true)
     const server = loaded.webServer
@@ -173,20 +161,16 @@ describe('real Loader composition', () => {
     const streamed = await request(server.port, '/stream', { headers: { 'accept-encoding': 'gzip' } })
     expect(streamed).toMatchObject({ body: body.slice(0, 80) })
     expect(streamed.headers.get('content-encoding')).toBe('gzip')
-    expect((await request(server.port, '/small', { headers: { 'accept-encoding': 'gzip' } }))
-      .headers.get('content-encoding')).toBeNull()
+    expect((await request(server.port, '/small', { headers: { 'accept-encoding': 'gzip' } })).headers.get('content-encoding')).toBeNull()
 
     const identity = await request(server.port, '/text', {
       headers: { 'accept-encoding': 'gzip;q=0.5, identity;q=1' },
     })
     expect(identity.headers.get('content-encoding')).toBeNull()
     expect(identity.headers.get('vary')).toBe('Accept-Encoding')
-    expect((await request(server.port, '/events', { headers: { 'accept-encoding': 'gzip' } }))
-      .headers.get('content-encoding')).toBeNull()
-    expect((await request(server.port, '/archive', { headers: { 'accept-encoding': 'gzip' } }))
-      .headers.get('content-encoding')).toBeNull()
-    expect((await request(server.port, '/range', { headers: { 'accept-encoding': 'gzip' } }))
-      .headers.get('content-encoding')).toBeNull()
+    expect((await request(server.port, '/events', { headers: { 'accept-encoding': 'gzip' } })).headers.get('content-encoding')).toBeNull()
+    expect((await request(server.port, '/archive', { headers: { 'accept-encoding': 'gzip' } })).headers.get('content-encoding')).toBeNull()
+    expect((await request(server.port, '/range', { headers: { 'accept-encoding': 'gzip' } })).headers.get('content-encoding')).toBeNull()
   })
 
   // Real-Loader composition resolves workspace packages through tsx at test
@@ -195,8 +179,8 @@ describe('real Loader composition', () => {
   it('serves registered routes, index taps, and the fallback-seat semantics', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const unloaded = [...loaded.loader.entries()]
-      .filter(entry => entry.fiber === undefined && !entry.disabled)
-      .map(entry => entry.options.name)
+      .filter((entry) => entry.fiber === undefined && !entry.disabled)
+      .map((entry) => entry.options.name)
     expect(unloaded).toEqual([])
 
     const server = loaded.webServer
@@ -207,9 +191,30 @@ describe('real Loader composition', () => {
     // Routing precedence: exact beats prefix, longest prefix wins, a prefix
     // route answers its own path, and routes own their method handling
     // (POST reaches a registered prefix; 405 is fallback-only semantics).
-    server.register({ kind: 'exact', path: '/probe', handler: (_req, res) => { res.writeHead(200); res.end('EXACT') } })
-    server.register({ kind: 'prefix', path: '/api', handler: (_req, res) => { res.writeHead(200); res.end('API') } })
-    server.register({ kind: 'prefix', path: '/api/deep', handler: (_req, res) => { res.writeHead(200); res.end('DEEP') } })
+    server.register({
+      kind: 'exact',
+      path: '/probe',
+      handler: (_req, res) => {
+        res.writeHead(200)
+        res.end('EXACT')
+      },
+    })
+    server.register({
+      kind: 'prefix',
+      path: '/api',
+      handler: (_req, res) => {
+        res.writeHead(200)
+        res.end('API')
+      },
+    })
+    server.register({
+      kind: 'prefix',
+      path: '/api/deep',
+      handler: (_req, res) => {
+        res.writeHead(200)
+        res.end('DEEP')
+      },
+    })
     expect(await request(port, '/probe')).toMatchObject({ status: 200, body: 'EXACT' })
     expect(await request(port, '/api/anything')).toMatchObject({ status: 200, body: 'API' })
     expect(await request(port, '/api/deep/leaf')).toMatchObject({ status: 200, body: 'DEEP' })
@@ -220,7 +225,7 @@ describe('real Loader composition', () => {
     // named route matches; index taps are the owner's to apply; the seat
     // admits exactly one owner and the disposer releases it.
     expect((await request(port, '/no/such/route')).status).toBe(404)
-    const untap = server.tapIndex(html => html.replace('<head>', '<head><script>window.__T__=1</script>'))
+    const untap = server.tapIndex((html) => html.replace('<head>', '<head><script>window.__T__=1</script>'))
     expect(server.applyIndexTaps('<head></head>')).toContain('__T__')
     const releaseFallback = server.registerFallback((req, res) => {
       // Decode like a real static server would — a malformed %-escape throws
@@ -242,9 +247,15 @@ describe('real Loader composition', () => {
 
     // Duplicate (kind, path) is a misconfiguration and throws; the disposer
     // restores registrability (register/disposer symmetry).
-    expect(() => server.register({ kind: 'exact', path: '/probe', handler: () => {} }))
-      .toThrow(/duplicate exact route/)
-    const disposeOnce = server.register({ kind: 'exact', path: '/once', handler: (_req, res) => { res.writeHead(200); res.end('ONCE') } })
+    expect(() => server.register({ kind: 'exact', path: '/probe', handler: () => {} })).toThrow(/duplicate exact route/)
+    const disposeOnce = server.register({
+      kind: 'exact',
+      path: '/once',
+      handler: (_req, res) => {
+        res.writeHead(200)
+        res.end('ONCE')
+      },
+    })
     expect(await request(port, '/once')).toMatchObject({ status: 200, body: 'ONCE' })
     disposeOnce()
     expect((await request(port, '/once')).body).toContain('shell') // back to the fallback owner
@@ -262,12 +273,13 @@ describe('real Loader composition', () => {
     const disposeUpgrade = server.registerUpgrade({
       path: '/events',
       handler: (_req, socket) => {
-        socket.once('close', () => { upgradedServerClosed = true })
+        socket.once('close', () => {
+          upgradedServerClosed = true
+        })
         socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
       },
     })
-    expect(() => server.registerUpgrade({ path: '/events', handler: () => {} }))
-      .toThrow(/duplicate upgrade route/)
+    expect(() => server.registerUpgrade({ path: '/events', handler: () => {} })).toThrow(/duplicate upgrade route/)
     const upgraded = await upgrade(port, '/events?stream=mux')
     disposeUpgrade()
     expect(() => server.registerUpgrade({ path: '/events', handler: () => {} })).not.toThrow()
@@ -282,17 +294,14 @@ describe('real Loader composition', () => {
       },
     })
     const failedUpgrade = connect(port, '127.0.0.1')
-    failedUpgrade.on('error', () => { /* The server-side reset is the fixture outcome. */ })
+    failedUpgrade.on('error', () => {
+      /* The server-side reset is the fixture outcome. */
+    })
     await once(failedUpgrade, 'connect')
     const failedUpgradeClosed = once(failedUpgrade, 'close')
-    failedUpgrade.write([
-      'GET /upgrade-error HTTP/1.1',
-      `Host: 127.0.0.1:${String(port)}`,
-      'Connection: Upgrade',
-      'Upgrade: dsh-test',
-      '',
-      '',
-    ].join('\r\n'))
+    failedUpgrade.write(
+      ['GET /upgrade-error HTTP/1.1', `Host: 127.0.0.1:${String(port)}`, 'Connection: Upgrade', 'Upgrade: dsh-test', '', ''].join('\r\n'),
+    )
     await failedUpgradeClosed
     expect(await request(port, '/probe')).toMatchObject({ status: 200, body: 'EXACT' })
 
@@ -333,26 +342,30 @@ describe('real Loader composition', () => {
       '<body>',
       '<script>window.__P__="dark"</script>',
       'shell',
-    ].map(part => html.indexOf(part))
+    ].map((part) => html.indexOf(part))
     expect(order).toEqual([...order].sort((a, b) => a - b))
-    expect(order.every(at => at !== -1)).toBe(true)
+    expect(order.every((at) => at !== -1)).toBe(true)
 
     // Fresh collection per render: the listener reads live state at emit time.
     flag = 'light'
     expect(server.renderIndex('<head></head><body></body>')).toContain('window.__P__="light"')
 
     // Raw taps still run, over the already-rendered rows.
-    const untap = server.tapIndex(h => h.replace('window.__Q__=1', 'window.__Q__=2'))
+    const untap = server.tapIndex((h) => h.replace('window.__Q__=1', 'window.__Q__=2'))
     expect(server.renderIndex('<head></head><body></body>')).toContain('window.__Q__=2')
     untap()
 
     // Tag-less fragments: head rows prepend, body rows append, and the
     // boot-readiness tail lands after the last body row.
-    expect(renderIndexInjections('<main>x</main>', [
-      { kind: 'script', placement: 'head', text: 'H' },
-      { kind: 'script', placement: 'body', text: 'B' },
-    ])).toBe('<script>H</script><main>x</main><script>B</script>'
-      + '<script>(globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()).resolve()</script>')
+    expect(
+      renderIndexInjections('<main>x</main>', [
+        { kind: 'script', placement: 'head', text: 'H' },
+        { kind: 'script', placement: 'body', text: 'B' },
+      ]),
+    ).toBe(
+      '<script>H</script><main>x</main><script>B</script>' +
+        '<script>(globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()).resolve()</script>',
+    )
   })
 
   it('fails the fiber when the port is already taken (fail-loud at activation)', { timeout: 60_000 }, async () => {
@@ -364,7 +377,7 @@ describe('real Loader composition', () => {
     let second: Context | undefined
     try {
       second = await loadComposition(takenPort)
-      const entry = [...second.loader.entries()].find(e => e.options.name === '@deepseek-ai/dsh-host-webserver')
+      const entry = [...second.loader.entries()].find((e) => e.options.name === '@deepseek-ai/dsh-host-webserver')
       expect(entry?.fiber?.state).toBe(FiberState.FAILED)
       await expect(entry?.fiber?.await()).rejects.toThrow('EADDRINUSE')
     } finally {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -25,7 +25,7 @@ describe('StateDot', () => {
     expect(spinner.querySelector('g')).not.toBeNull()
     const rings = spinner.querySelectorAll('circle')
     expect(rings).toHaveLength(2)
-    expect([...rings].map(ring => ring.getAttribute('r'))).toEqual(['9.5', '9.5'])
+    expect([...rings].map((ring) => ring.getAttribute('r'))).toEqual(['9.5', '9.5'])
   })
 
   it('sizes via the size prop in both shapes', () => {
@@ -74,7 +74,7 @@ describe('StateDot ongoing phase', () => {
     try {
       const { unmount } = render(<StateDot state="ongoing" />)
       expect(getAnimations).toHaveBeenCalledWith({ subtree: true })
-      expect(animations.map(animation => animation.startTime)).toEqual([0, 0])
+      expect(animations.map((animation) => animation.startTime)).toEqual([0, 0])
       unmount()
       expect(getAnimations).toHaveBeenCalledTimes(1)
     } finally {

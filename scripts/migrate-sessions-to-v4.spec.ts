@@ -4,7 +4,7 @@ import { mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { execa } from 'execa'
 import type { SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
 import { encodeSegment, generationLogFilename, type JsonlCompression } from '../packages/session/session-persistence-jsonl/src/format.ts'
@@ -25,9 +25,13 @@ function temporaryRoot(): string {
 
 async function runAt(entrypoint: string, ...args: string[]) {
   const child = execa(process.execPath, ['--import', 'tsx', entrypoint, ...args], {
-    cwd: repository, reject: false,
+    cwd: repository,
+    reject: false,
   })
-  stopProcesses.push(async () => { child.kill('SIGKILL'); await child })
+  stopProcesses.push(async () => {
+    child.kill('SIGKILL')
+    await child
+  })
   const result = await child
   const logPath = [...result.stdout.matchAll(/^Full log: (.+)$/gmu)].at(-1)?.[1]
   const summaryPath = [...result.stdout.matchAll(/^JSON summary: (.+)$/gmu)].at(-1)?.[1]
@@ -43,7 +47,7 @@ function run(...args: string[]) {
 }
 
 afterEach(async () => {
-  await Promise.all(stopProcesses.splice(0).map(stop => stop()))
+  await Promise.all(stopProcesses.splice(0).map((stop) => stop()))
   for (const directory of directories) removeFixtureSafely(directory)
   directories.clear()
 })
@@ -52,33 +56,65 @@ const toolTurn: readonly SessionFormatJsonObject[] = [
   { type: 'turn/start', data: { turn: 1 } },
   { type: 'step/start', data: { turn: 1, step: 1 } },
   { type: 'request/header', data: { reason: 'initial', header: { config: { provider: 'mock', model: 'mock' } } } },
-  { type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, step: 1, stream: [], message: {
-    id: 'assistant', role: 'assistant', source: { kind: 'model', provider: 'mock', model: 'mock' },
-    content: [{ type: 'tool-call', id: 'call', name: 'read', arguments: '{}' }],
-  } } },
+  {
+    type: 'assistant/message',
+    surfaceOp: 'append',
+    data: {
+      turn: 1,
+      step: 1,
+      stream: [],
+      message: {
+        id: 'assistant',
+        role: 'assistant',
+        source: { kind: 'model', provider: 'mock', model: 'mock' },
+        content: [{ type: 'tool-call', id: 'call', name: 'read', arguments: '{}' }],
+      },
+    },
+  },
   { type: 'tool/call', data: { turn: 1, step: 1, callId: 'call', name: 'read', arguments: '{}' } },
-  { type: 'tool/result', surfaceOp: 'append', data: { turn: 1, step: 1, message: {
-    id: 'result', role: 'user', source: { kind: 'tool', callId: 'call' },
-    content: [{ type: 'tool-result', toolCallId: 'call', isError: false, content: [{ type: 'text', text: 'saved output' }] }],
-  } } },
+  {
+    type: 'tool/result',
+    surfaceOp: 'append',
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        id: 'result',
+        role: 'user',
+        source: { kind: 'tool', callId: 'call' },
+        content: [{ type: 'tool-result', toolCallId: 'call', isError: false, content: [{ type: 'text', text: 'saved output' }] }],
+      },
+    },
+  },
   { type: 'step/end', data: { turn: 1, step: 1 } },
   { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
 ]
 
 async function fixture(
-  root: string, id: string, version: number, compression: JsonlCompression, events: readonly SessionFormatJsonObject[] = [],
+  root: string,
+  id: string,
+  version: number,
+  compression: JsonlCompression,
+  events: readonly SessionFormatJsonObject[] = [],
   headerFields: SessionFormatJsonObject = {},
 ) {
   const directory = join(root, '_no-cwd', encodeSegment(id))
   await mkdir(directory, { recursive: true })
-  const header = JSON.stringify({ type: 'session', version, id, createdAt: 1, delegationDepth: 0,
-    ...version >= 2 ? { isSeeded: false } : {},
-    ...headerFields,
-  }) + '\n'
+  const header =
+    JSON.stringify({
+      type: 'session',
+      version,
+      id,
+      createdAt: 1,
+      delegationDepth: 0,
+      ...(version >= 2 ? { isSeeded: false } : {}),
+      ...headerFields,
+    }) + '\n'
   const body = events.map((event, seq) => JSON.stringify({ ...event, seq, time: seq + 2 }) + '\n').join('')
-  const bytes = compression === 'none' ? Buffer.from(header + body) : Buffer.concat([
-    await compressZstdFrame(header), ...body === '' ? [] : [await compressZstdFrame(body)],
-  ])
+  const bytes =
+    compression === 'none'
+      ? Buffer.from(header + body)
+      : Buffer.concat([await compressZstdFrame(header), ...(body === '' ? [] : [await compressZstdFrame(body)])])
   const path = join(directory, generationLogFilename(version, compression))
   await writeFile(path, bytes)
   return { path, bytes, directory }
@@ -153,7 +189,7 @@ describe('one-time V4 migration command', () => {
       active -= 1
       return false
     })
-    expect(visits.every(count => count === 1)).toBe(true)
+    expect(visits.every((count) => count === 1)).toBe(true)
     expect(peak).toBe(16)
     expect(active).toBe(0)
   })
@@ -194,9 +230,14 @@ describe('one-time V4 migration command', () => {
     })
     const target = join(source.directory, generationLogFilename(4, compression))
     const targetBytes = await readFile(target)
-    const decoded = compression === 'none' ? targetBytes : Buffer.concat(await Promise.all(
-      scanZstdFrames(targetBytes).frames.map(frame => decompressZstdFrame(targetBytes.subarray(frame.start, frame.end))),
-    ))
+    const decoded =
+      compression === 'none'
+        ? targetBytes
+        : Buffer.concat(
+            await Promise.all(
+              scanZstdFrames(targetBytes).frames.map((frame) => decompressZstdFrame(targetBytes.subarray(frame.start, frame.end))),
+            ),
+          )
     expect(decoded.toString()).toContain('"role":"tool"')
     expect(decoded.toString()).toContain('"text":"saved output"')
     expect(decoded.toString()).not.toContain('"type":"tool-result"')
@@ -230,9 +271,14 @@ describe('one-time V4 migration command', () => {
     for (const jobs of [1, 2]) {
       const root = temporaryRoot()
       const parent = await fixture(root, 'a-parent', 3, compression)
-      const child = await fixture(root, 'z-child', 3, compression, [
-        { type: 'subagent/descriptor', data: { version: 3, mode: 'continuable', provider: 'spawn', label: 'saved child' } },
-      ], { origin: 'subagent', parentSession: 'a-parent', createdAt: 2, delegationDepth: 1 })
+      const child = await fixture(
+        root,
+        'z-child',
+        3,
+        compression,
+        [{ type: 'subagent/descriptor', data: { version: 3, mode: 'continuable', provider: 'spawn', label: 'saved child' } }],
+        { origin: 'subagent', parentSession: 'a-parent', createdAt: 2, delegationDepth: 1 },
+      )
       const result = await run('--sessions-dir', root, '--jobs', String(jobs))
       expect(result.status, result.stdout + result.stderr).toBe(0)
       expect(result.stdout).toContain('converted=2, already-V4=0, failed=0, skipped=0')
@@ -241,12 +287,22 @@ describe('one-time V4 migration command', () => {
       for (const original of [parent, child]) {
         expect(await readFile(original.path)).toEqual(original.bytes)
         const bytes = await readFile(join(original.directory, generationLogFilename(4, compression)))
-        const decoded = compression === 'none' ? bytes : Buffer.concat(await Promise.all(
-          scanZstdFrames(bytes).frames.map(frame => decompressZstdFrame(bytes.subarray(frame.start, frame.end))),
-        ))
+        const decoded =
+          compression === 'none'
+            ? bytes
+            : Buffer.concat(
+                await Promise.all(scanZstdFrames(bytes).frames.map((frame) => decompressZstdFrame(bytes.subarray(frame.start, frame.end)))),
+              )
         current.push(decoded)
       }
-      expect(current[0]!.toString().trim().split('\n').slice(1).map((line): unknown => JSON.parse(line))).toMatchObject([
+      expect(
+        current[0]!
+          .toString()
+          .trim()
+          .split('\n')
+          .slice(1)
+          .map((line): unknown => JSON.parse(line)),
+      ).toMatchObject([
         { type: 'subagent/catalog', data: { childId: 'z-child', childCreatedAt: 2, mode: 'continuable', label: 'saved child' } },
       ])
       outputs.push(current)
@@ -290,13 +346,23 @@ describe('one-time V4 migration command', () => {
         '3': { converted: 0, alreadyV4: 0, failed: 2, skipped: 0 },
       },
       failureGroups: [
-        { sourceVersion: 0, reason: 'unknown_event', eventType: 'unrecognized/required', count: 1,
-          items: [{ inputPath: legacy.path, reason: 'unknown_event', errorName: anyString, message: anyString }] },
-        { sourceVersion: 3, reason: 'unknown_event', eventType: 'unrecognized/required', count: 2,
+        {
+          sourceVersion: 0,
+          reason: 'unknown_event',
+          eventType: 'unrecognized/required',
+          count: 1,
+          items: [{ inputPath: legacy.path, reason: 'unknown_event', errorName: anyString, message: anyString }],
+        },
+        {
+          sourceVersion: 3,
+          reason: 'unknown_event',
+          eventType: 'unrecognized/required',
+          count: 2,
           items: [
             { inputPath: first.path, reason: 'unknown_event', errorName: anyString, message: anyString },
             { inputPath: second.path, reason: 'unknown_event', errorName: anyString, message: anyString },
-          ] },
+          ],
+        },
       ],
     })
     for (const source of [first, second, legacy]) expect(await readFile(source.path)).toEqual(source.bytes)
@@ -305,7 +371,10 @@ describe('one-time V4 migration command', () => {
   it('groups sequence failures without dropping their distinct sequence coordinates', async () => {
     const root = temporaryRoot()
     const items: Array<{ inputPath: string; expectedSeq: number; actualSeq: number }> = []
-    for (const [id, actualSeq] of [['a-gap', 2], ['b-gap', 4]] as const) {
+    for (const [id, actualSeq] of [
+      ['a-gap', 2],
+      ['b-gap', 4],
+    ] as const) {
       const source = await fixture(root, id, 2, 'none', [
         { type: 'turn/start', data: { turn: 1 } },
         { type: 'step/start', data: { turn: 1, step: 1 } },
@@ -327,13 +396,25 @@ describe('one-time V4 migration command', () => {
   it('reports a source-change deferral and retries after the other input completes', async () => {
     const root = temporaryRoot()
     const parent = await fixture(root, 'a-parent', 3, 'none')
-    const child = await fixture(root, 'b-child', 3, 'none', [{
-      type: 'subagent/descriptor', data: { version: 3, mode: 'continuable', provider: 'spawn', label: 'fixture child' },
-    }], { origin: 'subagent', parentSession: 'a-parent', createdAt: 2, delegationDepth: 1 })
+    const child = await fixture(
+      root,
+      'b-child',
+      3,
+      'none',
+      [
+        {
+          type: 'subagent/descriptor',
+          data: { version: 3, mode: 'continuable', provider: 'spawn', label: 'fixture child' },
+        },
+      ],
+      { origin: 'subagent', parentSession: 'a-parent', createdAt: 2, delegationDepth: 1 },
+    )
     const entrypoint = join(temporaryRoot(), 'retry-once.mjs')
     const backendUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/index.ts')).href
     const generationUrl = pathToFileURL(join(repository, 'packages/session/session-persistence-jsonl/src/generation.ts')).href
-    await writeFile(entrypoint, `
+    await writeFile(
+      entrypoint,
+      `
       const { default: Backend } = await import(${JSON.stringify(backendUrl)});
       const { JsonlGenerationSourceChangedError } = await import(${JSON.stringify(generationUrl)});
       const open = Backend.prototype.open;
@@ -347,17 +428,18 @@ describe('one-time V4 migration command', () => {
       };
       process.argv[1] = ${JSON.stringify(script)};
       await import(${JSON.stringify(pathToFileURL(script).href)});
-    `)
+    `,
+    )
     const result = await runAt(entrypoint, '--sessions-dir', root, '--jobs', '2')
     expect(result.status, result.stdout + result.stderr).toBe(0)
     const lines = result.stdout.split('\n')
-    const deferred = lines.findIndex(line => line.includes('[1/2]') && line.includes('DEFERRED'))
-    const childDone = lines.findIndex(line => line.includes('[2/2]') && line.includes('completed=1/2'))
-    const retry = lines.findIndex(line => line.includes('[1/2]') && line.includes('RETRY'))
+    const deferred = lines.findIndex((line) => line.includes('[1/2]') && line.includes('DEFERRED'))
+    const childDone = lines.findIndex((line) => line.includes('[2/2]') && line.includes('completed=1/2'))
+    const retry = lines.findIndex((line) => line.includes('[1/2]') && line.includes('RETRY'))
     expect(deferred).toBeGreaterThanOrEqual(0)
     expect(childDone).toBeGreaterThan(deferred)
     expect(retry).toBeGreaterThan(childDone)
-    expect(lines.filter(line => line.includes('RETRY'))).toHaveLength(1)
+    expect(lines.filter((line) => line.includes('RETRY'))).toHaveLength(1)
     expect(result.summary).toMatchObject({ totals: { converted: 2, alreadyV4: 0, failed: 0, skipped: 0 }, failureGroups: [] })
     const target = await readFile(join(parent.directory, 'session.v4.jsonl'), 'utf8')
     expect(target).toContain('"type":"subagent/catalog"')

@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -30,7 +30,7 @@ describe.each(['none', 'zstd'] as const)('V3 interrupted-turn publication (%s)',
     const rows = [
       { type: 'turn/start', data: { turn: 1 } },
       { type: 'step/start', data: { turn: 1, step: 1 } },
-      ...openStep ? [] : [{ type: 'step/end', data: { turn: 1, step: 1 } }],
+      ...(openStep ? [] : [{ type: 'step/end', data: { turn: 1, step: 1 } }]),
       { type: 'agent/inbox/spliced', data: { target: 'next-turn', inserted: [message] } },
       { type: 'turn/start', data: { turn: 2 } },
       { type: 'user/message', data: message, surfaceOp: 'append' },
@@ -39,10 +39,12 @@ describe.each(['none', 'zstd'] as const)('V3 interrupted-turn publication (%s)',
     ].map((event, seq) => ({ ...event, seq, time: seq + 10 }))
     const header = { type: 'session', version: 3, id, createdAt: 1, isSeeded: false, delegationDepth: 0 }
     const first = JSON.stringify(header) + '\n'
-    const body = rows.map(row => JSON.stringify(row) + '\n').join('')
+    const body = rows.map((row) => JSON.stringify(row) + '\n').join('')
     await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, compression === 'none' ? first + body
-      : Buffer.concat([await compressZstdFrame(first), await compressZstdFrame(body)]))
+    await writeFile(
+      path,
+      compression === 'none' ? first + body : Buffer.concat([await compressZstdFrame(first), await compressZstdFrame(body)]),
+    )
     async function mount() {
       const ctx = new Context()
       contexts.push(ctx)
@@ -72,15 +74,23 @@ describe.each(['none', 'zstd'] as const)('V3 interrupted-turn publication (%s)',
     expect(await identity(f.path)).toEqual(original)
     expect(await readdir(directory)).toEqual(files)
     const writer = await ctx.sessionPersistence.open(f.id, 'write')
-    try { expect((await writer.read()).events).toEqual(prepared) } finally { await writer.close() }
+    try {
+      expect((await writer.read()).events).toEqual(prepared)
+    } finally {
+      await writer.close()
+    }
     expect(await identity(f.path)).toEqual(original)
-    expect((await readdir(directory)).filter(name => name !== 'session.lock').sort()).toEqual([
+    expect((await readdir(directory)).filter((name) => name !== 'session.lock').sort()).toEqual([
       compression === 'none' ? 'session.v3.jsonl' : 'session.v3.jsonl.zstd',
       compression === 'none' ? 'session.v4.jsonl' : 'session.v4.jsonl.zstd',
     ])
     const independent = await f.mount()
     const reopened = await independent.sessionPersistence.open(f.id, 'read')
-    try { expect((await reopened.read()).events).toEqual(prepared) } finally { await reopened.close() }
+    try {
+      expect((await reopened.read()).events).toEqual(prepared)
+    } finally {
+      await reopened.close()
+    }
     expect(await identity(f.path)).toEqual(original)
   })
 
@@ -92,7 +102,7 @@ describe.each(['none', 'zstd'] as const)('V3 interrupted-turn publication (%s)',
       await expect(ctx.sessionPersistence.open(f.id, access)).rejects.toThrow('turn/start does not open the expected turn')
     }
     expect(await identity(f.path)).toEqual(original)
-    expect((await readdir(dirname(f.path))).filter(name => name !== 'session.lock')).toEqual([
+    expect((await readdir(dirname(f.path))).filter((name) => name !== 'session.lock')).toEqual([
       compression === 'none' ? 'session.v3.jsonl' : 'session.v3.jsonl.zstd',
     ])
   })

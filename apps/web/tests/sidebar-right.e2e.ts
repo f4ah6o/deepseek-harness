@@ -22,12 +22,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, ConsoleMessage, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vite-plus/test'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
-} from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 /** The produced file the seeded turn writes, and what the preview should show. */
 const SAMPLE_NAME = 'notes.txt'
@@ -94,22 +92,37 @@ function paneAt(column: Locator, index: number): Locator {
 async function holdPanelSlide(panel: Locator) {
   return await panel.evaluateHandle((node) => {
     const controller = new AbortController()
-    const state = { animation: null as Animation | null, columnsAtStart: '', dispose: () => { controller.abort() } }
-    node.addEventListener('transitionrun', (event) => {
-      const target = event.target
-      if (!(target instanceof Element) || !target.matches('[data-dockkit-host="dock"]')
-        || (event as TransitionEvent).propertyName !== 'transform') return
-      const frame = node.closest('[style*="grid-template-columns"]')
-      if (frame === null) throw new Error('panel frame is unavailable')
-      state.columnsAtStart = getComputedStyle(frame).gridTemplateColumns
-      const slide = target.getAnimations().find(animation =>
-        'transitionProperty' in animation && animation.transitionProperty === 'transform')
-      if (slide === undefined || slide.effect === null) throw new Error('panel transform transition is unavailable')
-      slide.pause()
-      slide.currentTime = Number(slide.effect.getComputedTiming().endTime) / 2
-      state.animation = slide
-      controller.abort()
-    }, { signal: controller.signal })
+    const state = {
+      animation: null as Animation | null,
+      columnsAtStart: '',
+      dispose: () => {
+        controller.abort()
+      },
+    }
+    node.addEventListener(
+      'transitionrun',
+      (event) => {
+        const target = event.target
+        if (
+          !(target instanceof Element) ||
+          !target.matches('[data-dockkit-host="dock"]') ||
+          (event as TransitionEvent).propertyName !== 'transform'
+        )
+          return
+        const frame = node.closest('[style*="grid-template-columns"]')
+        if (frame === null) throw new Error('panel frame is unavailable')
+        state.columnsAtStart = getComputedStyle(frame).gridTemplateColumns
+        const slide = target
+          .getAnimations()
+          .find((animation) => 'transitionProperty' in animation && animation.transitionProperty === 'transform')
+        if (slide === undefined || slide.effect === null) throw new Error('panel transform transition is unavailable')
+        slide.pause()
+        slide.currentTime = Number(slide.effect.getComputedTiming().endTime) / 2
+        state.animation = slide
+        controller.abort()
+      },
+      { signal: controller.signal },
+    )
     return state
   })
 }
@@ -128,7 +141,7 @@ function expandOf(page: Page): Locator {
  * header's expand button, which lives in the conversation, not the column.
  */
 async function ensureExpanded(page: Page, column: Locator): Promise<void> {
-  if (await column.locator('[data-sidebar-right-open]').count() > 0) return
+  if ((await column.locator('[data-sidebar-right-open]').count()) > 0) return
   await expandOf(page).click()
   await column.locator('[data-sidebar-right-open]').waitFor({ timeout: 10_000 })
 }
@@ -245,7 +258,7 @@ async function width(locator: Locator): Promise<number> {
   let steady = 0
   for (let attempt = 0; attempt < 80; attempt += 1) {
     // Layout width, not the visible box: a zero-width track is still an answer.
-    const now = Math.round(await locator.evaluate(node => node.getBoundingClientRect().width))
+    const now = Math.round(await locator.evaluate((node) => node.getBoundingClientRect().width))
     steady = now === last ? steady + 1 : 0
     if (steady === 2) return now
     last = now
@@ -304,10 +317,14 @@ describe('web e2e: shipped right Sidebar', () => {
       // silent lookup failure.
       expect(String(agent.id)).toBe(String(agent.session.id))
       agent.session.append('turn/start', { turn: 1 })
-      agent.session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'Show the right sidebar.' }],
-        source: { kind: 'user' },
-      }), { surfaceOp: 'append' })
+      agent.session.append(
+        'user/message',
+        createUserMessage({
+          content: [{ type: 'text', text: 'Show the right sidebar.' }],
+          source: { kind: 'user' },
+        }),
+        { surfaceOp: 'append' },
+      )
       agent.session.append('step/start', { turn: 1, step: 1 })
       // A successful mutation is what lets the closing prose link the file's
       // inline-code mention — the product's own way into the Sidebar. The file
@@ -326,28 +343,36 @@ describe('web e2e: shipped right Sidebar', () => {
         name: 'write',
         arguments: JSON.stringify({ file_path: SAMPLE_NAME, content: SAMPLE_TEXT }),
       } as never)
-      agent.session.append('tool/result', {
-        turn: 1,
-        step: 1,
-        message: {
-          id: 'result-call-write-1',
-          role: 'tool',
-          source: { kind: 'tool', callId: 'call-write-1' },
-          toolCallId: 'call-write-1',
-          content: [{ type: 'text', text: 'ok' }],
-          isError: false,
+      agent.session.append(
+        'tool/result',
+        {
+          turn: 1,
+          step: 1,
+          message: {
+            id: 'result-call-write-1',
+            role: 'tool',
+            source: { kind: 'tool', callId: 'call-write-1' },
+            toolCallId: 'call-write-1',
+            content: [{ type: 'text', text: 'ok' }],
+            isError: false,
+          },
+        } as never,
+        { surfaceOp: 'append' },
+      )
+      agent.session.append(
+        'assistant/message',
+        {
+          stream: [],
+          turn: 1,
+          step: 1,
+          message: createMessage({
+            role: 'assistant',
+            content: [{ type: 'text', text: `Ready. Wrote \`${SAMPLE_NAME}\`.` }],
+            source: { kind: 'model', provider: 'fixture', model: 'fixture' },
+          }),
         },
-      } as never, { surfaceOp: 'append' })
-      agent.session.append('assistant/message', {
-        stream: [],
-        turn: 1,
-        step: 1,
-        message: createMessage({
-          role: 'assistant',
-          content: [{ type: 'text', text: `Ready. Wrote \`${SAMPLE_NAME}\`.` }],
-          source: { kind: 'model', provider: 'fixture', model: 'fixture' },
-        }),
-      }, { surfaceOp: 'append' })
+        { surfaceOp: 'append' },
+      )
       agent.session.append('step/end', { turn: 1, step: 1 })
       agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       await scaffold.ctx.sessions.flush(agent.session)
@@ -360,8 +385,14 @@ describe('web e2e: shipped right Sidebar', () => {
       await composer.pressSequentially('@')
       // Any candidate list means the agent-scoped lookup and the gateway route
       // both work in this scaffold; nothing rendered means the wire is the fault.
-      const answered = await page.locator('[data-input-trigger], [role="listbox"], [data-reference-list]')
-        .first().waitFor({ timeout: 10_000 }).then(() => true, () => false)
+      const answered = await page
+        .locator('[data-input-trigger], [role="listbox"], [data-reference-list]')
+        .first()
+        .waitFor({ timeout: 10_000 })
+        .then(
+          () => true,
+          () => false,
+        )
       await page.keyboard.press('Escape')
       // Leave the composer as it was found: these cases share one page, and a
       // stray '@' rides into every later assertion and screenshot. `fill('')`
@@ -412,7 +443,7 @@ describe('web e2e: shipped right Sidebar', () => {
       const conversationBoxBefore = await conversation.boundingBox()
       if (conversationBoxBefore === null) throw new Error('conversation is not rendered')
       // How far the utilities' right edge sits from the conversation's own.
-      const gapBefore = (conversationBoxBefore.x + conversationBoxBefore.width) - (rowBox.x + rowBox.width)
+      const gapBefore = conversationBoxBefore.x + conversationBoxBefore.width - (rowBox.x + rowBox.width)
       const centerBefore = await width(conversation)
       await shot(page, '02a-collapsed-header-button')
 
@@ -431,7 +462,7 @@ describe('web e2e: shipped right Sidebar', () => {
       const utilitiesAfter = await utilities.boundingBox()
       const conversationAfter = await conversation.boundingBox()
       if (utilitiesAfter === null || conversationAfter === null) throw new Error('header is not rendered')
-      const gapAfter = (conversationAfter.x + conversationAfter.width) - (utilitiesAfter.x + utilitiesAfter.width)
+      const gapAfter = conversationAfter.x + conversationAfter.width - (utilitiesAfter.x + utilitiesAfter.width)
       expect(gapAfter).toBeLessThan(gapBefore)
 
       // The panel is in the column, not over it, and carries the seeded tab —
@@ -529,25 +560,37 @@ describe('web e2e: shipped right Sidebar', () => {
       const panel = column.locator('[data-sidebar-right-panel]')
       const viewport = page.viewportSize()
       if (viewport === null) throw new Error('expected a fixed viewport')
-      const geometry = () => frame.evaluate(node => ({
-        columns: getComputedStyle(node).gridTemplateColumns,
-        transition: getComputedStyle(node).transitionProperty,
-        handles: [...node.querySelectorAll('[data-side="sidebar"], [data-side="rightbar"]')]
-          .map(handle => getComputedStyle(handle).transitionProperty),
-        animatingGrid: node.getAnimations().some(animation =>
-          'transitionProperty' in animation && animation.transitionProperty === 'grid-template-columns'
-          && animation.playState !== 'finished' && animation.playState !== 'idle'),
-      }))
-      await frame.evaluate(async (node) => { await Promise.allSettled(node.getAnimations().map(animation => animation.finished)) })
+      const geometry = () =>
+        frame.evaluate((node) => ({
+          columns: getComputedStyle(node).gridTemplateColumns,
+          transition: getComputedStyle(node).transitionProperty,
+          handles: [...node.querySelectorAll('[data-side="sidebar"], [data-side="rightbar"]')].map(
+            (handle) => getComputedStyle(handle).transitionProperty,
+          ),
+          animatingGrid: node
+            .getAnimations()
+            .some(
+              (animation) =>
+                'transitionProperty' in animation &&
+                animation.transitionProperty === 'grid-template-columns' &&
+                animation.playState !== 'finished' &&
+                animation.playState !== 'idle',
+            ),
+        }))
+      await frame.evaluate(async (node) => {
+        await Promise.allSettled(node.getAnimations().map((animation) => animation.finished))
+      })
       const normalColumns = (await geometry()).columns
       await column.locator('[data-sidebar-right-mode="fullscreen"]').click()
       await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
       await column.locator('[data-sidebar-right-toggle]').click()
       await Promise.all([
         panel.evaluate(async (node) => {
-          await Promise.allSettled(node.getAnimations({ subtree: true }).map(animation => animation.finished))
+          await Promise.allSettled(node.getAnimations({ subtree: true }).map((animation) => animation.finished))
         }),
-        frame.evaluate(async (node) => { await Promise.allSettled(node.getAnimations().map(animation => animation.finished)) }),
+        frame.evaluate(async (node) => {
+          await Promise.allSettled(node.getAnimations().map((animation) => animation.finished))
+        }),
       ])
       const closedColumns = (await geometry()).columns
       expect(closedColumns).not.toBe(normalColumns)
@@ -558,7 +601,7 @@ describe('web e2e: shipped right Sidebar', () => {
       const held = await holdPanelSlide(panel)
       try {
         await expandOf(page).click()
-        await expect.poll(() => held.evaluate(state => state.animation?.playState)).toBe('paused')
+        await expect.poll(() => held.evaluate((state) => state.animation?.playState)).toBe('paused')
         const entering = await paneAt(column, 0).boundingBox()
         if (entering === null) throw new Error('entering panel is not rendered')
         expect(entering.x).toBeGreaterThan(0)
@@ -567,7 +610,9 @@ describe('web e2e: shipped right Sidebar', () => {
         expect((await geometry()).animatingGrid).toBe(false)
         expect(await frame.getAttribute('data-rightbar-fullscreen')).toBeNull()
 
-        await held.evaluate((state) => { (state.animation as Animation).finish() })
+        await held.evaluate((state) => {
+          ;(state.animation as Animation).finish()
+        })
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
         expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
         expect(await geometry()).toEqual({ columns: normalColumns, transition: 'none', handles: ['none'], animatingGrid: false })
@@ -575,14 +620,16 @@ describe('web e2e: shipped right Sidebar', () => {
         const exit = await holdPanelSlide(panel)
         try {
           await column.locator('[data-sidebar-right-toggle]').click()
-          await expect.poll(() => exit.evaluate(state => state.animation?.playState)).toBe('paused')
-          expect(await exit.evaluate(state => state.columnsAtStart)).toBe(closedColumns)
+          await expect.poll(() => exit.evaluate((state) => state.animation?.playState)).toBe('paused')
+          expect(await exit.evaluate((state) => state.columnsAtStart)).toBe(closedColumns)
           const leaving = await paneAt(column, 0).boundingBox()
           if (leaving === null) throw new Error('leaving panel is not rendered')
           expect(leaving.x).toBeGreaterThan(0)
           expect(leaving.x).toBeLessThan(viewport.width)
           expect(await geometry()).toEqual({ columns: closedColumns, transition: 'none', handles: ['none'], animatingGrid: false })
-          await exit.evaluate((state) => { (state.animation as Animation).finish() })
+          await exit.evaluate((state) => {
+            ;(state.animation as Animation).finish()
+          })
           expect((await geometry()).columns).toBe(closedColumns)
         } finally {
           await exit.evaluate((state) => {
@@ -614,8 +661,10 @@ describe('web e2e: shipped right Sidebar', () => {
         })
         await held.dispose()
         try {
-          if (await panel.getAttribute('data-sidebar-right-panel') === 'fullscreen'
-            && await panel.getAttribute('data-sidebar-right-open') !== null) {
+          if (
+            (await panel.getAttribute('data-sidebar-right-panel')) === 'fullscreen' &&
+            (await panel.getAttribute('data-sidebar-right-open')) !== null
+          ) {
             await column.locator('[data-sidebar-right-mode="push"]').click()
           }
         } finally {
@@ -695,12 +744,14 @@ describe('web e2e: shipped right Sidebar', () => {
         // a couple of frames after the resize; until then the grip sits at the
         // old frame's coordinates. Press only a grip aligned with the panel's
         // left edge (the handle is 8px wide, centred on the seam).
-        await expect.poll(async () => {
-          const gripBox = await grip.boundingBox()
-          const panelBox = await panel.boundingBox()
-          if (gripBox === null || panelBox === null) return Number.NaN
-          return Math.abs(gripBox.x + 4 - panelBox.x)
-        }).toBeLessThanOrEqual(1)
+        await expect
+          .poll(async () => {
+            const gripBox = await grip.boundingBox()
+            const panelBox = await panel.boundingBox()
+            if (gripBox === null || panelBox === null) return Number.NaN
+            return Math.abs(gripBox.x + 4 - panelBox.x)
+          })
+          .toBeLessThanOrEqual(1)
         // Narrow with overshoot: drag the grip far right past the clamp floor.
         const from = await centre(grip)
         await page.mouse.move(from.x, from.y)
@@ -735,16 +786,20 @@ describe('web e2e: shipped right Sidebar', () => {
     }, 60_000)
 
     it('CONTROL: the host endpoint answers when called directly, bypassing the wire', async () => {
-      const files = (scaffold.ctx as {
-        get(name: string): {
-          read(
-            scope: { sessionId: string; workspaceRoot: string },
-            path: string,
-            range: object,
-            signal: AbortSignal,
-          ): Promise<{ text: string; eof: boolean }>
-        } | undefined
-      }).get('workspaceFiles')
+      const files = (
+        scaffold.ctx as {
+          get(name: string):
+            | {
+                read(
+                  scope: { sessionId: string; workspaceRoot: string },
+                  path: string,
+                  range: object,
+                  signal: AbortSignal,
+                ): Promise<{ text: string; eof: boolean }>
+              }
+            | undefined
+        }
+      ).get('workspaceFiles')
       if (files === undefined) throw new Error('host endpoint is not provided')
       const agent = scaffold.ctx.agents.list()[0]
       if (agent === undefined) throw new Error('no Agent to read for')
@@ -757,11 +812,14 @@ describe('web e2e: shipped right Sidebar', () => {
       // the suite: this case exists to tell host logic apart from the wire.
       // A page is the file's lines joined by `\n`, without the final terminator.
       const verdict = await Promise.race([
-        files.read(scope, SAMPLE_NAME, {}, new AbortController().signal)
-          .then(value => ({ kind: 'settled' as const, text: value.text, eof: value.eof }))
+        files
+          .read(scope, SAMPLE_NAME, {}, new AbortController().signal)
+          .then((value) => ({ kind: 'settled' as const, text: value.text, eof: value.eof }))
           .catch((error: unknown) => ({ kind: 'threw' as const, text: String(error), eof: false })),
         new Promise<{ kind: 'hung'; text: string; eof: boolean }>((resolve) => {
-          setTimeout(() => { resolve({ kind: 'hung', text: 'no settlement in 10s', eof: false }) }, 10_000)
+          setTimeout(() => {
+            resolve({ kind: 'hung', text: 'no settlement in 10s', eof: false })
+          }, 10_000)
         }),
       ])
       expect(verdict).toEqual({ kind: 'settled', text: SAMPLE_TEXT.replace(/\n$/u, ''), eof: true })
@@ -786,7 +844,9 @@ describe('web e2e: shipped right Sidebar', () => {
         wire.sent += 1
       }
       page.on('websocket', (ws) => {
-        ws.on('framesent', (frame) => { watch(String(frame.payload)) })
+        ws.on('framesent', (frame) => {
+          watch(String(frame.payload))
+        })
         ws.on('framereceived', (frame) => {
           if (String(frame.payload).includes('workspaceFiles')) wire.received += 1
         })
@@ -810,9 +870,12 @@ describe('web e2e: shipped right Sidebar', () => {
       // The body arrives through the text type's keyed registration, and its
       // content came over the wire from the real file.
       // A real Remote round-trip settles well after the default poll window.
-      await column.locator('[data-textpreview-state="text"]')
+      await column
+        .locator('[data-textpreview-state="text"]')
         .waitFor({ timeout: 15_000 })
-        .catch(() => { throw new Error(`preview never settled; wire=${JSON.stringify(wire)}`) })
+        .catch(() => {
+          throw new Error(`preview never settled; wire=${JSON.stringify(wire)}`)
+        })
       expect(await column.locator('pre').first().innerText()).toContain('produced by the seeded turn')
       // The whole batch-E chain in one frame: a file mention in the
       // conversation, the tab it opened, and the file's real content read over
@@ -825,7 +888,12 @@ describe('web e2e: shipped right Sidebar', () => {
       // folder action on the page is the changed-files card's header, and only
       // when the Host has a desktop.
       const folders = page.getByRole('button', { name: /folder/i })
-      expect(await folders.count()).toBe(await page.locator('[data-changed-files]').getByRole('button', { name: /folder/i }).count())
+      expect(await folders.count()).toBe(
+        await page
+          .locator('[data-changed-files]')
+          .getByRole('button', { name: /folder/i })
+          .count(),
+      )
 
       // Split, then dock-drag: the kit's gestures drive the store's actions.
       await paneAt(column, 0).locator('[data-dockkit-split-button]').click()
@@ -874,7 +942,7 @@ describe('web e2e: shipped right Sidebar', () => {
     // panel by product decision, and copy has no service method yet:
     // `duplicateTab` is a store/kit intent only, which service.client.spec.ts covers.
 
-    it('keeps each session\'s surface to itself across switching and page reload', async () => {
+    it("keeps each session's surface to itself across switching and page reload", async () => {
       const fx = await newEnglishPage(browser)
       const fxTripwire = watchConsole(fx)
       onTestFailed(() => saveFailureShot(fx, 'web-e2e-sidebar-right-sessions'))
@@ -897,8 +965,10 @@ describe('web e2e: shipped right Sidebar', () => {
         const panes = column.locator('[data-dockkit-pane]')
         await expect.poll(async () => await panes.count()).toBe(2)
         const records = async (): Promise<{ panes: string[]; tabs: string[]; titles: string[] }> => ({
-          panes: await panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-dockkit-pane')!)),
-          tabs: await column.locator('[data-dockkit-tab]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-dockkit-tab')!)),
+          panes: await panes.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-dockkit-pane')!)),
+          tabs: await column
+            .locator('[data-dockkit-tab]')
+            .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-dockkit-tab')!)),
           titles: await tabTitles(column),
         })
         const before = await records()
@@ -932,7 +1002,7 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(records, { timeout: 15_000 }).toEqual(before)
         expect(await width(column)).toBeGreaterThan(0)
         await column.locator('[data-sidebar-right-panel]').evaluate(async (node) => {
-          await Promise.allSettled(node.getAnimations().map(animation => animation.finished))
+          await Promise.allSettled(node.getAnimations().map((animation) => animation.finished))
         })
         await shot(fx, 'session-layout-restored')
         expect(fxTripwire.pageErrors).toEqual([])
@@ -960,14 +1030,17 @@ describe('web e2e: shipped right Sidebar', () => {
       await expect.poll(async () => await tabTitles(first)).toEqual(['Files', SAMPLE_NAME])
       const order = await tabTitles(first)
       // The insertion index is measured against chip midpoints, not strip width.
-      await dragTo(page, first.locator('[data-dockkit-tab]').last(),
+      await dragTo(
+        page,
+        first.locator('[data-dockkit-tab]').last(),
         await pointIn(first.locator('[data-dockkit-tab]').first(), 0.25, 0.5),
-        strip.locator('[data-dockkit-caret="0"]'))
+        strip.locator('[data-dockkit-caret="0"]'),
+      )
       await expect.poll(async () => await tabTitles(first)).toEqual([...order].reverse())
 
       // 2. Cross-pane move into a second pane: the tab leaves one pane's strip
       //    for another's.
-      if (await panes.count() < 2) {
+      if ((await panes.count()) < 2) {
         await first.locator('[data-dockkit-split-button]').click()
         await expect.poll(async () => await panes.count()).toBe(2)
       }
@@ -978,10 +1051,10 @@ describe('web e2e: shipped right Sidebar', () => {
 
       const splitButtons = column.locator('[data-dockkit-split-button]')
       await expect.poll(async () => await splitButtons.count()).toBe(2)
-      expect(await splitButtons.evaluateAll(buttons => buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true)
+      expect(await splitButtons.evaluateAll((buttons) => buttons.every((button) => (button as HTMLButtonElement).disabled))).toBe(true)
       expect(await panes.count()).toBe(2)
       await setPanelWidth(page, 560)
-      expect(await splitButtons.evaluateAll(buttons => buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true)
+      expect(await splitButtons.evaluateAll((buttons) => buttons.every((button) => (button as HTMLButtonElement).disabled))).toBe(true)
 
       const outer = column.locator('[data-dockkit-divider]').first()
       const before = await width(paneAt(column, 1))
@@ -1000,7 +1073,7 @@ describe('web e2e: shipped right Sidebar', () => {
       await dragElement(page, outer, { x: surfaceBox.x + surfaceBox.width / 2, y: grip.y })
       await expect.poll(ratio).toBeCloseTo(0.5, 2)
       expect(await panes.count()).toBe(2)
-      expect(await splitButtons.evaluateAll(buttons => buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true)
+      expect(await splitButtons.evaluateAll((buttons) => buttons.every((button) => (button as HTMLButtonElement).disabled))).toBe(true)
 
       // 5. The split's guide and the document float while Files stays docked.
       const floatOne = paneAt(column, 1).locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME })
@@ -1142,7 +1215,9 @@ describe('web e2e: shipped right Sidebar', () => {
     // depends on a sibling block's setup passes only in the right order.
     it('renders the shipped Chinese copy on a Chinese page', async () => {
       const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-      await zhPage.addInitScript(() => { Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' }) })
+      await zhPage.addInitScript(() => {
+        Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' })
+      })
       const zhTripwire = watchConsole(zhPage)
       onTestFailed(() => saveFailureShot(zhPage, 'web-e2e-sidebar-right-zh'))
       try {
@@ -1151,7 +1226,10 @@ describe('web e2e: shipped right Sidebar', () => {
         // A fresh page opens the workspace on a blank session's hero, which has
         // no session header and so no expand button. The settled session is the
         // second row of the tree; pick it the way a user would.
-        await zhPage.getByRole('treeitem', { name: /Show the right sidebar\./u }).first().click()
+        await zhPage
+          .getByRole('treeitem', { name: /Show the right sidebar\./u })
+          .first()
+          .click()
         const column = zhPage.locator('[data-rightbar-col]')
         await expandOf(zhPage).waitFor({ timeout: 20_000 })
         await expandOf(zhPage).click()
@@ -1167,20 +1245,21 @@ describe('web e2e: shipped right Sidebar', () => {
         // as a layout defect that is not there.
         expect(await width(column)).toBeGreaterThan(300)
         await expect.poll(async () => await tabTitles(column)).toEqual(['文件', '开始'])
-        await expect.poll(async () => await guide.locator('[data-sidebar-right-guide-entry="files"]').innerText())
+        await expect
+          .poll(async () => await guide.locator('[data-sidebar-right-guide-entry="files"]').innerText())
           .toBe('工作区文件\n浏览会话工作区的文件\n⌥\n⌘\nP')
         const fileEntry = guide.locator('[data-sidebar-right-guide-entry="files"]')
         const terminalEntry = guide.locator('[data-sidebar-right-guide-entry="terminal"]')
         for (const entry of [fileEntry, terminalEntry]) {
-          expect(await entry.evaluate(node => getComputedStyle(node).borderRadius)).toBe('20px')
+          expect(await entry.evaluate((node) => getComputedStyle(node).borderRadius)).toBe('20px')
         }
-        expect(await terminalEntry.evaluate(node => getComputedStyle(node).overflow)).toBe('hidden')
+        expect(await terminalEntry.evaluate((node) => getComputedStyle(node).overflow)).toBe('hidden')
         const terminalActions = terminalEntry.getByRole('button')
         const terminalButtons = await terminalActions.all()
         for (const [index, action] of terminalButtons.entries()) {
-          expect(await action.evaluate(node => getComputedStyle(node).borderRadius)).toBe(index === 0 ? '0px' : '4px')
+          expect(await action.evaluate((node) => getComputedStyle(node).borderRadius)).toBe(index === 0 ? '0px' : '4px')
           await action.hover()
-          expect(await action.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
+          expect(await action.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
         }
         await terminalActions.first().hover()
         await shot(zhPage, '05-guide-copy-zh')

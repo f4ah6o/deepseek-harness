@@ -10,14 +10,14 @@ import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-r
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { createSessionTestRemote } from './test-remote.ts'
 
 /** Booted contexts and their temp roots, torn down after each test. */
 const contexts: Context[] = []
 const tempDirs: string[] = []
 afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -35,11 +35,13 @@ function roster(ids: readonly string[]): unknown {
     resolve: (id?: string) => {
       const wanted = id ?? ids[0] ?? ''
       if (!ids.includes(wanted)) {
-        return Promise.reject(new RemoteError(
-          'agent-preset/not-found',
-          `agent-presets: preset "${wanted}" not found (available: ${ids.join(', ') || 'none'})`,
-          { agentPreset: wanted, available: ids },
-        ))
+        return Promise.reject(
+          new RemoteError(
+            'agent-preset/not-found',
+            `agent-presets: preset "${wanted}" not found (available: ${ids.join(', ') || 'none'})`,
+            { agentPreset: wanted, available: ids },
+          ),
+        )
       }
       return Promise.resolve(presetOf(wanted))
     },
@@ -60,15 +62,17 @@ async function harness(presets?: readonly string[]) {
 
   const factory: AgentFactory = {
     async createAgent(_ownerCtx, options) {
-      const session = ctx.sessions.create(
-        options.sessionId,
-        options.meta === undefined ? {} : { meta: options.meta },
-      )
+      const session = ctx.sessions.create(options.sessionId, options.meta === undefined ? {} : { meta: options.meta })
       const agent = stubAgent(session)
       ;(agent as { ctx?: Context }).ctx = ctx
       await options.setup?.(ctx, agent)
       const unregister = await ctx.agents.register(agent)
-      return { agent, dispose: async () => { await unregister() } }
+      return {
+        agent,
+        dispose: async () => {
+          await unregister()
+        },
+      }
     },
     async resume() {
       throw new Error('test harness has no persisted sessions')
@@ -147,8 +151,7 @@ describe('session.create Agent preset identity', () => {
     const { remote } = await harness(['standard', 'minimal'])
     await remote.create({ sessionId: SessionId('s5'), agentPreset: 'minimal' })
 
-    await expect(remote.create({ sessionId: SessionId('s5') }))
-      .resolves.toMatchObject({ ok: true })
+    await expect(remote.create({ sessionId: SessionId('s5') })).resolves.toMatchObject({ ok: true })
   })
 
   it('leaves the header preset-less when no roster is composed', async () => {

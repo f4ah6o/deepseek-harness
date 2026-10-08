@@ -27,20 +27,18 @@ type Mode = 'emit' | 'bail' | 'waterfall' | 'parallel' | 'serial'
 const FENCE = 'ts cordis-catalog'
 
 /** Append fail-closed signature type-link violations from the retained type tree. */
-function checkTypeLinks(
-  where: string,
-  names: readonly string[],
-  policy: CordisCatalogPolicy,
-  violations: string[],
-): void {
+function checkTypeLinks(where: string, names: readonly string[], policy: CordisCatalogPolicy, violations: string[]): void {
   for (const name of names) {
-    if (Object.hasOwn(policy.linkedTypePages, name)
-      || policy.foundationTypeNames.has(name)
-      || Object.hasOwn(policy.typeLinkExemptions, name)) continue
+    if (
+      Object.hasOwn(policy.linkedTypePages, name) ||
+      policy.foundationTypeNames.has(name) ||
+      Object.hasOwn(policy.typeLinkExemptions, name)
+    )
+      continue
     violations.push(
-      `${where} references unclassified type '${name}'. Add it to linkedTypePages with its documentation page, `
-      + 'to foundationTypeNames if TypeScript or the framework owns it, or to typeLinkExemptions with '
-      + 'the non-catalog documentation owner.',
+      `${where} references unclassified type '${name}'. Add it to linkedTypePages with its documentation page, ` +
+        'to foundationTypeNames if TypeScript or the framework owns it, or to typeLinkExemptions with ' +
+        'the non-catalog documentation owner.',
     )
   }
 }
@@ -49,8 +47,8 @@ function checkTypeLinks(
 function reportTypeLinkViolations(gate: string, violations: string[]): void {
   if (violations.length === 0) return
   throw new Error(
-    `${gate}: ${violations.length} signature type-link coverage violation(s):\n`
-    + violations.map(violation => `  ${violation}`).join('\n'),
+    `${gate}: ${violations.length} signature type-link coverage violation(s):\n` +
+      violations.map((violation) => `  ${violation}`).join('\n'),
   )
 }
 
@@ -169,14 +167,9 @@ export class CordisCatalogProjector {
    */
   renderRuntimeApi(model: CordisCatalogModel): string {
     const services = [...model.services, ...(this.policy.runtimeServices ?? [])]
-      .filter(service => !this.policy.runtimeServiceExclusions?.has(service.key))
+      .filter((service) => !this.policy.runtimeServiceExclusions?.has(service.key))
       .sort((left, right) => left.key.localeCompare(right.key))
-    return renderRuntimeApi(
-      services,
-      model.events,
-      this.runtimeTypes(services, model.events),
-      this.policy.inheritedServices,
-    )
+    return renderRuntimeApi(services, model.events, this.runtimeTypes(services, model.events), this.policy.inheritedServices)
   }
 
   private collectEvents(): EventEntry[] {
@@ -204,7 +197,9 @@ export class CordisCatalogProjector {
         const last = node.signature.parameters.at(-1)
         const hasNext = last?.name === 'next'
         if (isMode(mode) && hasNext && mode !== 'waterfall') {
-          violations.push(`${where} has a trailing 'next' parameter (structurally a waterfall) but is tagged '@mode ${mode}'. Fix the tag or the signature.`)
+          violations.push(
+            `${where} has a trailing 'next' parameter (structurally a waterfall) but is tagged '@mode ${mode}'. Fix the tag or the signature.`,
+          )
         }
         if (isMode(mode) && !hasNext && mode === 'waterfall') {
           violations.push(`${where} is tagged '@mode waterfall' but has no trailing 'next' parameter. A waterfall delegates via next().`)
@@ -217,7 +212,7 @@ export class CordisCatalogProjector {
           'event',
           node.signature.parameters,
           parsed.params,
-          parameter => parameter.receiver || (hasNext && parameter === last),
+          (parameter) => parameter.receiver || (hasNext && parameter === last),
           violations,
         )
         if (isMode(mode)) {
@@ -262,12 +257,15 @@ export class CordisCatalogProjector {
       for (const service of packageModel.services) {
         const declaration = this.renderer.declaration(service.symbol)
         const owner = /^packages\/[^/]+\/[^/]+\/src\//.exec(service.location.file)?.[0]
-        if ((declaration.kind !== 'class' && declaration.kind !== 'interface')
-          || owner === undefined
-          || (this.face.face === 'host'
+        if (
+          (declaration.kind !== 'class' && declaration.kind !== 'interface') ||
+          owner === undefined ||
+          (this.face.face === 'host'
             ? !/^packages\/[^/]+\/[^/]+\/src\/[^/]+\.ts$/.test(service.location.file)
-            : !/^packages\/[^/]+\/[^/]+\/src\/client\/.+\.tsx?$/.test(service.location.file))
-          || !declaration.location.file.startsWith(owner)) continue
+            : !/^packages\/[^/]+\/[^/]+\/src\/client\/.+\.tsx?$/.test(service.location.file)) ||
+          !declaration.location.file.startsWith(owner)
+        )
+          continue
         const current = chosen.get(service.key)
         if (current !== undefined && this.renderer.declaration(current.symbol).kind === 'class') continue
         chosen.set(service.key, service)
@@ -311,8 +309,7 @@ export class CordisCatalogProjector {
           continue
         }
         if (parsed.doc === '') violations.push(`${where} has no description prose above its block tags.`)
-        checkParams(where, 'service', member.signature.parameters, parsed.params,
-          parameter => parameter.receiver, violations)
+        checkParams(where, 'service', member.signature.parameters, parsed.params, (parameter) => parameter.receiver, violations)
         checkReturns(where, member.signature, parsed.returns, this.renderer, violations)
       }
       entries.push({
@@ -329,17 +326,17 @@ export class CordisCatalogProjector {
     return entries.sort((left, right) => left.key.localeCompare(right.key))
   }
 
-  private runtimeTypes(
-    services: readonly ServiceEntry[],
-    events: readonly EventEntry[],
-  ): { name: string; declaration: string }[] {
+  private runtimeTypes(services: readonly ServiceEntry[], events: readonly EventEntry[]): { name: string; declaration: string }[] {
     const declarations = new Map<string, string>()
     const ambiguous = new Set<string>()
     const maxDeclarationChars = this.policy.runtimeDeclarationMaxChars ?? DEFAULT_MAX_DECL_CHARS
     for (const declaration of this.sourceDeclarations) {
-      if (declaration.face !== this.face.face
-        || (!/^packages\/[^/]+\/[^/]+\/src\/.+\.tsx?$/.test(declaration.location.file)
-          && !(declaration.kind === 'enum' && /^vendor\/[^/]+\/src\/.+\.ts$/.test(declaration.location.file)))) continue
+      if (
+        declaration.face !== this.face.face ||
+        (!/^packages\/[^/]+\/[^/]+\/src\/.+\.tsx?$/.test(declaration.location.file) &&
+          !(declaration.kind === 'enum' && /^vendor\/[^/]+\/src\/.+\.ts$/.test(declaration.location.file)))
+      )
+        continue
       if (declarations.has(declaration.name)) {
         ambiguous.add(declaration.name)
         continue
@@ -352,10 +349,10 @@ export class CordisCatalogProjector {
       )
     }
     for (const name of ambiguous) declarations.delete(name)
-    return referencedTypes([
-      ...services.flatMap(service => service.methods.map(method => method.signature)),
-      ...events.map(event => event.signature),
-    ], declarations)
+    return referencedTypes(
+      [...services.flatMap((service) => service.methods.map((method) => method.signature)), ...events.map((event) => event.signature)],
+      declarations,
+    )
   }
 }
 
@@ -366,7 +363,11 @@ export class CordisCatalogProjector {
  * @param targetFace - Host or Client Typert face to project.
  * @returns the configured projector and its validated catalog model.
  */
-export function projectCordisCatalog(scanRoot: string, policy: CordisCatalogPolicy, targetFace: TypertFace = 'host'): {
+export function projectCordisCatalog(
+  scanRoot: string,
+  policy: CordisCatalogPolicy,
+  targetFace: TypertFace = 'host',
+): {
   readonly projector: CordisCatalogProjector
   readonly model: CordisCatalogModel
 } {
@@ -377,8 +378,7 @@ export function projectCordisCatalog(scanRoot: string, policy: CordisCatalogPoli
     checkDiagnostics: false,
     caches,
   }).discoverPackages()
-  const packages = discovery.filter(candidate => candidate.faces.includes(targetFace))
-    .map(candidate => candidate.package)
+  const packages = discovery.filter((candidate) => candidate.faces.includes(targetFace)).map((candidate) => candidate.package)
   const workspace = new WorkspaceAnalyzer({
     root: scanRoot,
     faces: [targetFace],
@@ -386,7 +386,7 @@ export function projectCordisCatalog(scanRoot: string, policy: CordisCatalogPoli
     checkDiagnostics: false,
     caches,
   }).analyzeInBatches()
-  const face = workspace.faces.find(candidate => candidate.face === targetFace)
+  const face = workspace.faces.find((candidate) => candidate.face === targetFace)
   if (face === undefined) throw new Error(`gen-cordis-catalog: Typert produced no ${targetFace} face`)
   const sourceDeclarations = new WorkspaceAnalyzer({
     root: scanRoot,
@@ -431,7 +431,7 @@ function parseJsDoc(raw: string): ParsedJsDoc {
     .replace(/^\/\*\*/, '')
     .replace(/\*\/$/, '')
     .split('\n')
-    .map(line => line.replace(/^\s*\*?\s?/, '').replace(/\s+$/, ''))
+    .map((line) => line.replace(/^\s*\*?\s?/, '').replace(/\s+$/, ''))
   const blocks: string[] = []
   let paragraph: string[] = []
   let list: string[] = []
@@ -525,7 +525,10 @@ function parseJsDoc(raw: string): ParsedJsDoc {
     else sink?.(line.trim())
   }
   return {
-    doc: blocks.join('\n\n').replace(/\{@link\s+([^}]+)\}/g, '$1').trim(),
+    doc: blocks
+      .join('\n\n')
+      .replace(/\{@link\s+([^}]+)\}/g, '$1')
+      .trim(),
     params,
     returns,
     throws,
@@ -543,7 +546,9 @@ function checkParams(
 ): void {
   for (const parameter of parameters) {
     if (parameter.binding !== 'identifier') {
-      violations.push(`${where}: parameter '${parameter.name}' is a binding pattern; the ${apiKind} API needs simple identifier parameters so @param can name them.`)
+      violations.push(
+        `${where}: parameter '${parameter.name}' is a binding pattern; the ${apiKind} API needs simple identifier parameters so @param can name them.`,
+      )
       continue
     }
     if (isExempt(parameter)) continue
@@ -552,7 +557,7 @@ function checkParams(
     else if (description.trim() === '') violations.push(`${where}: @param ${parameter.name} has an empty description.`)
   }
   for (const tag of tags.keys()) {
-    if (!parameters.some(parameter => parameter.binding === 'identifier' && parameter.name === tag)) {
+    if (!parameters.some((parameter) => parameter.binding === 'identifier' && parameter.name === tag)) {
       violations.push(`${where}: @param ${tag} does not match any parameter (stale tag?).`)
     }
   }
@@ -574,8 +579,8 @@ function checkReturns(
 function reportViolations(gate: string, violations: readonly string[]): void {
   if (violations.length === 0) return
   throw new Error(
-    `${gate}: ${String(violations.length)} JSDoc completeness violation(s) (see AGENTS.md):\n`
-    + violations.map(violation => `  ${violation}`).join('\n'),
+    `${gate}: ${String(violations.length)} JSDoc completeness violation(s) (see AGENTS.md):\n` +
+      violations.map((violation) => `  ${violation}`).join('\n'),
   )
 }
 
@@ -631,17 +636,12 @@ function quoteList(values: readonly string[]): string {
 
 /** Render structured parameter documentation as a compact TypeScript literal. */
 function renderParameters(parameters: ReadonlyMap<string, string>): string {
-  const values = [...parameters].map(([name, description]) => (
-    `{ name: ${quote(name)}, description: ${quote(description)} }`
-  ))
+  const values = [...parameters].map(([name, description]) => `{ name: ${quote(name)}, description: ${quote(description)} }`)
   return `[${values.join(', ')}]`
 }
 
 /** Resolve and sort the word-bounded transitive type closure referenced by seed text. */
-function referencedTypes(
-  seeds: readonly string[],
-  declarations: ReadonlyMap<string, string>,
-): { name: string; declaration: string }[] {
+function referencedTypes(seeds: readonly string[], declarations: ReadonlyMap<string, string>): { name: string; declaration: string }[] {
   const included = new Map<string, string>()
   let frontier = [...seeds]
   while (frontier.length > 0) {
@@ -649,16 +649,14 @@ function referencedTypes(
     for (const [name, declaration] of declarations) {
       if (included.has(name)) continue
       const pattern = new RegExp(`\\b${name}\\b`)
-      if (frontier.some(text => pattern.test(text))) {
+      if (frontier.some((text) => pattern.test(text))) {
         included.set(name, declaration)
         next.push(declaration)
       }
     }
     frontier = next
   }
-  return [...included]
-    .map(([name, declaration]) => ({ name, declaration }))
-    .sort((left, right) => left.name.localeCompare(right.name))
+  return [...included].map(([name, declaration]) => ({ name, declaration })).sort((left, right) => left.name.localeCompare(right.name))
 }
 
 function firstSentence(doc: string): string {
@@ -728,7 +726,7 @@ function renderRuntimeApi(
     'export interface EventApiEntry {',
     '  /** The scoped event name, e.g. `agent/status`. */',
     '  name: string',
-    '  /** The dispatch mode from the declaration\'s `@mode` tag. */',
+    "  /** The dispatch mode from the declaration's `@mode` tag. */",
     '  mode: string',
     '  /** The exact listener signature, whitespace-normalized. */',
     '  signature: string',
@@ -782,12 +780,7 @@ function renderRuntimeApi(
     }
     lines.push('  },')
   }
-  lines.push(
-    ']',
-    '',
-    '/** Every harness event, sorted by name. */',
-    'export const EVENT_API: readonly EventApiEntry[] = [',
-  )
+  lines.push(']', '', '/** Every harness event, sorted by name. */', 'export const EVENT_API: readonly EventApiEntry[] = [')
   for (const event of [...events].sort((left, right) => left.name.localeCompare(right.name))) {
     const contract = parseJsDoc(event.jsDoc)
     lines.push('  {')
@@ -931,9 +924,10 @@ function typeLinks(signature: string, onPage: string, linkedTypePages: Readonly<
   for (const name of Object.keys(linkedTypePages)) {
     if (new RegExp(`\\b${name}\\b`).test(signature)) seen.add(name)
   }
-  const links = [...seen].sort()
-    .filter(name => linkedTypePages[name] !== onPage)
-    .map(name => `[${name}](${linkedTypePages[name]})`)
+  const links = [...seen]
+    .sort()
+    .filter((name) => linkedTypePages[name] !== onPage)
+    .map((name) => `[${name}](${linkedTypePages[name]})`)
   if (links.length === 0) return ''
   return `Types: ${links.join(' · ')}`
 }
@@ -941,13 +935,16 @@ function typeLinks(signature: string, onPage: string, linkedTypePages: Readonly<
 /**
  * GitHub's heading-slug algorithm (lowercase; drop everything but letters,
  * numbers, spaces, hyphens; spaces become hyphens). Region headings carry
- * backticks and em-dashes, which VitePress slugifies differently, so each
+ * backticks and em-dashes, which generated documentation readers slugify differently, so each
  * generated heading is preceded by an explicit `<a id>` carrying this slug —
  * the historical flat-catalog anchor — making `#ctx<key>--<class>` fragments
  * resolve identically on GitHub and the published site.
  */
 function githubSlug(heading: string): string {
-  return heading.toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').replaceAll(' ', '-')
+  return heading
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} -]/gu, '')
+    .replaceAll(' ', '-')
 }
 
 /** The explicit-anchor line emitted before one generated heading. */
@@ -977,15 +974,11 @@ function renderService(s: ServiceEntry, onPage: string, linkedTypePages: Readonl
   const kind = s.abstract ? ' (abstract seam)' : ''
   const out = [...anchorFor(`ctx.${s.key} — ${s.type}${kind}`), `### \`ctx.${s.key}\` — \`${s.type}\`${kind}`, '']
   if (s.doc) out.push(s.doc, '')
-  const methods = s.methods.filter(member => member.kind !== 'property')
+  const methods = s.methods.filter((member) => member.kind !== 'property')
   if (methods.length) {
-    const declarations = methods.flatMap((method, index) => [
-      ...(index > 0 ? [''] : []),
-      method.jsDoc,
-      method.signature,
-    ])
+    const declarations = methods.flatMap((method, index) => [...(index > 0 ? [''] : []), method.jsDoc, method.signature])
     out.push('```' + FENCE, ...declarations, '```', '')
-    const links = typeLinks(methods.map(method => method.signature).join('\n'), onPage, linkedTypePages)
+    const links = typeLinks(methods.map((method) => method.signature).join('\n'), onPage, linkedTypePages)
     if (links) out.push(links, '')
   }
   out.push(`Source: ${sourceLink(s.source)}`, '')
@@ -1000,7 +993,8 @@ const BANNER = [
 ]
 
 /** The shared GENERATED + freshness-gate + fence notice paragraph. */
-const GATE_NOTICE = 'This file is GENERATED from source (`scripts/gen-cordis-catalog.ts`) and verified fresh by `pnpm run verify-cordis-catalog` (part of `doc-sync`) — do not edit it by hand. Signature blocks use a `ts cordis-catalog` fence and include the original source JSDoc immediately before each event or service method. doc-typecheck skips these bare declaration fragments; type names in a signature link to the page that documents them.'
+const GATE_NOTICE =
+  'This file is GENERATED from source (`scripts/gen-cordis-catalog.ts`) and verified fresh by `pnpm run verify-cordis-catalog` (part of `doc-sync`) — do not edit it by hand. Signature blocks use a `ts cordis-catalog` fence and include the original source JSDoc immediately before each event or service method. doc-typecheck skips these bare declaration fragments; type names in a signature link to the page that documents them.'
 
 /**
  * Render one page's generated Cordis API region: the services mapped to
@@ -1024,10 +1018,10 @@ export function renderPageRegion(page: string, services: ServiceEntry[], events:
     '',
   ]
   for (const s of services) lines.push(...renderService(s, page, policy.linkedTypePages))
-  const scopes = [...new Set(events.map(e => e.scope))].sort()
+  const scopes = [...new Set(events.map((e) => e.scope))].sort()
   for (const scope of scopes) {
     lines.push(...anchorFor(`${scope}/* events`), `### \`${scope}/*\` events`, '')
-    for (const e of events.filter(x => x.scope === scope).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const e of events.filter((x) => x.scope === scope).sort((a, b) => a.name.localeCompare(b.name))) {
       lines.push(...renderEvent(e, page, policy.linkedTypePages))
     }
   }
@@ -1056,11 +1050,7 @@ export function renderInheritedPage(policy: CordisCatalogPolicy): string {
   for (const s of policy.inheritedServices) {
     lines.push(`- \`${s.name}\` — ${s.summary} ([\`${s.source}\`](../../${s.source.split(':')[0]}))`)
   }
-  lines.push(
-    '',
-    '## Inherited events (cordis core + loader/hmr/timer)',
-    '',
-  )
+  lines.push('', '## Inherited events (cordis core + loader/hmr/timer)', '')
   for (const e of policy.inheritedEvents) {
     lines.push(`- \`${e.name}\` — ${e.summary} ([\`${e.source}\`](../../${e.source.split(':')[0]}))`)
   }

@@ -1,10 +1,13 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * The dsh CLI ships its command and the profile lifecycle shared with Desktop.
  * Declarations come from `tsc -b` (dts: false), matching every package.
  */
 export default defineConfig({
+  deps: {
+    resolveDepSubpath: true,
+  },
   entry: ['lib/types/bin.js', 'lib/types/profile-boot.js'],
   outDir: 'lib',
   format: ['esm'],

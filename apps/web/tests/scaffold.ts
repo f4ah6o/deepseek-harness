@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Page } from 'playwright'
-import { expect } from 'vitest'
+import { expect } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -60,24 +60,12 @@ import {
 import type { Profile, ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import type {
-  LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, RetryPolicyConfig, StreamChunk,
-} from '@deepseek-ai/dsh-llm'
+import type { LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, RetryPolicyConfig, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayHandle, ReplayProviderConfig } from '@deepseek-ai/dsh-llm-replay'
-import {
-  installLlmReplay,
-  parseSessionLog,
-  prepareSessionSnapshotFixtureForComparison,
-} from '@deepseek-ai/dsh-llm-replay'
+import { installLlmReplay, parseSessionLog, prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
-import {
-  SESSION_FORMAT_VERSION,
-  SessionId,
-  type Session,
-  type SessionEvent,
-  type SessionHeader,
-} from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 // Empty type imports carry the webServer/agents/sessionPersistence Context merges.
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -143,12 +131,13 @@ export function webSnapshotMode(): WebSnapshotMode {
  * @param options - Root entries the scenario owns outside the expected state, such as a `.git` directory it initialized.
  */
 export async function assertFinalWorkspaceSnapshot(
-  scenarioDir: string, workspaceRoot: string, options: CaptureWorkspaceSnapshotOptions = {},
+  scenarioDir: string,
+  workspaceRoot: string,
+  options: CaptureWorkspaceSnapshotOptions = {},
 ): Promise<void> {
   const manifestPath = join(scenarioDir, 'snapshot.yml')
   const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
-  expect(manifest.workspace?.final, `${manifest.scenario ?? scenarioDir}: mutating Web scenario declares workspace.final`)
-    .toBe(true)
+  expect(manifest.workspace?.final, `${manifest.scenario ?? scenarioDir}: mutating Web scenario declares workspace.final`).toBe(true)
   const actual = await captureWorkspaceSnapshot(workspaceRoot, options)
   const expected = await captureExpectedWorkspaceSnapshot(join(scenarioDir, 'workspace.expected'))
   expect(actual, `${manifest.scenario ?? scenarioDir}: complete final workspace`).toEqual(expected)
@@ -174,9 +163,8 @@ export async function selectedSessionFixture(path: string, allowAbsent = false):
   const requested = parseSessionFixtureName(basename(path))
   if (requested === undefined) return path
   const entries = await readdir(dirname(path))
-  if (allowAbsent && !entries.some(name => parseSessionFixtureName(name) !== undefined)) return path
-  const selected = sessionFixtureFiles(entries)
-    .find(candidate => candidate.index === requested.index)
+  if (allowAbsent && !entries.some((name) => parseSessionFixtureName(name) !== undefined)) return path
+  const selected = sessionFixtureFiles(entries).find((candidate) => candidate.index === requested.index)
   if (selected === undefined) throw new Error(`${path}: missing Session fixture role ${requested.index}`)
   const resolved = join(dirname(path), selected.name)
   assertSessionFixtureVersion(selected.name, await readFile(resolved, 'utf8'))
@@ -198,7 +186,9 @@ export function recordedSessionFixturePath(path: string, version: number): strin
 /** The shipped composition under test: the dsh-base and dsh-web-app bundle patches over the empty profile root. */
 const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
 const WEB_BUNDLE_DIR = join(REPO_ROOT, 'packages/bundle/web-app')
-const WEB_BUNDLE_PATCH = (JSON.parse(readFileSync(join(WEB_BUNDLE_DIR, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string[] } } }).dsh.bundle
+const WEB_BUNDLE_PATCH = (
+  JSON.parse(readFileSync(join(WEB_BUNDLE_DIR, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string[] } } }
+).dsh.bundle
 /** The installation anchor whose dependency surface the runtime resolution mirrors. */
 const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 
@@ -207,22 +197,24 @@ const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 // catch-all would leave resolveModelInfo unroutable and compaction-basic's
 // post-step pressure check would warn every step). The published
 // contextWindow keeps that pressure path provably inert for small fixtures.
-const REPLAY_PROVIDERS = [{
-  id: 'deepseek-official',
-  name: 'DeepSeek',
-  models: [
-    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 },
-    {
-      id: 'deepseek-v4-flash-vision-exp',
-      name: 'DeepSeek-V4-Flash-Vision-Exp',
-      contextWindow: 1_000_000,
-      inputModalities: ['text', 'image'] as const,
-      defaultMaxTokens: 256_000,
-      reasoningEfforts: ['off', 'low', 'high', 'max'],
-      defaultReasoningEffort: 'high',
-    },
-  ],
-}]
+const REPLAY_PROVIDERS = [
+  {
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 },
+      {
+        id: 'deepseek-v4-flash-vision-exp',
+        name: 'DeepSeek-V4-Flash-Vision-Exp',
+        contextWindow: 1_000_000,
+        inputModalities: ['text', 'image'] as const,
+        defaultMaxTokens: 256_000,
+        reasoningEfforts: ['off', 'low', 'high', 'max'],
+        defaultReasoningEffort: 'high',
+      },
+    ],
+  },
+]
 
 /**
  * The routes a shipped composition always has, with no ability to stream.
@@ -237,39 +229,39 @@ class RouteOnlyAdapter extends LlmAdapter {
   }
 
   override providerInfo(provider: string): LlmProviderInfo {
-    return { id: provider, name: this.providers.find(entry => entry.id === provider)?.name ?? provider }
+    return { id: provider, name: this.providers.find((entry) => entry.id === provider)?.name ?? provider }
   }
 
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve((this.providers.find(entry => entry.id === provider)?.models ?? [])
-      .map(model => ({ provider, id: model.id, name: model.name })))
+    return Promise.resolve(
+      (this.providers.find((entry) => entry.id === provider)?.models ?? []).map((model) => ({ provider, id: model.id, name: model.name })),
+    )
   }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    const listed = this.providers.find(entry => entry.id === provider)?.models
-      .find(entry => entry.id === model)
+    const listed = this.providers.find((entry) => entry.id === provider)?.models.find((entry) => entry.id === model)
     return Promise.resolve({
       provider,
       id: model,
       name: listed?.name ?? model,
-      ...listed?.contextWindow === undefined ? {} : { contextWindow: listed.contextWindow },
+      ...(listed?.contextWindow === undefined ? {} : { contextWindow: listed.contextWindow }),
     })
   }
 
   override async *stream(): AsyncIterable<StreamChunk> {
     throw new Error(
-      'web e2e scaffold: a model call was issued by a scenario that declared no replay fixture'
-      + ' — pass replayFixture, or keep the scenario free of model calls',
+      'web e2e scaffold: a model call was issued by a scenario that declared no replay fixture' +
+        ' — pass replayFixture, or keep the scenario free of model calls',
     )
   }
 }
 
 function replayProviders(contextWindow: number | undefined): typeof REPLAY_PROVIDERS {
-  return REPLAY_PROVIDERS.map(provider => ({
+  return REPLAY_PROVIDERS.map((provider) => ({
     ...provider,
-    models: provider.models.map(model => ({
+    models: provider.models.map((model) => ({
       ...model,
-      ...contextWindow === undefined ? {} : { contextWindow },
+      ...(contextWindow === undefined ? {} : { contextWindow }),
     })),
   }))
 }
@@ -461,24 +453,32 @@ async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persiste
 export async function launchWebScaffold(options: LaunchOptions = {}): Promise<WebScaffold> {
   requireDist()
   const {
-    auditStartupEntries, composeEntries, createRuntimeResolution, initProfile,
-    mountRootInclude, readProfileManifest, readProfilePatches, loadProfileDirectory, loadOverlayPatches, PluginPackages,
+    auditStartupEntries,
+    composeEntries,
+    createRuntimeResolution,
+    initProfile,
+    mountRootInclude,
+    readProfileManifest,
+    readProfilePatches,
+    loadProfileDirectory,
+    loadOverlayPatches,
+    PluginPackages,
     bundlePatchPaths,
   } = appBoot()
   const mode = webSnapshotMode()
-  const replayFixture = options.replayFixture === undefined
-    ? undefined
-    : await selectedSessionFixture(options.replayFixture, options.replayOverride !== undefined)
-  const replayChildFixtures = options.replayChildFixtures === undefined
-    ? undefined
-    : await Promise.all(options.replayChildFixtures.map(path => selectedSessionFixture(path)))
-  const compareReplaySession = options.compareReplaySession ?? await ownsReplayFixture(replayFixture)
+  const replayFixture =
+    options.replayFixture === undefined
+      ? undefined
+      : await selectedSessionFixture(options.replayFixture, options.replayOverride !== undefined)
+  const replayChildFixtures =
+    options.replayChildFixtures === undefined
+      ? undefined
+      : await Promise.all(options.replayChildFixtures.map((path) => selectedSessionFixture(path)))
+  const compareReplaySession = options.compareReplaySession ?? (await ownsReplayFixture(replayFixture))
   const publicMount = options.publicMount
   // Chromium maps *.localhost to loopback without a resolver.
   const publicHost = publicMount === undefined ? undefined : 'public.localhost'
-  const publicPrefix = publicMount === undefined
-    ? undefined
-    : `/${(publicMount.prefix ?? 'tools/dsh/').replace(/^\/+|\/+$/gu, '')}/`
+  const publicPrefix = publicMount === undefined ? undefined : `/${(publicMount.prefix ?? 'tools/dsh/').replace(/^\/+|\/+$/gu, '')}/`
   const browserHost = options.remoteAuthority ?? '127.0.0.1'
   if (mode === 'record') {
     // Both owning vitest configs (web unconditionally, snapshot in record
@@ -522,9 +522,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     DSH_AGENTS_HOME: join(workspaceCwd, '.agents-home'),
     DSH_BUNDLED_SKILL_DIR: join(workspaceCwd, '.bundled-skills'),
   }
-  const originalSkillRootEnvironment = Object.fromEntries(
-    Object.keys(skillRootEnvironment).map(key => [key, process.env[key]]),
-  )
+  const originalSkillRootEnvironment = Object.fromEntries(Object.keys(skillRootEnvironment).map((key) => [key, process.env[key]]))
   let skillRootEnvironmentRestored = false
   const restoreSkillRootEnvironment = (): void => {
     if (skillRootEnvironmentRestored) return
@@ -552,25 +550,29 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // patch id that stops matching a row fails the boot sweep loudly instead of
   // drifting).
   const basePatches = loadOverlayPatches('web e2e scaffold', BASE_PATCH_PATH)
-  const surfacePatches = bundlePatchPaths(WEB_BUNDLE_DIR, WEB_BUNDLE_PATCH).flatMap(file => loadOverlayPatches('web e2e scaffold', file))
-  const extraOverlayPatches = options.extraOverlayPath === undefined
-    ? []
-    : (typeof options.extraOverlayPath === 'string' ? [options.extraOverlayPath] : options.extraOverlayPath)
-      .flatMap(path => loadOverlayPatches('web e2e scaffold', path))
+  const surfacePatches = bundlePatchPaths(WEB_BUNDLE_DIR, WEB_BUNDLE_PATCH).flatMap((file) => loadOverlayPatches('web e2e scaffold', file))
+  const extraOverlayPatches =
+    options.extraOverlayPath === undefined
+      ? []
+      : (typeof options.extraOverlayPath === 'string' ? [options.extraOverlayPath] : options.extraOverlayPath).flatMap((path) =>
+          loadOverlayPatches('web e2e scaffold', path),
+        )
   const composedRows = composeEntries([basePatches, surfacePatches, extraOverlayPatches])
-  const webRuntimeConfig = composedRows.find(row => row.id === 'web-runtime')?.config as {
-    surfaceContext?: boolean
-  } | undefined
+  const webRuntimeConfig = composedRows.find((row) => row.id === 'web-runtime')?.config as
+    | {
+        surfaceContext?: boolean
+      }
+    | undefined
   const surfaceContext = webRuntimeConfig?.surfaceContext !== false
   // The scaffold's own overrides, above every bundle layer like `--patch` overlays.
   const overlayPatches: PatchOptions[] = [
     // Without HMR the profile applies configuration changes at its next start.
-    ...options.profile?.hmr === false ? [{ id: 'hmr', disabled: true }] : [],
+    ...(options.profile?.hmr === false ? [{ id: 'hmr', disabled: true }] : []),
     { id: 'session-log-deepseek', config: { enabled: false } },
     { id: 'ui-plugin-manager', config: { registryProbeEnabled: false } },
-    ...mode === 'record' || options.deepSeekMissingCredential === true
+    ...(mode === 'record' || options.deepSeekMissingCredential === true
       ? []
-      : [{ id: 'agent-default-model', config: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }],
+      : [{ id: 'agent-default-model', config: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }]),
     ...extraOverlayPatches,
     { id: 'agent-preset-registry', config: { default: 'standard' } },
     { id: 'session-persistence-jsonl', config: { root: persistenceRoot } },
@@ -610,23 +612,28 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     options.telemetryUrl === undefined
       ? { id: 'session-telemetry-otel', disabled: true }
       : {
-        id: 'session-telemetry-otel',
-        config: {
-          mode: options.telemetryMode ?? 'FEEDBACK_ONLY',
-          exporter: { url: options.telemetryUrl },
-          ...(options.telemetryScheduledDelayMillis === undefined ? {} : {
-            processor: { scheduledDelayMillis: options.telemetryScheduledDelayMillis },
-          }),
-          shutdownTimeoutMillis: 1_000,
+          id: 'session-telemetry-otel',
+          config: {
+            mode: options.telemetryMode ?? 'FEEDBACK_ONLY',
+            exporter: { url: options.telemetryUrl },
+            ...(options.telemetryScheduledDelayMillis === undefined
+              ? {}
+              : {
+                  processor: { scheduledDelayMillis: options.telemetryScheduledDelayMillis },
+                }),
+            shutdownTimeoutMillis: 1_000,
+          },
         },
-      },
     // Use an ephemeral port while preserving the shipped compression policy;
     // a patch replaces the row's complete config.
     {
       id: 'webserver',
       config: {
-        host: '127.0.0.1', port: 0, compression: 'gzip',
-        compressionLevel: 1, compressionThresholdBytes: 1024,
+        host: '127.0.0.1',
+        port: 0,
+        compression: 'gzip',
+        compressionLevel: 1,
+        compressionThresholdBytes: 1024,
       },
     },
     // The bundle's web-runtime row resolves the same built dist under test
@@ -635,17 +642,19 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // Preserve the composed surface-context choice because a patch replaces
     // the row's complete config.
     { id: 'web-runtime', config: { openBrowser: false, printUrl: false, surfaceContext } },
-    ...publicHost === undefined && options.remoteAuthority === undefined
+    ...(publicHost === undefined && options.remoteAuthority === undefined
       ? []
-      : [{
-        id: 'connection',
-        config: {
-          trustedHosts: [
-            ...publicHost === undefined ? [] : [publicHost],
-            ...options.remoteAuthority === undefined ? [] : [options.remoteAuthority],
-          ],
-        },
-      }],
+      : [
+          {
+            id: 'connection',
+            config: {
+              trustedHosts: [
+                ...(publicHost === undefined ? [] : [publicHost]),
+                ...(options.remoteAuthority === undefined ? [] : [options.remoteAuthority]),
+              ],
+            },
+          },
+        ]),
     { id: 'credentials', config: { dshHome: harnessHome } },
     // The shipped directory-picker row is the -auto chooser, which resolves
     // the interaction from the RUNNING host (display, SSH launch, bind). The
@@ -654,35 +663,63 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // host: patch `name` is an assertion, not an override, hence the
     // disable+insert pair.
     { id: 'directory-picker', disabled: true },
-    { insert: [
-      { id: 'directory-picker-browse', name: '@deepseek-ai/dsh-host-directory-picker-browse' },
-      { id: 'ui-directory-picker-browse', name: '@deepseek-ai/dsh-client-ui-directory-picker-browse' },
-    ] },
+    {
+      insert: [
+        { id: 'directory-picker-browse', name: '@deepseek-ai/dsh-host-directory-picker-browse' },
+        { id: 'ui-directory-picker-browse', name: '@deepseek-ai/dsh-client-ui-directory-picker-browse' },
+      ],
+    },
     // Ordinary scenarios exclude host-dependent application discovery. The
     // Open In scenario supplies launch facts that suppress every native probe.
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
-    ...options.agentPresets === undefined ? [] : [
-      { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
-      { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
-    ],
-    ...options.toolsMode === undefined ? [] : [{ id: 'tools', config: { mode: options.toolsMode } }],
-    ...options.deepSeekSearch === undefined
+    ...(options.agentPresets === undefined
       ? []
-      : [{
-        id: 'web-search-deepseek',
-        config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
-        },
-      }],
+      : [
+          { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
+          {
+            insert: (options.agentPresets.definitions ?? []).map((config) => ({
+              id: `preset-${config.id}`,
+              name: '@deepseek-ai/dsh-agent-preset',
+              config,
+            })),
+          },
+        ]),
+    ...(options.toolsMode === undefined ? [] : [{ id: 'tools', config: { mode: options.toolsMode } }]),
+    ...(options.deepSeekSearch === undefined
+      ? []
+      : [
+          {
+            id: 'web-search-deepseek',
+            config: {
+              apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
+              baseURL: options.deepSeekSearch.baseURL,
+            },
+          },
+        ]),
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
-  const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',
-    'web-search-deepseek', 'agent-loop', 'subagent', 'bash-sandbox', 'pwsh-sandbox',
-    'session-log-deepseek', 'ui-theme', 'locale', 'ui-chat', 'ui-conversation', 'ui-settings', 'ui-settings-general', 'permission'])
+  const formEntries = new Set([
+    'agent-default-model',
+    'agent-preset-registry',
+    'llm-deepseek',
+    'llm-pi-ai',
+    'web-search-deepseek',
+    'agent-loop',
+    'subagent',
+    'bash-sandbox',
+    'pwsh-sandbox',
+    'session-log-deepseek',
+    'ui-theme',
+    'locale',
+    'ui-chat',
+    'ui-conversation',
+    'ui-settings',
+    'ui-settings-general',
+    'permission',
+  ])
   const formDefaults: PatchOptions[] = []
   const processOverlays = overlayPatches.map((patch) => {
     if (patch.id === undefined || !formEntries.has(patch.id) || patch.config === undefined) return patch
@@ -716,25 +753,28 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }
     process.chdir(workspaceCwd)
     const profileDir = join(harnessHome, 'profiles', 'scaffold')
-    const extraLayers: Profile['layers'] = await Promise.all((options.extraInstallAnchors ?? []).map(async (anchor) => {
-      const manifest = JSON.parse(await readFile(anchor, 'utf8')) as { name?: unknown }
-      if (typeof manifest.name !== 'string' || manifest.name === '') {
-        throw new Error(`web scaffold extra install anchor has no package name: ${anchor}`)
-      }
-      const packageDir = dirname(anchor)
-      // A real profile already has each bundle installed by `dsh plugin add`.
-      // Reproduce that link so a private bundle can import its own plugin.
-      const installedLink = join(profileDir, 'node_modules', manifest.name)
-      await mkdir(dirname(installedLink), { recursive: true })
-      await symlink(packageDir, installedLink, 'junction')
-      return {
-        packageName: manifest.name,
-        packageDir,
-        patchPaths: [join(packageDir, 'cordis.patch.yml')],
-        patches: [],
-      }
-    }))
-    const profile: Profile = { skippedBundles: [],
+    const extraLayers: Profile['layers'] = await Promise.all(
+      (options.extraInstallAnchors ?? []).map(async (anchor) => {
+        const manifest = JSON.parse(await readFile(anchor, 'utf8')) as { name?: unknown }
+        if (typeof manifest.name !== 'string' || manifest.name === '') {
+          throw new Error(`web scaffold extra install anchor has no package name: ${anchor}`)
+        }
+        const packageDir = dirname(anchor)
+        // A real profile already has each bundle installed by `dsh plugin add`.
+        // Reproduce that link so a private bundle can import its own plugin.
+        const installedLink = join(profileDir, 'node_modules', manifest.name)
+        await mkdir(dirname(installedLink), { recursive: true })
+        await symlink(packageDir, installedLink, 'junction')
+        return {
+          packageName: manifest.name,
+          packageDir,
+          patchPaths: [join(packageDir, 'cordis.patch.yml')],
+          patches: [],
+        }
+      }),
+    )
+    const profile: Profile = {
+      skippedBundles: [],
       name: 'scaffold',
       dir: profileDir,
       layers: extraLayers,
@@ -751,7 +791,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       // A real profile: the shipped web bundles plus each fixture package,
       // installed the way `dsh plugin add` leaves them.
       const dependencies: Record<string, string> = {}
-      const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...options.profile?.bundles ?? []]
+      const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...(options.profile?.bundles ?? [])]
       for (const entry of options.profile?.packages ?? []) {
         const manifest = JSON.parse(await readFile(join(entry.dir, 'package.json'), 'utf8')) as { name: string }
         dependencies[manifest.name] = `file:${entry.dir}`
@@ -763,7 +803,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       // Fixture deployment defaults remain below editable profile values.
       const fixtureDir = join(profileDir, 'node_modules', SCAFFOLD_DEFAULTS_BUNDLE)
       await mkdir(fixtureDir, { recursive: true })
-      await writeFile(join(fixtureDir, 'package.json'), JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+      await writeFile(
+        join(fixtureDir, 'package.json'),
+        JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }),
+      )
       await writeFile(join(fixtureDir, 'cordis.patch.yml'), yaml.dump(formDefaults, { schema: entryListSchema }))
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
@@ -772,15 +815,25 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       manifest.dependencies = dependencies
       await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
       profileContext = {
-        name: 'scaffold', dir: profileDir, patchPath: profile.patchPath, installAnchor: INSTALL_ANCHOR,
-        ...options.profile?.packageManager === undefined ? {} : { packageManager: options.profile.packageManager },
-        cwd: workspaceCwd, home: harnessHome,
-        startedBundles: loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers.map(layer => layer.packageName),
-        overlays: processOverlays, telemetryDisabledEnv: undefined,
+        name: 'scaffold',
+        dir: profileDir,
+        patchPath: profile.patchPath,
+        installAnchor: INSTALL_ANCHOR,
+        ...(options.profile?.packageManager === undefined ? {} : { packageManager: options.profile.packageManager }),
+        cwd: workspaceCwd,
+        home: harnessHome,
+        startedBundles: loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers.map((layer) => layer.packageName),
+        overlays: processOverlays,
+        telemetryDisabledEnv: undefined,
       }
       // HMR gates file-driven reloads on application readiness, which the
       // launcher commits after boot; this direct harness is ready at once.
-      ctx.provide('appReady', { onReady: (listener) => { listener(); return () => {} } })
+      ctx.provide('appReady', {
+        onReady: (listener) => {
+          listener()
+          return () => {}
+        },
+      })
       ctx.provide('profileContext', profileContext)
     }
     // This direct Loader harness supplies the same root-path capability as app-boot.
@@ -807,9 +860,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       await ctx.settings.update('ui-settings', { enabled: options.developerTools })
     }
     if (options.welcomeNoticePending !== true) {
-      await ctx.settings.mutate(WELCOME_NOTICE_SETTINGS_NAMESPACE, [{
-        op: 'set', path: [WELCOME_NOTICE_ACK_FIELD], value: WELCOME_NOTICE_VERSION,
-      }])
+      await ctx.settings.mutate(WELCOME_NOTICE_SETTINGS_NAMESPACE, [
+        {
+          op: 'set',
+          path: [WELCOME_NOTICE_ACK_FIELD],
+          value: WELCOME_NOTICE_VERSION,
+        },
+      ])
     }
     if (options.firstUse !== true && ctx.workspaceRegistry.list().length === 0) {
       const initial = await ctx.workspaceRegistry.initializeDefault(async () => workspaceCwd)
@@ -848,10 +905,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         throw new Error('replayProvidersOnly fixture must open with a session header row')
       }
       const recorded = parseSessionLog(fixtureText)
-      const hasModelCall = recorded.some(event => (
-        event.type === 'assistant/message' || event.type === 'assistant/attempt'
-          || event.type === 'request/header' || event.type === 'tool/call'
-      ))
+      const hasModelCall = recorded.some(
+        (event) =>
+          event.type === 'assistant/message' ||
+          event.type === 'assistant/attempt' ||
+          event.type === 'request/header' ||
+          event.type === 'tool/call',
+      )
       if (hasModelCall) {
         throw new Error('replayProvidersOnly fixture must record no model calls')
       }
@@ -859,7 +919,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     if (mode !== 'record' && replayFixture !== undefined) {
       replayHandle = installLlmReplay(ctx, {
         file: replayFixture,
-        providers: (options.replayProviders ?? replayProviders(options.replayContextWindow)).map(provider => ({
+        providers: (options.replayProviders ?? replayProviders(options.replayContextWindow)).map((provider) => ({
           ...provider,
           ...(options.replayRetryPolicy === undefined ? {} : { retryPolicy: options.replayRetryPolicy }),
         })),
@@ -873,10 +933,14 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       // composer refuses to type into. Register the same routes
       // a fixture would, with streaming that still fails loud: the scenario
       // issues no model calls, and one that slipped in must not pass quietly.
-      ctx.effect(() => ctx.llm.registerAdapter(
-        replayProviders(options.replayContextWindow).map(provider => provider.id),
-        new RouteOnlyAdapter(replayProviders(options.replayContextWindow)),
-      ), 'web e2e scaffold: route-only adapter')
+      ctx.effect(
+        () =>
+          ctx.llm.registerAdapter(
+            replayProviders(options.replayContextWindow).map((provider) => provider.id),
+            new RouteOnlyAdapter(replayProviders(options.replayContextWindow)),
+          ),
+        'web e2e scaffold: route-only adapter',
+      )
     }
     if (publicProxy === undefined || publicHost === undefined || publicPrefix === undefined) {
       baseUrl = `http://${browserHost}:${String(port)}`
@@ -942,17 +1006,15 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
           if (event.type !== 'turn/end') return
           clearTimeout(timer)
           off()
-          ctx.sessions.flush(session)
-            .then(() => { resolveSettled(session.id) }, reject)
+          ctx.sessions.flush(session).then(() => {
+            resolveSettled(session.id)
+          }, reject)
         })
       })
     },
     async close(): Promise<void> {
       const failures: unknown[] = []
-      if (mode !== 'record'
-        && replayFixture !== undefined
-        && options.replayProvidersOnly !== true
-        && compareReplaySession) {
+      if (mode !== 'record' && replayFixture !== undefined && options.replayProvidersOnly !== true && compareReplaySession) {
         try {
           await assertReplaySession(
             [...observedSessions.values()],
@@ -978,7 +1040,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       }
       try {
         stopObservingSessions()
-        failures.push(...await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot))
+        failures.push(...(await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot)))
         if (publicProxy !== undefined) {
           try {
             await publicProxy.close()
@@ -1000,27 +1062,24 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
  * in-memory record-mode harvest, so the on-disk zstd default never matters.
  */
 function rawSessionLog(session: Session): string {
-  const encodedEvents = (session.snapshotEvents() as unknown as readonly SessionFormatEvent[])
-    .map(event => sessionFormatCatalog.encodeCurrentEvent(event))
-  const header = sessionFormatCatalog.encodeCurrentHeader({
-    ...session.header,
-    delegationDepth: session.header.delegationDepth ?? 0,
-  }, session.inheritedEventCount)
-  return [
-    JSON.stringify(header),
-    ...encodedEvents.map(record => JSON.stringify(record)),
-    '',
-  ].join('\n')
+  const encodedEvents = (session.snapshotEvents() as unknown as readonly SessionFormatEvent[]).map((event) =>
+    sessionFormatCatalog.encodeCurrentEvent(event),
+  )
+  const header = sessionFormatCatalog.encodeCurrentHeader(
+    {
+      ...session.header,
+      delegationDepth: session.header.delegationDepth ?? 0,
+    },
+    session.inheritedEventCount,
+  )
+  return [JSON.stringify(header), ...encodedEvents.map((record) => JSON.stringify(record)), ''].join('\n')
 }
 
 function mapJsonStringValues(value: unknown, map: (value: string) => string): unknown {
   if (typeof value === 'string') return map(value)
-  if (Array.isArray(value)) return value.map(item => mapJsonStringValues(item, map))
+  if (Array.isArray(value)) return value.map((item) => mapJsonStringValues(item, map))
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
-      key,
-      mapJsonStringValues(item, map),
-    ]))
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, mapJsonStringValues(item, map)]))
   }
   return value
 }
@@ -1048,16 +1107,16 @@ function isTimeContextReading(value: unknown): boolean {
 
 /** Tokenize the browser timezone carried by user message sources. */
 function normalizeClientTimeZones(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(item => normalizeClientTimeZones(item))
+  if (Array.isArray(value)) return value.map((item) => normalizeClientTimeZones(item))
   if (value !== null && typeof value === 'object') {
-    const next = Object.fromEntries(Object.entries(value).map(([key, item]) => [
-      key,
-      normalizeClientTimeZones(item),
-    ]))
+    const next = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeClientTimeZones(item)]))
     const source = (next as { source?: unknown }).source
-    if (source !== null && typeof source === 'object'
-      && (source as { kind?: unknown }).kind === 'user'
-      && typeof (source as { clientTimeZone?: unknown }).clientTimeZone === 'string') {
+    if (
+      source !== null &&
+      typeof source === 'object' &&
+      (source as { kind?: unknown }).kind === 'user' &&
+      typeof (source as { clientTimeZone?: unknown }).clientTimeZone === 'string'
+    ) {
       return {
         ...next,
         source: { ...source, clientTimeZone: '{{clientTimeZone}}' },
@@ -1075,14 +1134,14 @@ function isWebCwdMatch(value: string, start: number, length: number): boolean {
   const before = value[start - 1]
   const after = value[start + length]
   const afterPunctuation = value[start + length + 1]
-  const startsAtBoundary = before === undefined
-    || WEB_PATH_TEXT_BOUNDARY_RE.test(before)
-    || WEB_FILE_URI_PATH_PREFIX_RE.test(value.slice(0, start))
-  const endsAtBoundary = after === undefined
-    || after === '/'
-    || after === '\\'
-    || WEB_PATH_TEXT_BOUNDARY_RE.test(after)
-    || after === '.' && (afterPunctuation === undefined || WEB_PATH_TEXT_BOUNDARY_RE.test(afterPunctuation))
+  const startsAtBoundary =
+    before === undefined || WEB_PATH_TEXT_BOUNDARY_RE.test(before) || WEB_FILE_URI_PATH_PREFIX_RE.test(value.slice(0, start))
+  const endsAtBoundary =
+    after === undefined ||
+    after === '/' ||
+    after === '\\' ||
+    WEB_PATH_TEXT_BOUNDARY_RE.test(after) ||
+    (after === '.' && (afterPunctuation === undefined || WEB_PATH_TEXT_BOUNDARY_RE.test(afterPunctuation)))
   return startsAtBoundary && endsAtBoundary
 }
 
@@ -1111,52 +1170,52 @@ function replaceWebCwd(value: string, cwd: string): string {
  * @returns compact JSONL with run-local strings tokenized.
  */
 export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string): string {
-  const headerLine = log.split(/\r?\n/).find(line => line.trim().length > 0)
-  const header = headerLine === undefined ? undefined : JSON.parse(headerLine) as { cwd?: unknown }
+  const headerLine = log.split(/\r?\n/).find((line) => line.trim().length > 0)
+  const header = headerLine === undefined ? undefined : (JSON.parse(headerLine) as { cwd?: unknown })
   const sessionCwd = typeof header?.cwd === 'string' && header.cwd.length > 0 ? header.cwd : undefined
-  const cwdSpellings = [...new Set([sessionCwd ?? workspaceCwd]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .flatMap((value) => {
-      const forward = value.replaceAll('\\', '/')
-      const native = /^[A-Za-z]:[\\/]/.test(value) ? forward.replaceAll('/', '\\') : value
-      return [value, value.replaceAll('\\', '\\\\'), forward, native]
-    }))].sort((left, right) => right.length - left.length)
-  return log.split(/\r?\n/).map((line) => {
-    if (line.trim() === '') return line
-    let record = normalizeClientTimeZones(mapJsonStringValues(JSON.parse(line), (value) => {
-      let normalized = value
-        .replace(/Anonymous user: [0-9a-f-]{36}(?=\.$)/gi, 'Anonymous user: {{anonymousUserId}}')
-      for (const cwd of cwdSpellings) normalized = replaceWebCwd(normalized, cwd)
-      return normalized
-    })) as { type?: unknown; data?: { endpoint?: unknown } }
-    if (record.type === 'web/deepseek-search-llm-request' && typeof record.data?.endpoint === 'string') {
-      record.data.endpoint = '{{webSearchEndpoint}}'
-    }
-    if (isTimeContextReading(record)) {
-      record = mapJsonStringValues(record, tokenizeTimeContextReading) as typeof record
-    }
-    return JSON.stringify(record)
-  }).join('\n')
+  const cwdSpellings = [
+    ...new Set(
+      [sessionCwd ?? workspaceCwd]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .flatMap((value) => {
+          const forward = value.replaceAll('\\', '/')
+          const native = /^[A-Za-z]:[\\/]/.test(value) ? forward.replaceAll('/', '\\') : value
+          return [value, value.replaceAll('\\', '\\\\'), forward, native]
+        }),
+    ),
+  ].sort((left, right) => right.length - left.length)
+  return log
+    .split(/\r?\n/)
+    .map((line) => {
+      if (line.trim() === '') return line
+      let record = normalizeClientTimeZones(
+        mapJsonStringValues(JSON.parse(line), (value) => {
+          let normalized = value.replace(/Anonymous user: [0-9a-f-]{36}(?=\.$)/gi, 'Anonymous user: {{anonymousUserId}}')
+          for (const cwd of cwdSpellings) normalized = replaceWebCwd(normalized, cwd)
+          return normalized
+        }),
+      ) as { type?: unknown; data?: { endpoint?: unknown } }
+      if (record.type === 'web/deepseek-search-llm-request' && typeof record.data?.endpoint === 'string') {
+        record.data.endpoint = '{{webSearchEndpoint}}'
+      }
+      if (isTimeContextReading(record)) {
+        record = mapJsonStringValues(record, tokenizeTimeContextReading) as typeof record
+      }
+      return JSON.stringify(record)
+    })
+    .join('\n')
 }
 
-function stableSessionFixture(
-  session: Session,
-  existing: string,
-  workspaceCwd: string,
-  harnessHome: string,
-): string {
-  const prepared = prepareSessionSnapshotFixtureForComparison(
-    normalizeWebSessionVolatiles(rawSessionLog(session), workspaceCwd),
-  )
-  const stabilized = existing === ''
-    ? prepared
-    : stabilizeRefreshLog(prepared, existing, [], {
-      sessionIds: [String(session.id)],
-      cwd: workspaceCwd,
-    })
-  const fresh = scrubSessionSnapshot(stabilized)
-    .split(session.id).join('{{session:1}}')
-    .split(harnessHome).join('{{harnessHome}}')
+function stableSessionFixture(session: Session, existing: string, workspaceCwd: string, harnessHome: string): string {
+  const prepared = prepareSessionSnapshotFixtureForComparison(normalizeWebSessionVolatiles(rawSessionLog(session), workspaceCwd))
+  const stabilized =
+    existing === ''
+      ? prepared
+      : stabilizeRefreshLog(prepared, existing, [], {
+          sessionIds: [String(session.id)],
+          cwd: workspaceCwd,
+        })
+  const fresh = scrubSessionSnapshot(stabilized).split(session.id).join('{{session:1}}').split(harnessHome).join('{{harnessHome}}')
   const stable = redactSessionSnapshotIds(stabilizeFixtureMessageIds([fresh], [existing]))[0]
   if (stable === undefined) throw new Error('session harvest produced no stabilized fixture')
   return stable
@@ -1179,7 +1238,10 @@ async function assertReplaySession(
     if (session.header.parentSession !== undefined) return false
     const actual = session.snapshotEvents().flatMap((event) => {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return []
-      const text = event.data.content.filter(block => block.type === 'text').map(block => block.text).join('')
+      const text = event.data.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('')
       return text.length === 0 ? [] : [text]
     })
     return JSON.stringify(actual) === JSON.stringify(userPrompts)
@@ -1194,7 +1256,7 @@ async function assertReplaySession(
     expectedPath = recordedSessionFixturePath(fixturePath, session.header.version)
     await writeFile(expectedPath, expected)
   }
-  const expectedHeader = JSON.parse(expected.split('\n').find(line => line.trim() !== '') ?? '{}') as {
+  const expectedHeader = JSON.parse(expected.split('\n').find((line) => line.trim() !== '') ?? '{}') as {
     id?: unknown
     cwd?: unknown
   }
@@ -1204,15 +1266,15 @@ async function assertReplaySession(
     cwd: typeof expectedHeader.cwd === 'string' ? expectedHeader.cwd : '\0no-cwd\0',
   }
   const actualSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0]
-    ?.split(harnessHome).join('{{harnessHome}}')
+    ?.split(harnessHome)
+    .join('{{harnessHome}}')
   const expectedSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0]
-    ?.split(harnessHome).join('{{harnessHome}}')
+    ?.split(harnessHome)
+    .join('{{harnessHome}}')
   expect(actualSnapshot, `${fixturePath}: persisted replay`).toBe(expectedSnapshot)
 
   if (manifest.header?.pin !== true) return
-  const normalizePrompt = (value: string): string => value
-    .split(REPO_ROOT).join('{{sourceRoot}}')
-    .split(webUrl).join('{{webUrl}}')
+  const normalizePrompt = (value: string): string => value.split(REPO_ROOT).join('{{sourceRoot}}').split(webUrl).join('{{webUrl}}')
   const prompts = normalizedSystemPrompts(actual, actualContext).map(normalizePrompt)
   const schemas = normalizedToolSchemas(actual, actualContext)
   const promptPath = join(fixtureDir, 'system-prompt.expected.md')
@@ -1245,12 +1307,7 @@ export async function recordFixture(scaffold: WebScaffold, sessionId: SessionId,
   const target = recordedSessionFixturePath(fixturePath, agent.session.header.version)
   const existingPath = existsSync(target) ? target : fixturePath
   const existing = existsSync(existingPath) ? await readFile(existingPath, 'utf8') : ''
-  await writeFile(target, stableSessionFixture(
-    agent.session,
-    existing,
-    scaffold.workspaceCwd,
-    scaffold.harnessHome,
-  ))
+  await writeFile(target, stableSessionFixture(agent.session, existing, scaffold.workspaceCwd, scaffold.harnessHome))
 }
 
 /**
@@ -1262,16 +1319,16 @@ export async function recordFixture(scaffold: WebScaffold, sessionId: SessionId,
 export function fixtureUserPrompts(fixtureText: string): string[] {
   return parseSessionLog(fixtureText).flatMap((event) => {
     if (event.type !== 'user/message' || event.data.source.kind !== 'user') return []
-    const text = event.data.content.filter(block => block.type === 'text').map(block => block.text).join('')
+    const text = event.data.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
     return text.length > 0 ? [text] : []
   })
 }
 
 /** Deterministic UUID used when a seed fixture's typed identity token is materialized. */
-export function fixtureIdentity(
-  kind: 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id',
-  ordinal: number,
-): string {
+export function fixtureIdentity(kind: 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id', ordinal: number): string {
   const hex = createHash('sha256').update(`${kind}:${ordinal}`).digest('hex').slice(0, 32).split('')
   hex[12] = '4'
   hex[16] = ['8', '9', 'a', 'b'][Number.parseInt(hex[16] as string, 16) % 4] as string
@@ -1290,28 +1347,32 @@ export function fixtureIdentity(
  * @returns the realized fixture text.
  */
 export function realizeSeedFixture(scaffold: WebScaffold, fixtureText: string, id: string): string {
-  const firstLine = fixtureText.split(/\r?\n/).find(line => line.trim().length > 0)
-  const fixtureCwd = firstLine === undefined
-    ? undefined
-    : (JSON.parse(firstLine) as { cwd?: unknown }).cwd
-  return fixtureText.split(/\r?\n/).map((line) => {
-    if (line.trim() === '') return line
-    const realized = mapJsonStringValues(JSON.parse(line), (value) => {
-      let result = typeof fixtureCwd === 'string'
-        ? value.split(fixtureCwd).join(scaffold.workspaceCwd)
-        : value
-      result = result
-        .split('{{sessionId}}').join(id)
-        .split('{{session:1}}').join(id)
-        .replace(/\{\{session:([2-9]\d*)\}\}/g, (_token, ordinal: string) => `${id}-child-${ordinal}`)
-        .replace(/\{\{(message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}/g, (_token, kind: string, ordinal: string) =>
-          fixtureIdentity(kind as 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id', Number(ordinal)))
-        .split('{{harnessHome}}').join(scaffold.harnessHome)
-        .split('{{cwd}}').join(scaffold.workspaceCwd)
-      return result
+  const firstLine = fixtureText.split(/\r?\n/).find((line) => line.trim().length > 0)
+  const fixtureCwd = firstLine === undefined ? undefined : (JSON.parse(firstLine) as { cwd?: unknown }).cwd
+  return fixtureText
+    .split(/\r?\n/)
+    .map((line) => {
+      if (line.trim() === '') return line
+      const realized = mapJsonStringValues(JSON.parse(line), (value) => {
+        let result = typeof fixtureCwd === 'string' ? value.split(fixtureCwd).join(scaffold.workspaceCwd) : value
+        result = result
+          .split('{{sessionId}}')
+          .join(id)
+          .split('{{session:1}}')
+          .join(id)
+          .replace(/\{\{session:([2-9]\d*)\}\}/g, (_token, ordinal: string) => `${id}-child-${ordinal}`)
+          .replace(/\{\{(message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}/g, (_token, kind: string, ordinal: string) =>
+            fixtureIdentity(kind as 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id', Number(ordinal)),
+          )
+          .split('{{harnessHome}}')
+          .join(scaffold.harnessHome)
+          .split('{{cwd}}')
+          .join(scaffold.workspaceCwd)
+        return result
+      })
+      return JSON.stringify(realized)
     })
-    return JSON.stringify(realized)
-  }).join('\n')
+    .join('\n')
 }
 
 /** Give reconstructed V0/V1 chunk streams positive intervals before the final wall-clock rebase. */
@@ -1342,11 +1403,11 @@ export function parseSeedFixture(fixtureText: string): {
   header: Record<string, unknown>
   events: SessionEvent[]
 } {
-  const sourceHeaderLine = fixtureText.split(/\r?\n/).find(line => line.trim().length > 0)
+  const sourceHeaderLine = fixtureText.split(/\r?\n/).find((line) => line.trim().length > 0)
   if (sourceHeaderLine === undefined) throw new Error('seed fixture has no session header')
   const sourceHeader = JSON.parse(sourceHeaderLine) as { version?: unknown }
   const current = prepareSessionSnapshotFixtureForComparison(fixtureText)
-  const headerLine = current.split(/\r?\n/).find(line => line.trim().length > 0)
+  const headerLine = current.split(/\r?\n/).find((line) => line.trim().length > 0)
   if (headerLine === undefined) throw new Error('seed fixture has no session header')
   const header = JSON.parse(headerLine) as Record<string, unknown>
   if (header.type !== 'session') throw new Error('seed fixture must start with a session header')
@@ -1373,11 +1434,7 @@ export function renderSeedFixture(
   headerLine: string,
   events: readonly ({ readonly seq: number; readonly time: number } & object)[],
 ): string {
-  return [
-    headerLine,
-    ...events.map(({ seq: _seq, time: _time, ...event }) => JSON.stringify(event)),
-    '',
-  ].join('\n')
+  return [headerLine, ...events.map(({ seq: _seq, time: _time, ...event }) => JSON.stringify(event)), ''].join('\n')
 }
 
 /** Re-anchor one projected embedded stream while preserving every intra-stream gap. */
@@ -1389,20 +1446,14 @@ function rebaseSeedStream(
   if (first === undefined) return stream
   const sourceStart = 'time' in first ? first.time : first.time0
   const delta = startAt - sourceStart
-  return stream.map(record => 'time' in record
-    ? { ...record, time: record.time + delta }
-    : { ...record, time0: record.time0 + delta })
+  return stream.map((record) => ('time' in record ? { ...record, time: record.time + delta } : { ...record, time0: record.time0 + delta }))
 }
 
 /** Last logical timestamp carried by an embedded Assistant stream. */
-function seedStreamEnd(
-  stream: SessionEvent<'assistant/message'>['data']['stream'],
-): number | undefined {
+function seedStreamEnd(stream: SessionEvent<'assistant/message'>['data']['stream']): number | undefined {
   let end: number | undefined
   for (const record of stream) {
-    const recordEnd = 'time' in record
-      ? record.time
-      : record.time0 + record.dt.reduce((total, delta) => total + delta, 0)
+    const recordEnd = 'time' in record ? record.time : record.time0 + record.dt.reduce((total, delta) => total + delta, 0)
     end = end === undefined ? recordEnd : Math.max(end, recordEnd)
   }
   return end
@@ -1440,7 +1491,7 @@ export async function seedSession(
     isSeeded: false,
     cwd: scaffold.workspaceCwd,
     delegationDepth: 0,
-    ...agentPreset === undefined ? {} : { agentPreset },
+    ...(agentPreset === undefined ? {} : { agentPreset }),
   }
   const fixtureCreatedAt = decoded.header.createdAt
   if (typeof fixtureCreatedAt !== 'number') {
@@ -1478,11 +1529,7 @@ export async function seedSession(
 }
 
 /** Materialize one detached Session fixture through the shipped JSONL provider. */
-async function persistSeedSession(
-  scaffold: WebScaffold,
-  meta: SessionHeader,
-  events: readonly SessionEvent[],
-): Promise<void> {
+async function persistSeedSession(scaffold: WebScaffold, meta: SessionHeader, events: readonly SessionEvent[]): Promise<void> {
   const seeder = new Context()
   try {
     // Same root as the booted tree with the plugin's own default compression,
@@ -1534,39 +1581,42 @@ export async function readPersistedEvents(scaffold: WebScaffold, id: SessionId):
  * live wall-clock state asks for it instead. Anchored on an aria label's
  * closing quote, where the bucket is always last.
  */
-const ARIA_AGE =
-  /(?:now|\d+min|\d+h|\d+d|\d+mo|\d+y|刚刚|\d+分钟|\d+小时|\d+天|\d+个月|\d+年)(?=")/g
+const ARIA_AGE = /(?:now|\d+min|\d+h|\d+d|\d+mo|\d+y|刚刚|\d+分钟|\d+小时|\d+天|\d+个月|\d+年)(?=")/g
 
 function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): string {
   // The session heading renders the workspace's basename, not the full
   // path, so both spellings must collapse to the token.
   const base = workspaceCwd.split('/').pop()!
-  return (age ? snapshot.replace(ARIA_AGE, '{{age}}') : snapshot)
-    .split(workspaceCwd).join('{{cwd}}')
-    .split(base).join('{{workspace}}')
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '{{uuid}}')
-    // The optional space in `\d+m ?\d+s` covers both minute spellings: the
-    // stats line's compact `2m42s` and the message-chrome template's `2m 42s`.
-    .replace(
-      /~\d+(?:y(?: \d+mo)?|mo(?: \d+d)?)|\b(?:\d+d(?: \d+h(?: \d+m \d+s)?)?|\d+h \d+m \d+s|\d+m ?\d+s|\d+(?:\.\d+)?s|\d+(?:\.\d+)?ms)\b/g,
-      duration => duration.startsWith('~') ? duration : '{{duration}}',
-    )
-    .replace(/\b\d[\d,]*(?:\.\d+)? ms\b/g, '{{duration}}')
-    .replace(
-      /约\d+(?:年(?:\d+个月)?|个月(?:\d+天)?)|\d+(?:天(?:\d+小时(?:\d+分\d+秒)?)?|小时\d+分\d+秒|分\d+秒|(?:\.\d+)?秒)/g,
-      duration => duration.startsWith('约') ? duration : '{{duration}}',
-    )
-    .replace(/\d+(?:\.\d+)?(?= tok\/s(?!\w))/g, '{{throughput}}')
-    // Seeded compaction prices realized file paths, whose length differs
-    // between local worktrees and CI scratch directories.
-    .replace(/(Compacted \d+ history items \(~)\d+( tokens\))/g, '$1{{tokens}}$2')
-    // Session summaries and Message IconActions clocks cross calendar
-    // boundaries; collapse every shape so goldens stay stable across them.
-    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '{{timestamp}}')
-    .replace(/\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, '{{clock}}')
-    .replace(/\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, '{{clock}}')
-    .replace(/(?<!\d)\d{1,2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*[AP]M)?(?!\d)/gi, '{{clock}}')
-    .replace(/(?<!\d)\d{2}:\d{2}(?!\d)/g, '{{clock}}')
+  return (
+    (age ? snapshot.replace(ARIA_AGE, '{{age}}') : snapshot)
+      .split(workspaceCwd)
+      .join('{{cwd}}')
+      .split(base)
+      .join('{{workspace}}')
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '{{uuid}}')
+      // The optional space in `\d+m ?\d+s` covers both minute spellings: the
+      // stats line's compact `2m42s` and the message-chrome template's `2m 42s`.
+      .replace(
+        /~\d+(?:y(?: \d+mo)?|mo(?: \d+d)?)|\b(?:\d+d(?: \d+h(?: \d+m \d+s)?)?|\d+h \d+m \d+s|\d+m ?\d+s|\d+(?:\.\d+)?s|\d+(?:\.\d+)?ms)\b/g,
+        (duration) => (duration.startsWith('~') ? duration : '{{duration}}'),
+      )
+      .replace(/\b\d[\d,]*(?:\.\d+)? ms\b/g, '{{duration}}')
+      .replace(
+        /约\d+(?:年(?:\d+个月)?|个月(?:\d+天)?)|\d+(?:天(?:\d+小时(?:\d+分\d+秒)?)?|小时\d+分\d+秒|分\d+秒|(?:\.\d+)?秒)/g,
+        (duration) => (duration.startsWith('约') ? duration : '{{duration}}'),
+      )
+      .replace(/\d+(?:\.\d+)?(?= tok\/s(?!\w))/g, '{{throughput}}')
+      // Seeded compaction prices realized file paths, whose length differs
+      // between local worktrees and CI scratch directories.
+      .replace(/(Compacted \d+ history items \(~)\d+( tokens\))/g, '$1{{tokens}}$2')
+      // Session summaries and Message IconActions clocks cross calendar
+      // boundaries; collapse every shape so goldens stay stable across them.
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '{{timestamp}}')
+      .replace(/\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, '{{clock}}')
+      .replace(/\d{1,2}月\d{1,2}日 \d{2}:\d{2}/g, '{{clock}}')
+      .replace(/(?<!\d)\d{1,2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*[AP]M)?(?!\d)/gi, '{{clock}}')
+      .replace(/(?<!\d)\d{2}:\d{2}(?!\d)/g, '{{clock}}')
+  )
 }
 
 /**
@@ -1597,8 +1647,7 @@ export async function captureStableAria(
   } = {},
 ): Promise<string> {
   if ((options.runningJobs ?? 'settle') === 'settle') {
-    await page.getByRole('button', { name: /background jobs? running/ })
-      .waitFor({ state: 'detached', timeout: 10_000 })
+    await page.getByRole('button', { name: /background jobs? running/ }).waitFor({ state: 'detached', timeout: 10_000 })
   }
   const region = page.locator(selector).first()
   const age = options.normalizeAge === true
@@ -1609,12 +1658,17 @@ export async function captureStableAria(
     return normalizeAria(snapshot, workspaceCwd, age)
   }
   let previous = normalize(await region.ariaSnapshot())
-  await expect.poll(async () => {
-    const current = normalize(await region.ariaSnapshot())
-    const stable = current === previous
-    previous = current
-    return stable
-  }, { timeout: 5_000, message: 'aria snapshot did not stabilize' }).toBe(true)
+  await expect
+    .poll(
+      async () => {
+        const current = normalize(await region.ariaSnapshot())
+        const stable = current === previous
+        previous = current
+        return stable
+      },
+      { timeout: 5_000, message: 'aria snapshot did not stabilize' },
+    )
+    .toBe(true)
   return previous
 }
 
@@ -1639,7 +1693,7 @@ export async function captureExpandedTurnProcessAria(
   const opened: number[] = []
   for (let index = 0; index < count; index++) {
     const control = controls.nth(index)
-    if (!await control.isVisible() || await control.getAttribute('aria-expanded') !== 'false') continue
+    if (!(await control.isVisible()) || (await control.getAttribute('aria-expanded')) !== 'false') continue
     await control.click()
     opened.push(index)
   }
@@ -1647,19 +1701,24 @@ export async function captureExpandedTurnProcessAria(
     if (options.scrollToBottom === true) {
       const backToBottom = page.getByRole('button', { name: 'Back to bottom', exact: true })
       const scroll = page.locator('[data-conversation-scroll]')
-      await expect.poll(async () => {
-        const distanceFromBottom = await scroll.evaluate((host) => {
-          host.scrollTop = host.scrollHeight
-          return host.scrollHeight - host.clientHeight - host.scrollTop
-        })
-        return Math.abs(distanceFromBottom) <= 1 && await backToBottom.count() === 0
-      }, { timeout: 10_000 }).toBe(true)
+      await expect
+        .poll(
+          async () => {
+            const distanceFromBottom = await scroll.evaluate((host) => {
+              host.scrollTop = host.scrollHeight
+              return host.scrollHeight - host.clientHeight - host.scrollTop
+            })
+            return Math.abs(distanceFromBottom) <= 1 && (await backToBottom.count()) === 0
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(true)
     }
     return await captureStableAria(page, selector, workspaceCwd)
   } finally {
     for (const index of opened.reverse()) {
       const control = controls.nth(index)
-      if (await control.getAttribute('aria-expanded') === 'true') await control.click()
+      if ((await control.getAttribute('aria-expanded')) === 'true') await control.click()
     }
   }
 }
@@ -1693,11 +1752,16 @@ export async function compareOrRefreshGolden(goldenPath: string, actual: string,
 export async function assertFixtureInventory(dir: string, expected: string[]): Promise<void> {
   const entries = (await readdir(dir)).sort()
   const ownsManifest = entries.includes('snapshot.yml')
-  const artifacts = entries.filter(name => name !== 'snapshot.yml')
-  const roleInventory = (names: readonly string[]): string[] => [...new Set(names.map((name) => {
-    const fixture = parseSessionFixtureName(name)
-    return fixture === undefined ? name : sessionFixtureName(fixture.index, 0)
-  }))].sort()
+  const artifacts = entries.filter((name) => name !== 'snapshot.yml')
+  const roleInventory = (names: readonly string[]): string[] =>
+    [
+      ...new Set(
+        names.map((name) => {
+          const fixture = parseSessionFixtureName(name)
+          return fixture === undefined ? name : sessionFixtureName(fixture.index, 0)
+        }),
+      ),
+    ].sort()
   expect(roleInventory(artifacts)).toEqual(roleInventory(expected))
   if (ownsManifest) {
     const manifestPath = join(dir, 'snapshot.yml')
@@ -1705,14 +1769,14 @@ export async function assertFixtureInventory(dir: string, expected: string[]): P
     expect(manifest.profile).toBe('web')
     if (manifest.session === undefined) {
       expect(
-        artifacts.some(name => parseSessionFixtureName(name)?.index === 0),
+        artifacts.some((name) => parseSessionFixtureName(name)?.index === 0),
         `${dir}: session owner must carry a canonical parent Session fixture`,
       ).toBe(true)
     } else {
       expect(existsSync(resolve(dir, manifest.session.source)), `${dir}: session source`).toBe(true)
     }
   }
-  for (const entry of artifacts.filter(name => name.endsWith('.jsonl'))) {
+  for (const entry of artifacts.filter((name) => name.endsWith('.jsonl'))) {
     const content = await readFile(join(dir, entry), 'utf8')
     expect(scrubModelRequestBulk(content), `${dir}/${entry} carries prompt text or tool-schema bulk`).toBe(content)
     expect(redactSessionSnapshotIds([content]), `${dir}/${entry} carries unredacted identities`).toEqual([content])
@@ -1742,7 +1806,9 @@ export function watchConsole(page: Page): WebConsoleTripwire {
     const text = message.text()
     if (/connection lost|gap repair|discontinuous/i.test(text)) warnings.push(text)
   })
-  page.on('pageerror', (error) => { pageErrors.push(String(error)) })
+  page.on('pageerror', (error) => {
+    pageErrors.push(String(error))
+  })
   return { warnings, pageErrors }
 }
 
@@ -1752,10 +1818,7 @@ export function watchConsole(page: Page): WebConsoleTripwire {
  * @param tripwire - the live console-warning collector.
  * @param warningStart - warning count captured immediately before reloading.
  */
-export function acknowledgeReloadConnectionLoss(
-  tripwire: WebConsoleTripwire,
-  warningStart: number,
-): void {
+export function acknowledgeReloadConnectionLoss(tripwire: WebConsoleTripwire, warningStart: number): void {
   const reloadWarnings = tripwire.warnings.splice(warningStart)
-  tripwire.warnings.push(...reloadWarnings.filter(text => !/connection lost/i.test(text)))
+  tripwire.warnings.push(...reloadWarnings.filter((text) => !/connection lost/i.test(text)))
 }

@@ -3,7 +3,7 @@
 import { createServer, type Server } from 'node:http'
 import { createContext, runInContext } from 'node:vm'
 import WebSocket, { type RawData } from 'ws'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { startInspector, type InspectorHandle } from '../src/host/bridge/controller.ts'
 import { InspectorClientFixture } from './fixtures/client-source.host.ts'
 
@@ -31,7 +31,9 @@ class TestCdpClient {
   static async connect(url: string): Promise<TestCdpClient> {
     const socket = new WebSocket(url)
     await new Promise<void>((resolve, reject) => {
-      socket.once('open', () => { resolve() })
+      socket.once('open', () => {
+        resolve()
+      })
       socket.once('error', reject)
     })
     return new TestCdpClient(socket)
@@ -55,7 +57,11 @@ class TestCdpClient {
 
   async close(): Promise<void> {
     if (this.socket.readyState === WebSocket.CLOSED) return
-    const closed = new Promise<void>((resolve) => { this.socket.once('close', () => { resolve() }) })
+    const closed = new Promise<void>((resolve) => {
+      this.socket.once('close', () => {
+        resolve()
+      })
+    })
     this.socket.close()
     await closed
   }
@@ -77,7 +83,12 @@ describe('experimental Inspector real Worker', () => {
     secondCdp = undefined
     await inspector?.close()
     inspector = undefined
-    if (server !== undefined) await new Promise<void>((resolve) => { server!.close(() => { resolve() }) })
+    if (server !== undefined)
+      await new Promise<void>((resolve) => {
+        server!.close(() => {
+          resolve()
+        })
+      })
     server = undefined
   })
 
@@ -86,14 +97,15 @@ describe('experimental Inspector real Worker', () => {
     const sourceCatalog = (name: string) => ({
       sourceText: `globalThis.clientName = ${JSON.stringify(name)}`,
       sourceMap: JSON.stringify({ version: 3, sources: [`${name}.ts`], mappings: 'AAAA' }),
-      sourceUrl: `http://client.test/${name}.js`, sourceMapUrl: `http://client.test/${name}.js.map`,
+      sourceUrl: `http://client.test/${name}.js`,
+      sourceMapUrl: `http://client.test/${name}.js.map`,
     })
     client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Embedded', sourceCatalog: sourceCatalog('embedded') })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     let sourceId: string | undefined
     await vi.waitFor(async () => {
       const sources = recordArray((await cdp!.call('DSHInspector.getSources')).result?.sources)
-      const selected = sources.find(source => source.label === 'Embedded')
+      const selected = sources.find((source) => source.label === 'Embedded')
       expect(typeof selected?.sourceId).toBe('string')
       sourceId = String(selected!.sourceId)
     })
@@ -106,13 +118,25 @@ describe('experimental Inspector real Worker', () => {
     const other = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Other', sourceCatalog: sourceCatalog('other') })
     test.onTestFinished(() => other.close())
     await vi.waitFor(() => {
-      expect(runtimeContexts(cdp!).map(context => context.name).sort()).toEqual(['Client — Embedded', 'Client — Other', 'Host'])
-      expect(runtimeContexts(secondCdp!).map(context => context.name).sort()).toEqual(['Client — Embedded', 'Host'])
-      expect(cdp!.events.some(event => event.method === 'Debugger.scriptParsed' && event.params?.url === 'http://client.test/other.js')).toBe(true)
+      expect(
+        runtimeContexts(cdp!)
+          .map((context) => context.name)
+          .sort(),
+      ).toEqual(['Client — Embedded', 'Client — Other', 'Host'])
+      expect(
+        runtimeContexts(secondCdp!)
+          .map((context) => context.name)
+          .sort(),
+      ).toEqual(['Client — Embedded', 'Host'])
+      expect(
+        cdp!.events.some((event) => event.method === 'Debugger.scriptParsed' && event.params?.url === 'http://client.test/other.js'),
+      ).toBe(true)
     })
-    expect(secondCdp.events.some(event => event.method === 'Debugger.scriptParsed' && event.params?.url === 'http://client.test/other.js')).toBe(false)
-    const otherContext = runtimeContexts(cdp).find(context => context.name === 'Client — Other')!
-    const selectedContext = runtimeContexts(secondCdp).find(context => context.name === 'Client — Embedded')!
+    expect(
+      secondCdp.events.some((event) => event.method === 'Debugger.scriptParsed' && event.params?.url === 'http://client.test/other.js'),
+    ).toBe(false)
+    const otherContext = runtimeContexts(cdp).find((context) => context.name === 'Client — Other')!
+    const selectedContext = runtimeContexts(secondCdp).find((context) => context.name === 'Client — Embedded')!
     expect((await secondCdp.call('Runtime.evaluate', { expression: '1', contextId: otherContext.id })).error).toBeDefined()
     await other.log('other-value', 'other-console')
     await client.log('own-value', 'own-console')
@@ -122,40 +146,48 @@ describe('experimental Inspector real Worker', () => {
     })
     expect(consoleEvent(secondCdp, Number(otherContext.id), 'other-console')).toBeUndefined()
     const filteredSources = recordArray((await secondCdp.call('DSHInspector.getSources')).result?.sources)
-    expect(filteredSources.filter(source => source.kind === 'client').map(source => source.label)).toEqual(['Embedded'])
-    for (const event of secondCdp.events.filter(event => event.method === 'DSHInspector.sourcesChanged')) {
-      expect(recordArray(event.params?.sources).filter(source => source.kind === 'client').map(source => source.label)).toEqual(['Embedded'])
+    expect(filteredSources.filter((source) => source.kind === 'client').map((source) => source.label)).toEqual(['Embedded'])
+    for (const event of secondCdp.events.filter((event) => event.method === 'DSHInspector.sourcesChanged')) {
+      expect(
+        recordArray(event.params?.sources)
+          .filter((source) => source.kind === 'client')
+          .map((source) => source.label),
+      ).toEqual(['Embedded'])
     }
     const scopedTree = asRecord((await secondCdp.call('DSHInspector.getCordisTree')).result?.tree)
     const fullTree = asRecord((await cdp.call('DSHInspector.getCordisTree')).result?.tree)
-    expect(recordArray(scopedTree.clients).map(realm => asRecord(realm.source).label)).toEqual(['Embedded'])
+    expect(recordArray(scopedTree.clients).map((realm) => asRecord(realm.source).label)).toEqual(['Embedded'])
     expect(recordArray(fullTree.clients)).toHaveLength(2)
     const root = asRecord((await secondCdp.call('DOM.getDocument', { depth: 3 })).result?.root)
-    const clients = recordArray(root.children).find(node => node.localName === 'clients')!
+    const clients = recordArray(root.children).find((node) => node.localName === 'clients')!
     expect(recordArray(clients.children)).toHaveLength(1)
     await client.disconnect()
     await vi.waitFor(() => {
-      expect(secondCdp!.events.some(event => event.method === 'Runtime.executionContextDestroyed'
-        && event.params?.executionContextId === selectedContext.id)).toBe(true)
-      const reconnected = runtimeContexts(secondCdp!).filter(context => context.name === 'Client — Embedded')
+      expect(
+        secondCdp!.events.some(
+          (event) => event.method === 'Runtime.executionContextDestroyed' && event.params?.executionContextId === selectedContext.id,
+        ),
+      ).toBe(true)
+      const reconnected = runtimeContexts(secondCdp!).filter((context) => context.name === 'Client — Embedded')
       expect(reconnected).toHaveLength(2)
       expect(reconnected[1]?.id).not.toBe(selectedContext.id)
     })
-    expect(runtimeContexts(secondCdp).some(context => context.name === 'Client — Other')).toBe(false)
-    expect(recordArray((await cdp.call('DSHInspector.getSources')).result?.sources).filter(source => source.kind === 'client')).toHaveLength(2)
+    expect(runtimeContexts(secondCdp).some((context) => context.name === 'Client — Other')).toBe(false)
+    expect(
+      recordArray((await cdp.call('DSHInspector.getSources')).result?.sources).filter((source) => source.kind === 'client'),
+    ).toHaveLength(2)
     endpoint.searchParams.set('clientSourceId', 'absent-client')
     const absent = await TestCdpClient.connect(endpoint.href)
     test.onTestFinished(() => absent.close())
     await absent.call('Runtime.enable')
-    expect(runtimeContexts(absent).map(context => context.name)).toEqual(['Host'])
-    expect(recordArray((await absent.call('DSHInspector.getSources')).result?.sources).every(source => source.kind === 'host')).toBe(true)
+    expect(runtimeContexts(absent).map((context) => context.name)).toEqual(['Host'])
+    expect(recordArray((await absent.call('DSHInspector.getSources')).result?.sources).every((source) => source.kind === 'host')).toBe(true)
   })
 
   it('rejects malformed Client selectors before admitting a CDP connection', async () => {
     inspector = await startInspector({ port: 0, captureFetch: false })
     for (const query of ['clientSourceId=', 'clientSourceId=a&clientSourceId=b']) {
-      await expect(TestCdpClient.connect(`${inspector.endpoint.webSocketDebuggerUrl}?${query}`))
-        .rejects.toThrow('400')
+      await expect(TestCdpClient.connect(`${inspector.endpoint.webSocketDebuggerUrl}?${query}`)).rejects.toThrow('400')
     }
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     expect((await cdp.call('Runtime.enable')).error).toBeUndefined()
@@ -171,8 +203,8 @@ describe('experimental Inspector real Worker', () => {
     await vi.waitFor(async () => {
       const response = await cdp!.call('DSHInspector.getSources')
       const sources = response.result?.sources as Array<{ kind: string; topics: Record<string, number> }>
-      expect(sources.find(source => source.kind === 'host')?.topics).toEqual({ 'host/probe': 1 })
-      expect(sources.find(source => source.kind === 'client')?.topics).toMatchObject({ 'client/probe': 1 })
+      expect(sources.find((source) => source.kind === 'host')?.topics).toEqual({ 'host/probe': 1 })
+      expect(sources.find((source) => source.kind === 'client')?.topics).toMatchObject({ 'client/probe': 1 })
     })
 
     ;(globalThis as Record<string, unknown>).__inspectorHostProbe = 73
@@ -180,11 +212,15 @@ describe('experimental Inspector real Worker', () => {
     let clientContextId: number | undefined
     let clientUniqueContextId: string | undefined
     await vi.waitFor(() => {
-      expect(runtimeContexts(cdp!).map(context => context.name).sort()).toEqual(['Client — Test Client', 'Host'])
+      expect(
+        runtimeContexts(cdp!)
+          .map((context) => context.name)
+          .sort(),
+      ).toEqual(['Client — Test Client', 'Host'])
       const clientContext = cdp!.events
-        .filter(event => event.method === 'Runtime.executionContextCreated')
-        .map(event => event.params?.context as Record<string, unknown> | undefined)
-        .find(context => String(context?.name).startsWith('Client —'))
+        .filter((event) => event.method === 'Runtime.executionContextCreated')
+        .map((event) => event.params?.context as Record<string, unknown> | undefined)
+        .find((context) => String(context?.name).startsWith('Client —'))
       expect(clientContext).toBeDefined()
       clientContextId = clientContext?.id as number
       clientUniqueContextId = clientContext?.uniqueId as string
@@ -214,8 +250,8 @@ describe('experimental Inspector real Worker', () => {
       ownProperties: true,
     })
     const propertyRows = recordArray(properties.result?.result)
-    const valueProperty = propertyRows.find(property => property.name === 'value')
-    const nestedProperty = propertyRows.find(property => property.name === 'nested')
+    const valueProperty = propertyRows.find((property) => property.name === 'value')
+    const nestedProperty = propertyRows.find((property) => property.name === 'nested')
     expect(asRecord(valueProperty?.value)).toMatchObject({ type: 'number', value: 17 })
     expect(asRecord(nestedProperty?.value).type).toBe('object')
 
@@ -229,19 +265,31 @@ describe('experimental Inspector real Worker', () => {
 
     const hostObject = await cdp.call('Runtime.evaluate', { expression: '({ realm: "host" })' })
     const hostObjectId = asRecord(hostObject.result?.result).objectId
-    expect((await cdp.call('Runtime.callFunctionOn', {
-      executionContextId: clientContextId,
-      functionDeclaration: 'function (value) { return value }',
-      arguments: [{ objectId: hostObjectId }],
-    })).error?.message).toContain('between realms')
-    expect((await cdp.call('Runtime.callFunctionOn', {
-      objectId: hostObjectId,
-      functionDeclaration: 'function (value) { return value }',
-      arguments: [{ objectId: clientObject.objectId }],
-    })).error?.message).toContain('between realms')
-    expect((await cdp.call('Runtime.queryObjects', {
-      prototypeObjectId: clientObject.objectId,
-    })).error?.message).toContain('Client realm has no native CDP transport')
+    expect(
+      (
+        await cdp.call('Runtime.callFunctionOn', {
+          executionContextId: clientContextId,
+          functionDeclaration: 'function (value) { return value }',
+          arguments: [{ objectId: hostObjectId }],
+        })
+      ).error?.message,
+    ).toContain('between realms')
+    expect(
+      (
+        await cdp.call('Runtime.callFunctionOn', {
+          objectId: hostObjectId,
+          functionDeclaration: 'function (value) { return value }',
+          arguments: [{ objectId: clientObject.objectId }],
+        })
+      ).error?.message,
+    ).toContain('between realms')
+    expect(
+      (
+        await cdp.call('Runtime.queryObjects', {
+          prototypeObjectId: clientObject.objectId,
+        })
+      ).error?.message,
+    ).toContain('Client realm has no native CDP transport')
 
     const awaited = await cdp.call('Runtime.evaluate', {
       expression: 'Promise.resolve({ realm: "client" })',
@@ -275,14 +323,18 @@ describe('experimental Inspector real Worker', () => {
       contextId: clientContextId,
       awaitPromise: true,
     })
-    await new Promise<void>((resolve) => { setTimeout(resolve, 10) })
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 10)
+    })
     await client.close()
     client = undefined
     expect((await pendingEvaluation).error).toBeDefined()
     await vi.waitFor(() => {
-      expect(cdp!.events.some(event =>
-        event.method === 'Runtime.executionContextDestroyed'
-        && event.params?.executionContextId === clientContextId)).toBe(true)
+      expect(
+        cdp!.events.some(
+          (event) => event.method === 'Runtime.executionContextDestroyed' && event.params?.executionContextId === clientContextId,
+        ),
+      ).toBe(true)
     })
   })
 
@@ -316,7 +368,7 @@ describe('experimental Inspector real Worker', () => {
       objectId: secondObjectId,
       ownProperties: true,
     })
-    const owner = recordArray(secondProperties.result?.result).find(property => property.name === 'owner')
+    const owner = recordArray(secondProperties.result?.result).find((property) => property.name === 'owner')
     expect(asRecord(owner?.value).value).toBe('second')
     expect((await secondCdp.call('Runtime.releaseObjectGroup', { objectGroup: 'console' })).error).toBeUndefined()
     expect((await secondCdp.call('Runtime.getProperties', { objectId: secondObjectId })).error).toBeDefined()
@@ -344,11 +396,15 @@ describe('experimental Inspector real Worker', () => {
       awaitPromise: true,
     })
     expect(timedOut.error?.message).toContain('timed out after 20ms')
-    expect((await cdp.call('Runtime.evaluate', {
-      expression: '42',
-      contextId,
-      returnByValue: true,
-    })).result?.result).toMatchObject({ type: 'number', value: 42 })
+    expect(
+      (
+        await cdp.call('Runtime.evaluate', {
+          expression: '42',
+          contextId,
+          returnByValue: true,
+        })
+      ).result?.result,
+    ).toMatchObject({ type: 'number', value: 42 })
   })
 
   it('advertises only the default Host context and preserves its numeric and unique selectors', async () => {
@@ -361,7 +417,7 @@ describe('experimental Inspector real Worker', () => {
     let contextId: number | undefined
     let uniqueContextId: string | undefined
     await vi.waitFor(() => {
-      const created = runtimeContexts(cdp!).find(candidate => candidate.name === 'Host')
+      const created = runtimeContexts(cdp!).find((candidate) => candidate.name === 'Host')
       contextId = created?.id as number | undefined
       uniqueContextId = created?.uniqueId as string | undefined
       expect(contextId).toBeTypeOf('number')
@@ -373,19 +429,28 @@ describe('experimental Inspector real Worker', () => {
       returnByValue: true,
     })
     expect(evaluated.result?.result).toMatchObject({ type: 'number', value: process.pid })
-    expect((await cdp.call('Runtime.evaluate', {
-      expression: 'process.pid',
-      uniqueContextId,
-      returnByValue: true,
-    })).result?.result).toMatchObject({ type: 'number', value: process.pid })
-    expect((await cdp.call('Runtime.callFunctionOn', {
-      executionContextId: contextId,
-      functionDeclaration: 'function () { return process.pid }',
-      returnByValue: true,
-    })).result?.result).toMatchObject({ type: 'number', value: process.pid })
-    expect((await cdp.call('Runtime.globalLexicalScopeNames', { executionContextId: contextId })).result?.names)
-      .not.toContain('vmLexicalMarker')
-    expect(runtimeContexts(cdp).map(candidate => candidate.name)).toEqual(['Host'])
+    expect(
+      (
+        await cdp.call('Runtime.evaluate', {
+          expression: 'process.pid',
+          uniqueContextId,
+          returnByValue: true,
+        })
+      ).result?.result,
+    ).toMatchObject({ type: 'number', value: process.pid })
+    expect(
+      (
+        await cdp.call('Runtime.callFunctionOn', {
+          executionContextId: contextId,
+          functionDeclaration: 'function () { return process.pid }',
+          returnByValue: true,
+        })
+      ).result?.result,
+    ).toMatchObject({ type: 'number', value: process.pid })
+    expect((await cdp.call('Runtime.globalLexicalScopeNames', { executionContextId: contextId })).result?.names).not.toContain(
+      'vmLexicalMarker',
+    )
+    expect(runtimeContexts(cdp).map((candidate) => candidate.name)).toEqual(['Host'])
   })
 
   it('uses the same Runtime value model for Host and Client realms', async () => {
@@ -395,7 +460,10 @@ describe('experimental Inspector real Worker', () => {
     await cdp.call('Runtime.enable')
     const clientContextId = await clientContext(cdp)
 
-    for (const [name, contextId] of [['Host', undefined], ['Client', clientContextId]] as const) {
+    for (const [name, contextId] of [
+      ['Host', undefined],
+      ['Client', clientContextId],
+    ] as const) {
       const select = contextId === undefined ? {} : { contextId }
       const nan = await cdp.call('Runtime.evaluate', { expression: 'NaN', ...select })
       expect(nan.result?.result, name).toMatchObject({ type: 'number', unserializableValue: 'NaN' })
@@ -411,7 +479,7 @@ describe('experimental Inspector real Worker', () => {
         objectId: arrayObject.objectId,
         ownProperties: true,
       })
-      const first = recordArray(properties.result?.result).find(property => property.name === '0')
+      const first = recordArray(properties.result?.result).find((property) => property.name === '0')
       expect(first, name).toMatchObject({ configurable: true, enumerable: true, writable: true })
       expect(asRecord(first?.value), name).toMatchObject({ type: 'number', value: 1 })
 
@@ -426,21 +494,33 @@ describe('experimental Inspector real Worker', () => {
       expect((await cdp.call('Runtime.getProperties', { objectId: arrayObject.objectId })).error).toBeDefined()
     }
 
-    expect((await cdp.call('Runtime.evaluate', {
-      expression: '1 + 1',
-      throwOnSideEffect: true,
-    })).result?.result).toMatchObject({ type: 'number', value: 2 })
-    expect((await cdp.call('Runtime.evaluate', {
-      expression: '1 + 1',
-      contextId: clientContextId,
-      throwOnSideEffect: true,
-    })).error?.message).toContain('does not support throwOnSideEffect')
-    expect((await cdp.call('Runtime.compileScript', {
-      expression: '1 + 1',
-      sourceURL: 'client-eval.js',
-      persistScript: true,
-      executionContextId: clientContextId,
-    })).error?.message).toContain('Client realm has no native CDP transport')
+    expect(
+      (
+        await cdp.call('Runtime.evaluate', {
+          expression: '1 + 1',
+          throwOnSideEffect: true,
+        })
+      ).result?.result,
+    ).toMatchObject({ type: 'number', value: 2 })
+    expect(
+      (
+        await cdp.call('Runtime.evaluate', {
+          expression: '1 + 1',
+          contextId: clientContextId,
+          throwOnSideEffect: true,
+        })
+      ).error?.message,
+    ).toContain('does not support throwOnSideEffect')
+    expect(
+      (
+        await cdp.call('Runtime.compileScript', {
+          expression: '1 + 1',
+          sourceURL: 'client-eval.js',
+          persistScript: true,
+          executionContextId: clientContextId,
+        })
+      ).error?.message,
+    ).toContain('Client realm has no native CDP transport')
   })
 
   it('forwards Client Console objects through isolated realm sessions', async () => {
@@ -450,7 +530,7 @@ describe('experimental Inspector real Worker', () => {
     secondCdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     await vi.waitFor(async () => {
       const response = await cdp!.call('DSHInspector.getSources')
-      expect(recordArray(response.result?.sources).some(source => source.kind === 'client')).toBe(true)
+      expect(recordArray(response.result?.sources).some((source) => source.kind === 'client')).toBe(true)
     })
     // The MessagePort can deliver log requests before ingest receives Console subscriptions.
     await client.setIngestPaused(true)
@@ -462,10 +542,14 @@ describe('experimental Inspector real Worker', () => {
     const logged = (async () => {
       // Both subscriptions precede this request on the same ingest WebSocket.
       // A Client response, unlike Runtime.enable, acknowledges their delivery.
-      expect((await cdp.call('Runtime.evaluate', {
-        contextId: firstContext,
-        expression: 'void 0',
-      })).error).toBeUndefined()
+      expect(
+        (
+          await cdp.call('Runtime.evaluate', {
+            contextId: firstContext,
+            expression: 'void 0',
+          })
+        ).error,
+      ).toBeUndefined()
       await client.log(value, marker)
     })()
     await Promise.all([logged, client.setIngestPaused(false)])
@@ -488,7 +572,7 @@ describe('experimental Inspector real Worker', () => {
       objectId: secondObjectId,
       ownProperties: true,
     })
-    const owner = recordArray(secondProperties.result?.result).find(property => property.name === 'owner')
+    const owner = recordArray(secondProperties.result?.result).find((property) => property.name === 'owner')
     expect(asRecord(owner?.value).value).toBe('client-console')
 
     expect((await cdp.call('Runtime.discardConsoleEntries')).error).toBeUndefined()
@@ -499,9 +583,15 @@ describe('experimental Inspector real Worker', () => {
     await client.close()
     client = undefined
     await vi.waitFor(() => {
-      for (const [connection, contextId] of [[cdp!, firstContext], [secondCdp!, secondContext]] as const) {
-        expect(connection.events.some(event => event.method === 'Runtime.executionContextDestroyed'
-          && event.params?.executionContextId === contextId)).toBe(true)
+      for (const [connection, contextId] of [
+        [cdp!, firstContext],
+        [secondCdp!, secondContext],
+      ] as const) {
+        expect(
+          connection.events.some(
+            (event) => event.method === 'Runtime.executionContextDestroyed' && event.params?.executionContextId === contextId,
+          ),
+        ).toBe(true)
       }
     })
   })
@@ -523,8 +613,7 @@ describe('experimental Inspector real Worker', () => {
 
     let script: CdpMessage | undefined
     await vi.waitFor(() => {
-      script = cdp!.events.find(event => event.method === 'Debugger.scriptParsed'
-        && event.params?.url === sourceUrl)
+      script = cdp!.events.find((event) => event.method === 'Debugger.scriptParsed' && event.params?.url === sourceUrl)
       expect(script).toBeDefined()
     })
     expect(script?.params).toMatchObject({
@@ -539,40 +628,61 @@ describe('experimental Inspector real Worker', () => {
     await expect(cdp.call('Debugger.getScriptSource', { scriptId })).resolves.toMatchObject({
       result: { scriptSource: sourceText },
     })
-    await expect(cdp.call('Debugger.searchInContent', {
-      scriptId,
-      query: 'clientSourceMarker',
-      caseSensitive: true,
-    })).resolves.toMatchObject({
+    await expect(
+      cdp.call('Debugger.searchInContent', {
+        scriptId,
+        query: 'clientSourceMarker',
+        caseSensitive: true,
+      }),
+    ).resolves.toMatchObject({
       result: { result: [{ lineNumber: 0, lineContent: 'const clientSourceMarker = 42' }] },
     })
-    expect((await cdp.call('Debugger.setBreakpointByUrl', { url: sourceUrl, lineNumber: 0 })).error?.message)
-      .toContain('Client native debugging is unavailable')
-    expect((await cdp.call('Debugger.setBreakpointByUrl', {
-      urlRegex: 'client\\.js',
-      lineNumber: 0,
-    })).error?.message).toContain('Client native debugging is unavailable')
-    expect((await cdp.call('Debugger.setBreakpointByUrl', {
-      scriptHash: 'test',
-      lineNumber: 0,
-    })).error?.message).toContain('Client native debugging is unavailable')
-    expect((await cdp.call('Debugger.evaluateOnCallFrame', {
-      callFrameId: 'client:unsupported-frame',
-      expression: '1',
-    })).error?.message).toContain('Client native debugging is unavailable')
+    expect((await cdp.call('Debugger.setBreakpointByUrl', { url: sourceUrl, lineNumber: 0 })).error?.message).toContain(
+      'Client native debugging is unavailable',
+    )
+    expect(
+      (
+        await cdp.call('Debugger.setBreakpointByUrl', {
+          urlRegex: 'client\\.js',
+          lineNumber: 0,
+        })
+      ).error?.message,
+    ).toContain('Client native debugging is unavailable')
+    expect(
+      (
+        await cdp.call('Debugger.setBreakpointByUrl', {
+          scriptHash: 'test',
+          lineNumber: 0,
+        })
+      ).error?.message,
+    ).toContain('Client native debugging is unavailable')
+    expect(
+      (
+        await cdp.call('Debugger.evaluateOnCallFrame', {
+          callFrameId: 'client:unsupported-frame',
+          expression: '1',
+        })
+      ).error?.message,
+    ).toContain('Client native debugging is unavailable')
   }, 15_000)
 
   it('projects full Host fetch data through the Network domain', async () => {
     server = createServer((request, response) => {
       let body = ''
       request.setEncoding('utf8')
-      request.on('data', (chunk: string) => { body += chunk })
+      request.on('data', (chunk: string) => {
+        body += chunk
+      })
       request.on('end', () => {
         response.writeHead(201, { authorization: 'response-secret', 'content-type': 'application/json' })
         response.end(JSON.stringify({ body }))
       })
     })
-    await new Promise<void>((resolve) => { server!.listen(0, '127.0.0.1', () => { resolve() }) })
+    await new Promise<void>((resolve) => {
+      server!.listen(0, '127.0.0.1', () => {
+        resolve()
+      })
+    })
     const port = (server.address() as import('node:net').AddressInfo).port
     inspector = await startInspector({ port: 0 })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
@@ -587,13 +697,15 @@ describe('experimental Inspector real Worker', () => {
 
     let started: CdpMessage | undefined
     await vi.waitFor(() => {
-      started = cdp!.events.find(event =>
-        event.method === 'Network.requestWillBeSent'
-        && String((event.params?.request as Record<string, unknown> | undefined)?.url).includes('/capture'))
+      started = cdp!.events.find(
+        (event) =>
+          event.method === 'Network.requestWillBeSent' &&
+          String((event.params?.request as Record<string, unknown> | undefined)?.url).includes('/capture'),
+      )
       expect(started).toBeDefined()
-      expect(cdp!.events.some(event =>
-        event.method === 'Network.loadingFinished'
-        && event.params?.requestId === started!.params?.requestId)).toBe(true)
+      expect(
+        cdp!.events.some((event) => event.method === 'Network.loadingFinished' && event.params?.requestId === started!.params?.requestId),
+      ).toBe(true)
     })
     const request = started!.params?.request as Record<string, unknown>
     expect(request.url).toBe(`http://127.0.0.1:${String(port)}/capture?secret=query`)
@@ -612,9 +724,15 @@ describe('experimental Inspector real Worker', () => {
     server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' })
       response.write(firstChunk)
-      void continueResponse.promise.then(() => { response.end(laterChunk) })
+      void continueResponse.promise.then(() => {
+        response.end(laterChunk)
+      })
     })
-    await new Promise<void>((resolve) => { server!.listen(0, '127.0.0.1', () => { resolve() }) })
+    await new Promise<void>((resolve) => {
+      server!.listen(0, '127.0.0.1', () => {
+        resolve()
+      })
+    })
     const port = (server.address() as import('node:net').AddressInfo).port
     inspector = await startInspector({ port: 0 })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
@@ -624,28 +742,29 @@ describe('experimental Inspector real Worker', () => {
       const response = await fetch(`http://127.0.0.1:${String(port)}/events`)
       let requestId: string | undefined
       await vi.waitFor(() => {
-        const received = cdp!.events.find(event =>
-          event.method === 'Network.responseReceived'
-          && (event.params?.response as Record<string, unknown> | undefined)?.mimeType === 'text/event-stream')
+        const received = cdp!.events.find(
+          (event) =>
+            event.method === 'Network.responseReceived' &&
+            (event.params?.response as Record<string, unknown> | undefined)?.mimeType === 'text/event-stream',
+        )
         requestId = received?.params?.requestId as string | undefined
         expect(requestId).toBeTypeOf('string')
         expect(received?.params).toMatchObject({
           type: 'EventSource',
           response: { encodedDataLength: -1 },
         })
-        expect(cdp!.events.find(event =>
-          event.method === 'Network.requestWillBeSent'
-          && event.params?.requestId === requestId)?.params?.type).toBe('EventSource')
-        expect(cdp!.events.find(event =>
-          event.method === 'Network.eventSourceMessageReceived'
-          && event.params?.requestId === requestId)?.params).toMatchObject({
+        expect(
+          cdp!.events.find((event) => event.method === 'Network.requestWillBeSent' && event.params?.requestId === requestId)?.params?.type,
+        ).toBe('EventSource')
+        expect(
+          cdp!.events.find((event) => event.method === 'Network.eventSourceMessageReceived' && event.params?.requestId === requestId)
+            ?.params,
+        ).toMatchObject({
           eventName: 'message',
           eventId: '1',
           data: 'first',
         })
-        expect(cdp!.events.some(event =>
-          event.method === 'Network.dataReceived'
-          && event.params?.requestId === requestId)).toBe(true)
+        expect(cdp!.events.some((event) => event.method === 'Network.dataReceived' && event.params?.requestId === requestId)).toBe(true)
       })
       if (requestId === undefined) throw new Error('SSE request was not observed')
 
@@ -656,18 +775,20 @@ describe('experimental Inspector real Worker', () => {
       expect(await response.text()).toBe(firstChunk + laterChunk)
 
       await vi.waitFor(() => {
-        expect(cdp!.events.some(event =>
-          event.method === 'Network.loadingFinished'
-          && event.params?.requestId === requestId)).toBe(true)
-        const streamed = cdp!.events.slice(laterEventOffset)
-          .filter(event => event.method === 'Network.dataReceived'
-            && event.params?.requestId === requestId
-            && typeof event.params?.data === 'string')
-          .map(event => Buffer.from(String(event.params!.data), 'base64'))
+        expect(cdp!.events.some((event) => event.method === 'Network.loadingFinished' && event.params?.requestId === requestId)).toBe(true)
+        const streamed = cdp!.events
+          .slice(laterEventOffset)
+          .filter(
+            (event) =>
+              event.method === 'Network.dataReceived' && event.params?.requestId === requestId && typeof event.params?.data === 'string',
+          )
+          .map((event) => Buffer.from(String(event.params!.data), 'base64'))
         expect(Buffer.concat(streamed).toString('utf8')).toBe(laterChunk)
-        expect(cdp!.events.slice(laterEventOffset).find(event =>
-          event.method === 'Network.eventSourceMessageReceived'
-          && event.params?.requestId === requestId)?.params).toMatchObject({
+        expect(
+          cdp!.events
+            .slice(laterEventOffset)
+            .find((event) => event.method === 'Network.eventSourceMessageReceived' && event.params?.requestId === requestId)?.params,
+        ).toMatchObject({
           eventName: 'update',
           eventId: '2',
           data: 'second\nline',
@@ -687,7 +808,11 @@ describe('experimental Inspector real Worker', () => {
       response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' })
       response.write(eventStream)
     })
-    await new Promise<void>((resolve) => { server!.listen(0, '127.0.0.1', () => { resolve() }) })
+    await new Promise<void>((resolve) => {
+      server!.listen(0, '127.0.0.1', () => {
+        resolve()
+      })
+    })
     const port = (server.address() as import('node:net').AddressInfo).port
     inspector = await startInspector({ port: 0 })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
@@ -701,25 +826,25 @@ describe('experimental Inspector real Worker', () => {
 
     let requestId: string | undefined
     await vi.waitFor(() => {
-      const received = cdp!.events.find(event =>
-        event.method === 'Network.responseReceived'
-        && String((event.params?.response as Record<string, unknown> | undefined)?.url).includes('/aborted-events'))
+      const received = cdp!.events.find(
+        (event) =>
+          event.method === 'Network.responseReceived' &&
+          String((event.params?.response as Record<string, unknown> | undefined)?.url).includes('/aborted-events'),
+      )
       requestId = received?.params?.requestId as string | undefined
       expect(requestId).toBeTypeOf('string')
-      expect(cdp!.events.filter(event =>
-        event.method === 'Network.eventSourceMessageReceived'
-        && event.params?.requestId === requestId).map(event => event.params?.data)).toEqual(['first', '[DONE]'])
+      expect(
+        cdp!.events
+          .filter((event) => event.method === 'Network.eventSourceMessageReceived' && event.params?.requestId === requestId)
+          .map((event) => event.params?.data),
+      ).toEqual(['first', '[DONE]'])
     })
     abort.abort()
 
     await vi.waitFor(() => {
-      expect(cdp!.events.some(event =>
-        event.method === 'Network.loadingFinished'
-        && event.params?.requestId === requestId)).toBe(true)
+      expect(cdp!.events.some((event) => event.method === 'Network.loadingFinished' && event.params?.requestId === requestId)).toBe(true)
     })
-    expect(cdp.events.some(event =>
-      event.method === 'Network.loadingFailed'
-      && event.params?.requestId === requestId)).toBe(false)
+    expect(cdp.events.some((event) => event.method === 'Network.loadingFailed' && event.params?.requestId === requestId)).toBe(false)
     const body = await cdp.call('Network.getResponseBody', { requestId })
     expect(Buffer.from(String(body.result?.body), 'base64').toString('utf8')).toBe(eventStream)
     expect(body.result?.dshInspectorTruncated).toBe(true)
@@ -730,7 +855,7 @@ describe('experimental Inspector real Worker', () => {
 async function clientContext(client: TestCdpClient): Promise<number> {
   let contextId: number | undefined
   await vi.waitFor(() => {
-    const context = runtimeContexts(client).find(candidate => String(candidate.name).startsWith('Client —'))
+    const context = runtimeContexts(client).find((candidate) => String(candidate.name).startsWith('Client —'))
     expect(context).toBeDefined()
     contextId = context?.id as number
   })
@@ -739,16 +864,14 @@ async function clientContext(client: TestCdpClient): Promise<number> {
 }
 
 function runtimeContexts(client: TestCdpClient): Readonly<Record<string, unknown>>[] {
-  return client.events
-    .filter(event => event.method === 'Runtime.executionContextCreated')
-    .map(event => asRecord(event.params?.context))
+  return client.events.filter((event) => event.method === 'Runtime.executionContextCreated').map((event) => asRecord(event.params?.context))
 }
 
 function consoleEvent(client: TestCdpClient, contextId: number, marker: string): CdpMessage | undefined {
   return client.events.find((event) => {
     if (event.method !== 'Runtime.consoleAPICalled' || event.params?.executionContextId !== contextId) return false
     const args = event.params.args
-    return Array.isArray(args) && args.some(argument => asRecord(argument).value === marker)
+    return Array.isArray(args) && args.some((argument) => asRecord(argument).value === marker)
   })
 }
 

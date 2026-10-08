@@ -1,6 +1,6 @@
 /** Reloaded tab identities and nonblocking close requests use independent lifetimes. */
 import { setImmediate } from 'node:timers/promises'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -15,42 +15,90 @@ import { TerminalBindings } from '../src/client/bindings.ts'
 import * as TerminalClient from '../src/client/index.ts'
 
 const sessionId = 'session' as SessionId
-const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, shell: { name: 'zsh', path: '/bin/zsh', args: ['-i'] }, title: 'zsh', cwd: '/workspace', rows: 24, cols: 80, state: 'running', exitCode: null }
+const info: WebTerminalInfo = {
+  id: 'terminal' as WebTerminalId,
+  shell: { name: 'zsh', path: '/bin/zsh', args: ['-i'] },
+  title: 'zsh',
+  cwd: '/workspace',
+  rows: 24,
+  cols: 80,
+  state: 'running',
+  exitCode: null,
+}
 const environment: TerminalEnvironment = { cwd: info.cwd, maxInputBytes: 1000, maxCols: 200, maxRows: 100, scrollback: 100 }
 const success = <T>(value: T): RemoteResult<T> => ({ ok: true, value })
 const failure = (message: string): RemoteResult<never> => ({ ok: false, error: new RemoteError('gateway/bad-request', message, {}) })
 const cleanups: (() => void | Promise<void>)[] = []
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 function storage() {
   const data = new Map<string, string>()
-  vi.stubGlobal('localStorage', { get length() { return data.size }, key: (index: number) => [...data.keys()][index] ?? null, getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } })
+  vi.stubGlobal('localStorage', {
+    get length() {
+      return data.size
+    },
+    key: (index: number) => [...data.keys()][index] ?? null,
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value)
+    },
+    removeItem: (key: string) => {
+      data.delete(key)
+    },
+  })
   return data
 }
 
 function fixture() {
   const remote: TerminalRemote = {
-    retain: vi.fn<TerminalRemote['retain']>(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
-      yield { type: 'retained' }
-      await new Promise<void>((resolve) => {
-        if (signal?.aborted) resolve()
-        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-    })),
+    retain: vi.fn<TerminalRemote['retain']>(
+      streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
+        yield { type: 'retained' }
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) resolve()
+          else
+            signal?.addEventListener(
+              'abort',
+              () => {
+                resolve()
+              },
+              { once: true },
+            )
+        })
+      }),
+    ),
     shells: vi.fn<TerminalRemote['shells']>(async () => success([info.shell])),
-    environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
+    environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)),
+    list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_session, request) => success({ ...info, id: request.id })),
-    close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
-    write: vi.fn<TerminalRemote['write']>(async () => success(undefined)), resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
-    follow: vi.fn<TerminalRemote['follow']>(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
-      yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
-      await new Promise<void>((resolve) => {
-        if (signal?.aborted) resolve()
-        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-    })),
+    close: vi.fn<TerminalRemote['close']>(async () => success(undefined)),
+    rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
+    write: vi.fn<TerminalRemote['write']>(async () => success(undefined)),
+    resize: vi.fn<TerminalRemote['resize']>(async () => success(undefined)),
+    follow: vi.fn<TerminalRemote['follow']>(
+      streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+        yield { type: 'snapshot', sequence: 0, screen: 'retained', info: { ...info, id, controllerId } }
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) resolve()
+          else
+            signal?.addEventListener(
+              'abort',
+              () => {
+                resolve()
+              },
+              { once: true },
+            )
+        })
+      }),
+    ),
   }
-  const gateway: Pick<ClientRemote, '$stream'> = { $stream: options => new RemoteStream({ generation: createSnapshotStore(undefined) }, options) }
+  const gateway: Pick<ClientRemote, '$stream'> = {
+    $stream: (options) => new RemoteStream({ generation: createSnapshotStore(undefined) }, options),
+  }
   function view() {
     const model = new TerminalView(sessionId, remote, gateway, info.id)
     cleanups.push(() => model.dispose())
@@ -61,7 +109,9 @@ function fixture() {
     ctx.provide('remote', { ...gateway, terminal: remote } as never)
     ctx.provide('remote.terminal', remote)
     const fiber = ctx.plugin(TerminalClient)
-    cleanups.push(async () => { await ctx.fiber.dispose() })
+    cleanups.push(async () => {
+      await ctx.fiber.dispose()
+    })
     await fiber
     return { service: ctx.webTerminals, dispose: () => fiber.dispose() }
   }
@@ -119,7 +169,7 @@ it('retries lost create acknowledgements with the saved id and closes after a re
   await model.refresh()
   expect(model.state.getSnapshot().error).toBe('response lost')
   await model.refresh()
-  expect(vi.mocked(h.remote.create).mock.calls.map(call => call[1].id)).toEqual([info.id, info.id])
+  expect(vi.mocked(h.remote.create).mock.calls.map((call) => call[1].id)).toEqual([info.id, info.id])
   await model.close()
   expect(h.remote.close).toHaveBeenCalledWith(sessionId, info.id)
 })
@@ -218,9 +268,9 @@ it('keeps concurrent windows close requests independent and removes only the set
   const b = new TerminalCloseRequests()
   a.save({ sessionId, id: 'a' as WebTerminalId, title: 'A' })
   b.save({ sessionId, id: 'b' as WebTerminalId, title: 'B' })
-  expect(new TerminalCloseRequests().pending().map(request => request.id)).toEqual(['a', 'b'])
+  expect(new TerminalCloseRequests().pending().map((request) => request.id)).toEqual(['a', 'b'])
   a.remove('a' as WebTerminalId)
-  expect(new TerminalCloseRequests().pending().map(request => request.id)).toEqual(['b'])
+  expect(new TerminalCloseRequests().pending().map((request) => request.id)).toEqual(['b'])
 })
 
 it('recovers Host terminals by Session while excluding held, pending-close, and already-closed identities', async () => {
@@ -239,9 +289,9 @@ it('recovers Host terminals by Session while excluding held, pending-close, and 
   service.close(sessionId, 'closing', 'closing')
   service.close(sessionId, 'closed', 'closed')
   await expect.poll(() => new TerminalCloseRequests().pending().length).toBe(1)
-  vi.mocked(h.remote.list).mockResolvedValue(success([
-    { ...info, id: held.id }, { ...info, id: closing.id }, { ...info, id: done.id }, unheld,
-  ]))
+  vi.mocked(h.remote.list).mockResolvedValue(
+    success([{ ...info, id: held.id }, { ...info, id: closing.id }, { ...info, id: done.id }, unheld]),
+  )
   expect(await service.recover(sessionId)).toEqual([unheld])
   expect(h.remote.list).toHaveBeenLastCalledWith(sessionId)
   const otherSession = 'other-session' as SessionId
@@ -316,7 +366,9 @@ it('waits for pending cleanup during service disposal without publishing a late 
   vi.mocked(h.remote.close).mockReturnValueOnce(pending.promise)
   service.close(sessionId, 'Build', 'Build', info.id)
   let finished = false
-  const disposing = dispose().then(() => { finished = true })
+  const disposing = dispose().then(() => {
+    finished = true
+  })
   expect(finished).toBe(false)
   pending.resolve(failure('transport is stopping'))
   await disposing
@@ -420,13 +472,16 @@ it('reports a missing saved terminal after reload and never starts a replacement
   expect(h.remote.create).toHaveBeenCalledOnce()
 })
 
-it.each(['{broken', 'null', '{}', '[{}]', '{"sessionId":"s","id":"bad/id","title":"x"}', '{"sessionId":"s","id":"different","title":"x"}'])('discards malformed saved cleanup: %s', (raw) => {
-  const data = storage()
-  data.set('dsh.terminal.close.v1.terminal', raw)
-  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  expect(new TerminalCloseRequests().pending()).toEqual([])
-  expect(error).toHaveBeenCalledOnce()
-})
+it.each(['{broken', 'null', '{}', '[{}]', '{"sessionId":"s","id":"bad/id","title":"x"}', '{"sessionId":"s","id":"different","title":"x"}'])(
+  'discards malformed saved cleanup: %s',
+  (raw) => {
+    const data = storage()
+    data.set('dsh.terminal.close.v1.terminal', raw)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(new TerminalCloseRequests().pending()).toEqual([])
+    expect(error).toHaveBeenCalledOnce()
+  },
+)
 
 it('skips unrelated storage and cleanup keys removed during enumeration', () => {
   const getItem = vi.fn(() => null)
@@ -451,7 +506,12 @@ it('keeps close requests usable without browser storage', () => {
 it('keeps cleanup usable in memory when storage access itself is denied', () => {
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.stubGlobal('localStorage', undefined)
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('storage denied') } })
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('storage denied')
+    },
+  })
   const requests = new TerminalCloseRequests()
   requests.save({ sessionId, id: info.id, title: 'Build' })
   expect(requests.pending()).toHaveLength(1)
@@ -474,8 +534,7 @@ it.each(['saved', 'view'] as const)('clears a %s close request after the Host co
   }
   await expect.poll(() => vi.mocked(h.remote.close).mock.calls.length).toBe(1)
   await dispose()
-  expect([...data.entries()]).toEqual(source === 'view'
-    ? [['dsh.terminal.shell', info.shell.path]] : [])
+  expect([...data.entries()]).toEqual(source === 'view' ? [['dsh.terminal.shell', info.shell.path]] : [])
   expect(service.closeFailures.getSnapshot()).toEqual([])
   expect(new TerminalCloseRequests().pending()).toEqual([])
   await h.service()
@@ -488,22 +547,33 @@ it('waits for both active and detached stream finalizers during plugin disposal 
   const started = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
   const release = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
   const finished = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()]
-  cleanups.push(() => { for (const barrier of release) barrier.resolve(undefined) })
+  cleanups.push(() => {
+    for (const barrier of release) barrier.resolve(undefined)
+  })
   let index = 0
-  vi.mocked(h.remote.follow).mockImplementation(streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
-    const current = index++
-    try {
-      yield { type: 'snapshot', sequence: 0, screen: 'screen', info: { ...info, id, controllerId } }
-      await new Promise<void>((resolve) => {
-        if (signal?.aborted) resolve()
-        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
-      })
-    } finally {
-      started[current]!.resolve(undefined)
-      await release[current]!.promise
-      finished[current]!.resolve(undefined)
-    }
-  }))
+  vi.mocked(h.remote.follow).mockImplementation(
+    streamMethod<TerminalRemote['follow']>(async function* (_session, id, controllerId, signal) {
+      const current = index++
+      try {
+        yield { type: 'snapshot', sequence: 0, screen: 'screen', info: { ...info, id, controllerId } }
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) resolve()
+          else
+            signal?.addEventListener(
+              'abort',
+              () => {
+                resolve()
+              },
+              { once: true },
+            )
+        })
+      } finally {
+        started[current]!.resolve(undefined)
+        await release[current]!.promise
+        finished[current]!.resolve(undefined)
+      }
+    }),
+  )
   const model = service.view(sessionId, 'tab', 'tab')
   model.mount()
   await model.refresh()
@@ -512,7 +582,9 @@ it('waits for both active and detached stream finalizers during plugin disposal 
   await started[0]!.promise
   await expect.poll(() => model.state.getSnapshot().writable).toBe(true)
   let disposed = false
-  const disposing = dispose().then(() => { disposed = true })
+  const disposing = dispose().then(() => {
+    disposed = true
+  })
   await started[1]!.promise
   release[1]!.resolve(undefined)
   await finished[1]!.promise
@@ -532,7 +604,8 @@ it('discovers menu choices without creating a process and remembers a choice bef
   vi.mocked(h.remote.shells).mockResolvedValue(success([info.shell, alternate]))
   const { service } = await h.service()
   expect(await service.launchShells(sessionId, new AbortController().signal)).toEqual({
-    shells: [info.shell, alternate], selectedShell: info.shell.path,
+    shells: [info.shell, alternate],
+    selectedShell: info.shell.path,
   })
   service.selectShell(alternate.path)
   expect(data.get('dsh.terminal.shell')).toBe(alternate.path)
@@ -541,17 +614,23 @@ it('discovers menu choices without creating a process and remembers a choice bef
   const model = service.view(sessionId, 'chosen', 'chosen', undefined, alternate.path)
   await model.refresh()
   expect(h.remote.create).toHaveBeenLastCalledWith(
-    sessionId, expect.objectContaining({ shellPath: alternate.path }), expect.any(AbortSignal),
+    sessionId,
+    expect.objectContaining({ shellPath: alternate.path }),
+    expect.any(AbortSignal),
   )
   expect(h.remote.shells).toHaveBeenCalledTimes(2)
   await h.view().refresh()
   expect(h.remote.create).toHaveBeenLastCalledWith(
-    sessionId, expect.objectContaining({ shellPath: alternate.path }), expect.any(AbortSignal),
+    sessionId,
+    expect.objectContaining({ shellPath: alternate.path }),
+    expect.any(AbortSignal),
   )
   vi.mocked(h.remote.shells).mockResolvedValue(success([info.shell]))
   await h.view().refresh()
   expect(h.remote.create).toHaveBeenLastCalledWith(
-    sessionId, expect.objectContaining({ shellPath: info.shell.path }), expect.any(AbortSignal),
+    sessionId,
+    expect.objectContaining({ shellPath: info.shell.path }),
+    expect.any(AbortSignal),
   )
   vi.mocked(h.remote.shells).mockResolvedValueOnce(failure('host offline'))
   await expect(service.launchShells(sessionId, new AbortController().signal)).rejects.toThrow('host offline')
@@ -578,7 +657,12 @@ it('retains the last selection across a failed automatic launch', async () => {
 
 it('keeps launch usable when browser storage is denied and stops late shell discovery after close', async () => {
   vi.stubGlobal('localStorage', undefined)
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('denied') } })
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('denied')
+    },
+  })
   const h = fixture()
   const model = h.view()
   await model.refresh()
@@ -606,7 +690,11 @@ it('retains only open saved occurrences across inactive Sessions and deduplicate
   bindings.set(otherSession, 'b', otherId)
   const h = fixture()
   const { service } = await h.service()
-  service.retainTabs([{ sessionId, tabId: 'a', contentId: 'a' }, { sessionId, tabId: 'duplicate', contentId: 'duplicate' }, { sessionId: otherSession, tabId: 'b', contentId: 'b' }])
+  service.retainTabs([
+    { sessionId, tabId: 'a', contentId: 'a' },
+    { sessionId, tabId: 'duplicate', contentId: 'duplicate' },
+    { sessionId: otherSession, tabId: 'b', contentId: 'b' },
+  ])
   await expect.poll(() => h.remote.retain).toHaveBeenCalledTimes(2)
   expect(h.remote.environment).not.toHaveBeenCalled()
   expect(h.remote.create).not.toHaveBeenCalled()
@@ -614,10 +702,10 @@ it('retains only open saved occurrences across inactive Sessions and deduplicate
   expect(h.remote.follow).not.toHaveBeenCalled()
   const calls = vi.mocked(h.remote.retain).mock.calls
   service.retainTabs([{ sessionId: otherSession, tabId: 'b', contentId: 'b' }])
-  await expect.poll(() => calls.find(call => call[0] === sessionId)?.[2]?.aborted).toBe(true)
-  expect(calls.find(call => call[0] === otherSession)?.[2]?.aborted).toBe(false)
+  await expect.poll(() => calls.find((call) => call[0] === sessionId)?.[2]?.aborted).toBe(true)
+  expect(calls.find((call) => call[0] === otherSession)?.[2]?.aborted).toBe(false)
   service.retainTabs([])
-  await expect.poll(() => calls.every(call => call[2]?.aborted)).toBe(true)
+  await expect.poll(() => calls.every((call) => call[2]?.aborted)).toBe(true)
 })
 
 it('waits for the window hold acknowledgement before restoring an output attachment', async () => {
@@ -626,14 +714,23 @@ it('waits for the window hold acknowledgement before restoring an output attachm
   const h = fixture()
   vi.mocked(h.remote.list).mockResolvedValue(success([info]))
   const acknowledge = Promise.withResolvers<undefined>()
-  vi.mocked(h.remote.retain).mockImplementation(streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
-    await acknowledge.promise
-    yield { type: 'retained' }
-    await new Promise<void>((resolve) => {
-      if (signal?.aborted) resolve()
-      else signal?.addEventListener('abort', () => { resolve() }, { once: true })
-    })
-  }))
+  vi.mocked(h.remote.retain).mockImplementation(
+    streamMethod<TerminalRemote['retain']>(async function* (_session, _id, signal) {
+      await acknowledge.promise
+      yield { type: 'retained' }
+      await new Promise<void>((resolve) => {
+        if (signal?.aborted) resolve()
+        else
+          signal?.addEventListener(
+            'abort',
+            () => {
+              resolve()
+            },
+            { once: true },
+          )
+      })
+    }),
+  )
   const { service } = await h.service()
   service.retainTabs([{ sessionId, tabId: 'restored', contentId: 'restored' }])
   const model = service.view(sessionId, 'restored', 'restored')
@@ -651,7 +748,9 @@ it('shows a missing terminal when retention loses the race to Host cleanup, with
   new TerminalBindings().set(sessionId, 'restored', info.id)
   const h = fixture()
   vi.mocked(h.remote.list).mockResolvedValue(success([info]))
-  vi.mocked(h.remote.retain).mockImplementation(() => { throw new RemoteError('terminal/unavailable', 'gone', {}) })
+  vi.mocked(h.remote.retain).mockImplementation(() => {
+    throw new RemoteError('terminal/unavailable', 'gone', {})
+  })
   const { service } = await h.service()
   service.retainTabs([{ sessionId, tabId: 'restored', contentId: 'restored' }])
   const model = service.view(sessionId, 'restored', 'restored')
@@ -667,7 +766,10 @@ it('ignores late inventory after disposal and excludes missing bindings and save
   new TerminalCloseRequests().save({ sessionId, id: info.id, title: 'Closing' })
   const h = fixture()
   const { service, dispose } = await h.service()
-  service.retainTabs([{ sessionId, tabId: 'missing', contentId: 'missing' }, { sessionId, tabId: 'closing', contentId: 'closing' }])
+  service.retainTabs([
+    { sessionId, tabId: 'missing', contentId: 'missing' },
+    { sessionId, tabId: 'closing', contentId: 'closing' },
+  ])
   expect(h.remote.retain).not.toHaveBeenCalled()
   await dispose()
   service.retainTabs([{ sessionId, tabId: 'closing', contentId: 'closing' }])
@@ -701,7 +803,9 @@ it('ignores a delayed retention failure after the restored view was disposed', a
   const h = fixture()
   vi.mocked(h.remote.list).mockResolvedValue(success([info]))
   const retained = Promise.withResolvers<undefined>()
-  const gateway: Pick<ClientRemote, '$stream'> = { $stream: options => new RemoteStream({ generation: createSnapshotStore(undefined) }, options) }
+  const gateway: Pick<ClientRemote, '$stream'> = {
+    $stream: (options) => new RemoteStream({ generation: createSnapshotStore(undefined) }, options),
+  }
   const model = new TerminalView(sessionId, h.remote, gateway, info.id, false, undefined, () => retained.promise)
   cleanups.push(() => model.dispose())
   await model.refresh()

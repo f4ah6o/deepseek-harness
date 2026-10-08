@@ -5,12 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
-import {
-  launchAcpTestAgent,
-  type AgentUnderTest,
-  type LaunchedAcpTestAgent,
-} from '@deepseek-ai/dsh-session-snapshot'
-import { describe, expect, it } from 'vitest'
+import { launchAcpTestAgent, type AgentUnderTest, type LaunchedAcpTestAgent } from '@deepseek-ai/dsh-session-snapshot'
+import { describe, expect, it } from 'vite-plus/test'
 
 const repoRoot = fileURLToPath(new URL('../../../../../../', import.meta.url))
 const agent: AgentUnderTest = {
@@ -28,10 +24,10 @@ function selectValue(
   configId: string,
   name: string,
 ): string {
-  const option = options?.find(candidate => candidate.id === configId)
+  const option = options?.find((candidate) => candidate.id === configId)
   if (option?.type !== 'select') throw new Error(`missing select option: ${configId}`)
-  const values = option.options.flatMap(candidate => 'group' in candidate ? candidate.options : [candidate])
-  const selected = values.find(candidate => candidate.name === name)
+  const values = option.options.flatMap((candidate) => ('group' in candidate ? candidate.options : [candidate]))
+  const selected = values.find((candidate) => candidate.name === name)
   if (selected === undefined) throw new Error(`missing ${configId} value: ${name}`)
   return selected.value
 }
@@ -71,11 +67,13 @@ describe('standard ACP v1 control surface', () => {
         value: low,
       })
 
-      await expect(first.client.prompt({
-        sessionId: created.sessionId,
-        prompt: [{ type: 'text', text: 'exercise the attached server' }],
-      })).resolves.toEqual({ stopReason: 'end_turn' })
-      expect(first.updates.map(update => update.sessionUpdate)).toEqual([
+      await expect(
+        first.client.prompt({
+          sessionId: created.sessionId,
+          prompt: [{ type: 'text', text: 'exercise the attached server' }],
+        }),
+      ).resolves.toEqual({ stopReason: 'end_turn' })
+      expect(first.updates.map((update) => update.sessionUpdate)).toEqual([
         'agent_thought_chunk',
         'usage_update',
         'tool_call',
@@ -83,11 +81,13 @@ describe('standard ACP v1 control surface', () => {
         'agent_message_chunk',
         'usage_update',
       ])
-      expect(first.updates).toContainEqual(expect.objectContaining({
-        sessionUpdate: 'agent_message_chunk',
-        content: { type: 'text', text: 'model=beta; tool=5' },
-      }))
-      const message = first.updates.find(update => update.sessionUpdate === 'agent_message_chunk')
+      expect(first.updates).toContainEqual(
+        expect.objectContaining({
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'model=beta; tool=5' },
+        }),
+      )
+      const message = first.updates.find((update) => update.sessionUpdate === 'agent_message_chunk')
       expect(message !== undefined && 'messageId' in message && typeof message.messageId === 'string').toBe(true)
       await first.client.closeSession({ sessionId: created.sessionId })
       await first.close()
@@ -100,9 +100,9 @@ describe('standard ACP v1 control surface', () => {
         sessions: [{ sessionId: created.sessionId, cwd }],
       })
       await second.client.resumeSession({ sessionId: created.sessionId, cwd, mcpServers })
-      const toolFinished = second.waitForUpdate(update => (
-        update.sessionUpdate === 'tool_call_update' && update.toolCallId === 'control-cancel-add'
-      ))
+      const toolFinished = second.waitForUpdate(
+        (update) => update.sessionUpdate === 'tool_call_update' && update.toolCallId === 'control-cancel-add',
+      )
       const prompt = second.client.prompt({
         sessionId: created.sessionId,
         prompt: [{ type: 'text', text: 'cancel after the tool finishes' }],

@@ -1,5 +1,5 @@
 /** Account route cancellation uses the real loop, registry, and tool lifecycle. */
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk, ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -38,8 +38,12 @@ function send(agent: Agent) {
 }
 
 class ScriptedAdapter extends LlmAdapter {
-  constructor(private run: (request: GenerateOptions) => AsyncIterable<StreamChunk>) { super() }
-  override stream(request: GenerateOptions) { return this.run(request) }
+  constructor(private run: (request: GenerateOptions) => AsyncIterable<StreamChunk>) {
+    super()
+  }
+  override stream(request: GenerateOptions) {
+    return this.run(request)
+  }
 }
 
 it('never falls back to an API key while signed out', async () => {
@@ -64,17 +68,26 @@ it.each(['deepseek-account', 'deepseek-official'])('cancels only the active acco
     yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('fixture-call'), name: 'wait', arguments: '{}' } }
     yield { type: 'finish', reason: { kind: 'tool-calls' } }
   })
-  ctx.on('llm/stream', request => adapter.stream(request))
+  ctx.on('llm/stream', (request) => adapter.stream(request))
   const agent = await ctx.agentLoop.create(SessionId(`tools-${provider}`), { provider, model: 'deepseek-v4-flash' })
-  ctx.tools.register(defineContentToolFixture({ name: 'wait', description: '', parameters: {}, async execute() {
-    toolEntered.resolve(undefined)
-    await release.promise
-    return [{ type: 'text', text: 'done' }]
-  } }))
+  ctx.tools.register(
+    defineContentToolFixture({
+      name: 'wait',
+      description: '',
+      parameters: {},
+      async execute() {
+        toolEntered.resolve(undefined)
+        await release.promise
+        return [{ type: 'text', text: 'done' }]
+      },
+    }),
+  )
   send(agent)
   await toolEntered.promise
   expect(agent.session.requestContext()?.provider).toBe(provider)
-  agent.inbox.splice('next-turn', Infinity, 0, [createUserMessage({ content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' } })])
+  agent.inbox.splice('next-turn', Infinity, 0, [
+    createUserMessage({ content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' } }),
+  ])
   ctx.emit('deepseek-account/signed-out')
   // Changing settings cannot reclassify the already running tool call.
   expect(agent.session.requestContext()?.provider).toBe(provider)
@@ -84,8 +97,12 @@ it.each(['deepseek-account', 'deepseek-official'])('cancels only the active acco
   await agent.whenIdle()
   expect(agent.status).toBe('idle')
   expect(agent.inbox.nextTurn).toHaveLength(1)
-  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({ reason: { kind: 'aborted', reason: provider === 'deepseek-account'
-    ? { kind: 'hook', reason: 'deepseek-account/signed-out' } : { kind: 'user' } } })
+  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({
+    reason: {
+      kind: 'aborted',
+      reason: provider === 'deepseek-account' ? { kind: 'hook', reason: 'deepseek-account/signed-out' } : { kind: 'user' },
+    },
+  })
 })
 
 it.each(['tool', 'retry'])('replaces the active provider only after the next request binds: %s', async (transition) => {
@@ -101,7 +118,10 @@ it.each(['tool', 'retry'])('replaces the active provider only after the next req
     await proceed.promise
     return { ...config, provider: 'deepseek-official' }
   })
-  ctx.on('agent/request-error', async (_event, next) => { await next(); return { kind: 'retry' } })
+  ctx.on('agent/request-error', async (_event, next) => {
+    await next()
+    return { kind: 'retry' }
+  })
   ctx.on('llm/stream', async function* (request) {
     if (request.provider === 'deepseek-account') {
       if (transition === 'retry') {
@@ -115,10 +135,20 @@ it.each(['tool', 'retry'])('replaces the active provider only after the next req
     }
     const signal = request.signal!
     streaming.resolve(signal)
-    await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+    await new Promise<void>((resolve) => {
+      signal.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
+    })
     signal.throwIfAborted()
   })
-  ctx.tools.register(defineContentToolFixture({ name: 'continue', description: '', parameters: {}, execute: async () => [{ type: 'text', text: 'done' }] }))
+  ctx.tools.register(
+    defineContentToolFixture({ name: 'continue', description: '', parameters: {}, execute: async () => [{ type: 'text', text: 'done' }] }),
+  )
   const agent = await ctx.agentLoop.create(SessionId('switch-provider'), { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
   expect(agent.session.requestContext()?.provider).toBeUndefined()
   send(agent)
@@ -151,9 +181,10 @@ it('does not infer a provider while the first request is still being prepared', 
   ctx.emit('deepseek-account/signed-out')
   proceed.resolve(undefined)
   await agent.whenIdle()
-  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({ reason: { kind: 'error', error: { code: 'ACCOUNT_SIGN_IN_REQUIRED' } } })
+  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({
+    reason: { kind: 'error', error: { code: 'ACCOUNT_SIGN_IN_REQUIRED' } },
+  })
 })
-
 
 it('never borrows an account token for a missing API key', async () => {
   vi.stubEnv('DEEPSEEK_API_KEY', '')
@@ -171,7 +202,6 @@ it('never borrows an account token for a missing API key', async () => {
   expect(fetch).not.toHaveBeenCalled()
 })
 
-
 it('propagates account sign-out to the HTTP request signal', async () => {
   const ctx = await harness()
   ctx.provide('deepseekAccount', { resolveToken: async (_url: string) => 'fixture-account-token' } as DeepSeekAccount)
@@ -181,7 +211,13 @@ it('propagates account sign-out to the HTTP request signal', async () => {
     expect(new Headers(init!.headers).get('x-dsh-auth-token')).toBe('fixture-account-token')
     started.resolve(signal)
     return new Promise<Response>((_resolve, reject) => {
-      signal.addEventListener('abort', () => { reject(new Error('request aborted', { cause: signal.reason })) }, { once: true })
+      signal.addEventListener(
+        'abort',
+        () => {
+          reject(new Error('request aborted', { cause: signal.reason }))
+        },
+        { once: true },
+      )
     })
   })
   const agent = await ctx.agentLoop.create(SessionId('http-abort'), { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
@@ -190,9 +226,10 @@ it('propagates account sign-out to the HTTP request signal', async () => {
   ctx.emit('deepseek-account/signed-out')
   await agent.whenIdle()
   expect(signal.aborted).toBe(true)
-  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({ reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'deepseek-account/signed-out' } } })
+  expect(agent.session.snapshotEvents().at(-1)?.data).toMatchObject({
+    reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'deepseek-account/signed-out' } },
+  })
 })
-
 
 it('cancels an account child without stopping its API-key parent', async () => {
   const ctx = await harness()
@@ -203,12 +240,23 @@ it('cancels an account child without stopping its API-key parent', async () => {
     if (request.provider === 'deepseek-account') childStarted.resolve(signal)
     else parentStarted.resolve(signal)
     yield { type: 'block-start', index: 0, blockType: 'text' }
-    await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+    await new Promise<void>((resolve) => {
+      signal.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
+    })
     signal.throwIfAborted()
   })
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
-  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent,
-    agentOptions: { provider: 'deepseek-account', model: 'deepseek-v4-flash' } })
+  const childHandle = await ctx.agents.create({
+    sessionId: SessionId('child'),
+    parentAgent: parent,
+    agentOptions: { provider: 'deepseek-account', model: 'deepseek-v4-flash' },
+  })
   send(parent)
   send(childHandle.agent)
   const [parentSignal, childSignal] = await Promise.all([parentStarted.promise, childStarted.promise])
@@ -224,7 +272,9 @@ it('hides signed-out account models while retaining the official catalog without
   vi.stubEnv('DEEPSEEK_API_KEY', '')
   const ctx = await harness()
   let token: string | undefined
-  ctx.provide('deepseekAccount', { resolveToken: async (url: string) => new URL(url).origin === 'https://api.deepseek.com' ? token : undefined } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', {
+    resolveToken: async (url: string) => (new URL(url).origin === 'https://api.deepseek.com' ? token : undefined),
+  } as DeepSeekAccount)
   expect(await ctx.llm.listModels('deepseek-account')).toEqual([])
   expect(await ctx.llm.listModels('deepseek-official')).not.toHaveLength(0)
   token = 'fixture-account-token'
@@ -239,7 +289,11 @@ it('hides signed-out account models while retaining the official catalog without
 
 it('surfaces credential storage failures during catalog discovery', async () => {
   const ctx = await harness()
-  ctx.provide('deepseekAccount', { resolveToken: async (_url: string): Promise<string | undefined> => { throw new Error('storage unavailable') } } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', {
+    resolveToken: async (_url: string): Promise<string | undefined> => {
+      throw new Error('storage unavailable')
+    },
+  } as DeepSeekAccount)
   await expect(ctx.llm.listModels('deepseek-account')).rejects.toThrow('storage unavailable')
 })
 
@@ -266,9 +320,7 @@ it('ignores idle account history but uses the last bound route during a new turn
     send(agent)
     await preparing.promise
     ctx.emit('deepseek-account/signed-out')
-    expect(cancel).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'hook', reason: 'deepseek-account/signed-out' }, { keepInbox: true },
-    )
+    expect(cancel).toHaveBeenCalledExactlyOnceWith({ kind: 'hook', reason: 'deepseek-account/signed-out' }, { keepInbox: true })
   } finally {
     proceed.resolve(undefined)
     await agent.whenIdle()

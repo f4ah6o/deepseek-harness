@@ -7,7 +7,7 @@
  * exercised through the real registry, because "fallback" means whatever the
  * registry's ranking means by it.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
@@ -83,7 +83,7 @@ describe('text type in the registry', () => {
     expect(tabs.claim('dsh-resource://file/session/s-1/w/logo.png').kind).toBe('image')
     expect(tabs.claim('dsh-resource://file/session/s-1/w/logo.md').kind).toBe(TEXTPREVIEW_KIND)
     // Still listed for the picture: a caller naming the kind may open it as text.
-    expect(tabs.candidates('dsh-resource://file/session/s-1/w/logo.png').map(type => type.kind)).toEqual(['image', TEXTPREVIEW_KIND])
+    expect(tabs.candidates('dsh-resource://file/session/s-1/w/logo.png').map((type) => type.kind)).toEqual(['image', TEXTPREVIEW_KIND])
   })
 
   it('does not claim addresses of other schemes', () => {

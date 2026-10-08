@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createSettlementMessage } from '../src/continuation-messages.ts'
@@ -17,11 +17,7 @@ describe('continuable settlement content', () => {
     const message = createSettlementMessage(childId, { stopReason: 'completed', output })
 
     expect(message.role).toBe('user')
-    expect(message.content).toEqual([
-      summary,
-      { type: 'text', text: 'Its closing message:' },
-      { type: 'text', text: 'answer' },
-    ])
+    expect(message.content).toEqual([summary, { type: 'text', text: 'Its closing message:' }, { type: 'text', text: 'answer' }])
     expect(output).toEqual(original)
   })
 
@@ -31,12 +27,9 @@ describe('continuable settlement content', () => {
     ['reasoning-only output', [reasoning]],
     ['empty text', [{ type: 'text', text: '' }]],
   ] satisfies [string, ContentBlock[] | undefined][])('reports no closing message for %s', (_label, output) => {
-    const message = createSettlementMessage(childId, { stopReason: 'completed', ...output === undefined ? {} : { output } })
+    const message = createSettlementMessage(childId, { stopReason: 'completed', ...(output === undefined ? {} : { output }) })
 
-    expect(message.content).toEqual([
-      summary,
-      { type: 'text', text: 'It left no closing message.' },
-    ])
+    expect(message.content).toEqual([summary, { type: 'text', text: 'It left no closing message.' }])
   })
 
   it('preserves text block order and bytes around omitted reasoning and tool calls', () => {
@@ -47,11 +40,6 @@ describe('continuable settlement content', () => {
       output: [reasoning, first, toolCall, second],
     })
 
-    expect(message.content).toEqual([
-      summary,
-      { type: 'text', text: 'Its closing message:' },
-      first,
-      second,
-    ])
+    expect(message.content).toEqual([summary, { type: 'text', text: 'Its closing message:' }, first, second])
   })
 })

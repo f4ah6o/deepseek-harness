@@ -1,6 +1,6 @@
 /** Named references use runtime identity and read the latest materialized values. */
 
-import { expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vite-plus/test'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { ChatSnapshotBuilder } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -23,8 +23,12 @@ it('indexes Node, Turn, Step, and their Data identities, including hidden and re
   const views = { get: () => chat, grouped: () => undefined } as ConversationSnapshot['views']
   const snapshot = createSnapshotStore<ConversationSnapshot>({ views, activeTargets: new Set(['chat']) })
   const binding: ConversationBinding = {
-    snapshot, openTurn: createSnapshotStore<number | undefined>(turn.turn),
-    activate: vi.fn(), target: () => { throw new Error('unused') },
+    snapshot,
+    openTurn: createSnapshotStore<number | undefined>(turn.turn),
+    activate: vi.fn(),
+    target: () => {
+      throw new Error('unused')
+    },
   }
   const model = new ChatNodeModel(binding)
   const objects = model.objects('object-session' as SessionId)
@@ -37,8 +41,8 @@ it('indexes Node, Turn, Step, and their Data identities, including hidden and re
   expect(objects.reference(turn.data)?.kind).toBe('turnData')
   expect(objects.reference(step)?.kind).toBe('step')
   expect(objects.reference(step.data)?.kind).toBe('stepData')
-  const locationReferences = [turn, turn.data, step, step.data].map(value => objects.reference(value)!)
-  expect(locationReferences.map(reference => reference.read())).toEqual([turn, turn.data, step, step.data])
+  const locationReferences = [turn, turn.data, step, step.data].map((value) => objects.reference(value)!)
+  expect(locationReferences.map((reference) => reference.read())).toEqual([turn, turn.data, step, step.data])
   expect(objects.reference(hidden)?.rowKey).toBe('node:hidden:')
   expect(objects.row('node:hidden:')?.target.nodeKey).toBe('hidden')
   expect(objects.row('missing')).toBeUndefined()
@@ -54,7 +58,7 @@ it('indexes Node, Turn, Step, and their Data identities, including hidden and re
   chat = builder.replace({ nodes: [], timeline: { turnOrder: [], turns: new Map() } })
   expect(reference.read()).toBeUndefined()
   expect(nodeData.read()).toBeUndefined()
-  expect(locationReferences.map(reference => reference.read())).toEqual([undefined, undefined, undefined, undefined])
+  expect(locationReferences.map((reference) => reference.read())).toEqual([undefined, undefined, undefined, undefined])
 })
 
 it('navigates Group snapshots, Group Data, and named member parts through their latest sources', () => {
@@ -70,13 +74,26 @@ it('navigates Group snapshots, Group Data, and named member parts through their 
   const plain = { kind: 'node' as const, key: other.key as NodeKey }
   const group = { key, data: { count: 1 }, members: [member, plain] }
   const groups = new ConversationGroupStore<{ count: number }>()
-  groups.prepareAndInstall({ entries: [{ kind: 'group', key }, { kind: 'node', key: loose.key as NodeKey }],
-    groups: { kind: 'replace', snapshots: [group] } },
-  nodeKey => chat.nodes.get(nodeKey))
+  groups.prepareAndInstall(
+    {
+      entries: [
+        { kind: 'group', key },
+        { kind: 'node', key: loose.key as NodeKey },
+      ],
+      groups: { kind: 'replace', snapshots: [group] },
+    },
+    (nodeKey) => chat.nodes.get(nodeKey),
+  )
   const views = { get: () => chat, grouped: () => groups } as ConversationSnapshot['views']
   const snapshot = createSnapshotStore<ConversationSnapshot>({ views, activeTargets: new Set(['chat']) })
-  const model = new ChatNodeModel({ snapshot, openTurn: createSnapshotStore<number | undefined>(1),
-    activate: vi.fn(), target: () => { throw new Error('unused') } })
+  const model = new ChatNodeModel({
+    snapshot,
+    openTurn: createSnapshotStore<number | undefined>(1),
+    activate: vi.fn(),
+    target: () => {
+      throw new Error('unused')
+    },
+  })
   const objects = model.objects('group-object-session' as SessionId)
   const groupReference = objects.reference(group)!
   const dataReference = objects.reference(group.data)!
@@ -95,13 +112,13 @@ it('navigates Group snapshots, Group Data, and named member parts through their 
   expect(objects.reference(member)?.rowKey).toBe(`node:${first.key}:reasoning`)
 
   const updated = { ...group, data: { count: 2 } }
-  groups.prepareAndInstall({ groups: { kind: 'apply', upserts: [updated], removes: [] } }, nodeKey => chat.nodes.get(nodeKey))
+  groups.prepareAndInstall({ groups: { kind: 'apply', upserts: [updated], removes: [] } }, (nodeKey) => chat.nodes.get(nodeKey))
   const published = groups.groupSource(key).getSnapshot()!
   expect(published).toEqual(updated)
   expect(groupReference.read()).toBe(published)
   expect(dataReference.read()).toBe(updated.data)
   expect(objects.reference(published)?.id).toBe(groupReference.id)
-  groups.prepareAndInstall({ entries: [], groups: { kind: 'replace', snapshots: [] } }, nodeKey => chat.nodes.get(nodeKey))
+  groups.prepareAndInstall({ entries: [], groups: { kind: 'replace', snapshots: [] } }, (nodeKey) => chat.nodes.get(nodeKey))
   expect(groupReference.read()).toBeUndefined()
   expect(dataReference.read()).toBeUndefined()
 })
@@ -115,7 +132,9 @@ it('keeps collection keys, members, typed arrays, and non-enumerable fields with
   const set = new InspectorObjectValue(new Set([value]))
   expect(set.label).toBe('Set(1)')
   expect([...set.entries()][0]?.value).toBe(value)
-  const getter = vi.fn(() => { throw new Error('must not execute') })
+  const getter = vi.fn(() => {
+    throw new Error('must not execute')
+  })
   const object = Object.defineProperties({}, { hidden: { value: 1 }, computed: { get: getter } })
   expect([...new InspectorObjectValue(object).entries()]).toEqual([
     { key: 'hidden', name: 'hidden', value: 1 },
@@ -135,8 +154,14 @@ it('retains Location references without rows and rejects stale unindexed values 
   let chat: ChatSnapshot | undefined = builder.replace({ nodes: [], timeline })
   const views = { get: () => chat, grouped: () => undefined } as ConversationSnapshot['views']
   const snapshot = createSnapshotStore<ConversationSnapshot>({ views, activeTargets: new Set(['chat']) })
-  const model = new ChatNodeModel({ snapshot, openTurn: createSnapshotStore<number | undefined>(1),
-    activate: vi.fn(), target: () => { throw new Error('unused') } })
+  const model = new ChatNodeModel({
+    snapshot,
+    openTurn: createSnapshotStore<number | undefined>(1),
+    activate: vi.fn(),
+    target: () => {
+      throw new Error('unused')
+    },
+  })
   const objects = model.objects('inactive-object-session' as SessionId)
   const location = objects.reference(first.location.turn)!
   expect(location.target).toEqual({ turn: 1 })

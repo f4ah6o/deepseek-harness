@@ -5,7 +5,7 @@ import ComputerUse from '@deepseek-ai/dsh-computer-use'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import * as Provider from '../src/index.ts'
 
 const executable = process.env.DSH_COMPUTER_USE_MCP_EXECUTABLE
@@ -40,7 +40,7 @@ it.skipIf(executable === undefined || executable === '')(
       expect(ctx.computerUse.providerName).toBe('cua-driver-mcp')
       const schemas = ctx.tools.schemas()
       expect(schemas.length).toBeGreaterThan(0)
-      expect(schemas.every(tool => tool.name.startsWith('mcp__cua-driver-mcp__'))).toBe(true)
+      expect(schemas.every((tool) => tool.name.startsWith('mcp__cua-driver-mcp__'))).toBe(true)
       const permissions = ctx.tools.get('mcp__cua-driver-mcp__check_permissions')
       expect(permissions).toBeDefined()
       const result = await ctx.tools.execute({
@@ -58,7 +58,7 @@ it.skipIf(executable === undefined || executable === '')(
       expect(canonical.structuredContent).toBeTypeOf('object')
       expect(canonical.structuredContent).not.toBeNull()
       expect(result.content.length).toBeGreaterThan(0)
-      expect(result.content.every(block => block.type === 'text')).toBe(true)
+      expect(result.content.every((block) => block.type === 'text')).toBe(true)
       await provider.dispose()
       expect(ctx.tools.schemas()).toEqual([])
       expect(ctx.computerUse.providerName).toBeUndefined()

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
   COVERAGE_PARTITION_MODE_ENV,
   COVERAGE_PARTITIONS_ENV,
@@ -22,10 +22,7 @@ import {
   type CoverageCommandResult,
   type CoveragePartitionCoordinatorOptions,
 } from './coverage-partitions.ts'
-import {
-  END_OF_LINE_COLUMN,
-  canonicalizeEndOfLineColumns,
-} from './coverage-canonical-locations.ts'
+import { END_OF_LINE_COLUMN, canonicalizeEndOfLineColumns } from './coverage-canonical-locations.ts'
 
 const passed: CoverageCommandResult = { exitCode: 0, signalCode: null }
 
@@ -62,7 +59,7 @@ async function runCoordinatorReadingConfigs(
 ): Promise<Map<string, string>> {
   const configContents = new Map<string, string>()
   const runCommand = vi.fn(async (command: CoverageCommand) => {
-    const configArgument = command.args.find(argument => argument.startsWith('--config='))
+    const configArgument = command.args.find((argument) => argument.startsWith('--config='))
     if (configArgument !== undefined) {
       configContents.set(command.label, await readFile(join(root, configArgument.slice('--config='.length)), 'utf8'))
     }
@@ -98,8 +95,7 @@ describe('coverage partition count', () => {
   })
 
   it.each(['0', '1', '2.5', '02', 'many'])('rejects %j', (raw) => {
-    expect(() => parseCoveragePartitionCount(raw))
-      .toThrow(`${COVERAGE_PARTITIONS_ENV} must be an integer greater than 1`)
+    expect(() => parseCoveragePartitionCount(raw)).toThrow(`${COVERAGE_PARTITIONS_ENV} must be an integer greater than 1`)
   })
 })
 
@@ -118,10 +114,10 @@ describe('lane test budget', () => {
   })
 
   it.each(['0', '-1', '2.5', '090', '90000ms', 'many'])('rejects %j', (raw) => {
-    expect(() => parseCoverageTestTimeout(raw))
-      .toThrow(`${COVERAGE_TEST_TIMEOUT_ENV} must be a positive integer, got ${JSON.stringify(raw)}.`)
-    expect(() => coverageTestTimeoutOptions(raw))
-      .toThrow(`${COVERAGE_TEST_TIMEOUT_ENV} must be a positive integer`)
+    expect(() => parseCoverageTestTimeout(raw)).toThrow(
+      `${COVERAGE_TEST_TIMEOUT_ENV} must be a positive integer, got ${JSON.stringify(raw)}.`,
+    )
+    expect(() => coverageTestTimeoutOptions(raw)).toThrow(`${COVERAGE_TEST_TIMEOUT_ENV} must be a positive integer`)
   })
 })
 
@@ -148,7 +144,7 @@ describe('weighted partition assignment', () => {
     expect(buckets).toHaveLength(3)
     for (const bucket of buckets) {
       expect(bucket).not.toHaveLength(0)
-      expect(bucket.filter(file => file.includes('heavy'))).toHaveLength(1)
+      expect(bucket.filter((file) => file.includes('heavy'))).toHaveLength(1)
     }
   })
 
@@ -156,7 +152,7 @@ describe('weighted partition assignment', () => {
     const files = Array.from({ length: 20 }, (_, index) => `packages/a/tests/file-${index}.spec.ts`)
     const weights = new Map(files.map((file, index) => [file, (index % 7) + 1]))
     const buckets = assignWeightedPartitions(files, weights, 4)
-    const sums = buckets.map(bucket => bucket.reduce((sum, file) => sum + (weights.get(file) ?? 0), 0))
+    const sums = buckets.map((bucket) => bucket.reduce((sum, file) => sum + (weights.get(file) ?? 0), 0))
     const spread = Math.max(...sums) - Math.min(...sums)
     expect(spread).toBeLessThanOrEqual(7)
   })
@@ -174,14 +170,14 @@ describe('weighted partition assignment', () => {
       ['f.spec.ts', 500],
     ])
     const buckets = assignWeightedPartitions([...weights.keys()], weights, 3)
-    const sums = buckets.map(bucket => bucket.reduce((sum, file) => sum + (weights.get(file) ?? 0), 0))
+    const sums = buckets.map((bucket) => bucket.reduce((sum, file) => sum + (weights.get(file) ?? 0), 0))
     expect(Math.max(...sums)).toBeLessThanOrEqual(1550)
   })
 
   it('leaves trailing empty buckets when files are scarce', () => {
     const files = ['a.spec.ts', 'b.spec.ts']
     const buckets = assignWeightedPartitions(files, new Map(), 4)
-    expect(buckets.map(bucket => bucket.length).sort()).toEqual([0, 0, 1, 1])
+    expect(buckets.map((bucket) => bucket.length).sort()).toEqual([0, 0, 1, 1])
   })
 
   it('returns one empty bucket per partition for an empty inventory', () => {
@@ -191,7 +187,7 @@ describe('weighted partition assignment', () => {
   it('assigns unknown-weight files evenly', () => {
     const files = ['a.spec.ts', 'b.spec.ts', 'c.spec.ts', 'd.spec.ts']
     const buckets = assignWeightedPartitions(files, new Map(), 2)
-    expect(buckets.map(bucket => bucket.length).sort()).toEqual([2, 2])
+    expect(buckets.map((bucket) => bucket.length).sort()).toEqual([2, 2])
   })
 })
 
@@ -208,10 +204,7 @@ describe('coverage file inventory', () => {
       'not a test line',
     ].join('\n')
     const inventory = parseListOutput(output, root)
-    expect(inventory.files).toEqual([
-      'packages/a/tests/a.spec.ts',
-      'packages/b/tests/b.spec.ts',
-    ])
+    expect(inventory.files).toEqual(['packages/a/tests/a.spec.ts', 'packages/b/tests/b.spec.ts'])
     expect(inventory.projectOf.get('packages/a/tests/a.spec.ts')).toBe('thread-safe')
     expect(inventory.projectOf.get('packages/b/tests/b.spec.ts')).toBe('process-bound')
   })
@@ -230,10 +223,7 @@ describe('coverage file inventory', () => {
       await writeFile(join(root, file), '')
     }
     const retained = 'packages/api/gateway/tests/rpc.spec.ts'
-    const inventory = parseListOutput(
-      [...typertFiles, retained].map(file => `[thread-safe] ${file}`).join('\n'),
-      root,
-    )
+    const inventory = parseListOutput([...typertFiles, retained].map((file) => `[thread-safe] ${file}`).join('\n'), root)
     expect(inventory.files).toEqual([retained])
     expect([...inventory.projectOf]).toEqual([[retained, 'thread-safe']])
   })
@@ -260,10 +250,13 @@ describe('coverage file inventory', () => {
   it('merges new durations into the persisted file', async () => {
     const root = await temporaryRoot()
     writeFileDurations(root, new Map([['packages/a/tests/x.spec.ts', 42]]))
-    writeFileDurations(root, new Map([
-      ['packages/a/tests/x.spec.ts', 55],
-      ['packages/a/tests/y.spec.ts', 7],
-    ]))
+    writeFileDurations(
+      root,
+      new Map([
+        ['packages/a/tests/x.spec.ts', 55],
+        ['packages/a/tests/y.spec.ts', 7],
+      ]),
+    )
     const durations = readFileDurations(root)
     expect(durations.get('packages/a/tests/x.spec.ts')).toBe(55)
     expect(durations.get('packages/a/tests/y.spec.ts')).toBe(7)
@@ -272,12 +265,15 @@ describe('coverage file inventory', () => {
   it('extracts per-file durations from partition json reports', async () => {
     const root = await temporaryRoot()
     const report = join(root, 'partition-1.report.json')
-    await writeFile(report, JSON.stringify({
-      testResults: [
-        { name: join(root, 'packages/a/tests/x.spec.ts'), startTime: 1000, endTime: 1500 },
-        { name: 'not-a-spec', startTime: 1, endTime: 2 },
-      ],
-    }))
+    await writeFile(
+      report,
+      JSON.stringify({
+        testResults: [
+          { name: join(root, 'packages/a/tests/x.spec.ts'), startTime: 1000, endTime: 1500 },
+          { name: 'not-a-spec', startTime: 1, endTime: 2 },
+        ],
+      }),
+    )
     const durations = collectPartitionDurations([report], root)
     expect(durations.get('packages/a/tests/x.spec.ts')).toBe(500)
   })
@@ -318,9 +314,9 @@ interface CoverageLibrary {
  * It arrives as a dependency of the declared istanbul-lib-report devDependency,
  * so this spec resolves it through that owner instead of declaring its own copy.
  */
-const coverageLibrary = createRequire(
-  createRequire(import.meta.url).resolve('istanbul-lib-report'),
-)('istanbul-lib-coverage') as CoverageLibrary
+const coverageLibrary = createRequire(createRequire(import.meta.url).resolve('istanbul-lib-report'))(
+  'istanbul-lib-coverage',
+) as CoverageLibrary
 
 /** One file's statement coverage, shaped as a partition blob carries it. */
 function statementRecord(statements: StatementLocation[], hits: number[]): Record<string, unknown> {
@@ -344,10 +340,7 @@ function statementRecord(statements: StatementLocation[], hits: number[]): Recor
  * Canonicalization runs on the `CoverageMap` the reporter hook receives, whose
  * `data` holds the raw per-file records merged here.
  */
-function mergePartitionRecords(
-  records: Array<Record<string, unknown>>,
-  canonicalize: boolean,
-): MergedStatements {
+function mergePartitionRecords(records: Array<Record<string, unknown>>, canonicalize: boolean): MergedStatements {
   const map = coverageLibrary.createCoverageMap({})
   for (const record of records) {
     if (canonicalize) canonicalizeEndOfLineColumns({ data: record })
@@ -363,7 +356,7 @@ function uncoveredStarts(coverage: MergedStatements): Array<{ line: number; colu
     .filter(([, hits]) => hits === 0)
     .map(([index]) => coverage.statementMap[index])
     .filter((location): location is StatementLocation => location !== undefined)
-    .map(location => location.start)
+    .map((location) => location.start)
 }
 
 describe('coverage location canonicalization', () => {
@@ -371,21 +364,14 @@ describe('coverage location canonicalization', () => {
   // client environment spells it (at `dirname(current)`); the loop holding
   // both spellings ran in each, and only the client record never took the
   // catch branch that owns the statement.
-  const ssrRecord = statementRecord(
-    [CRASH_LOOP, { start: { line: 48, column: 12 }, end: { line: 48, column: Infinity } }],
-    [3, 2],
-  )
-  const clientRecord = statementRecord(
-    [CRASH_LOOP, { start: { line: 48, column: 21 }, end: { line: 48, column: Infinity } }],
-    [5, 0],
-  )
+  const ssrRecord = statementRecord([CRASH_LOOP, { start: { line: 48, column: 12 }, end: { line: 48, column: Infinity } }], [3, 2])
+  const clientRecord = statementRecord([CRASH_LOOP, { start: { line: 48, column: 21 }, end: { line: 48, column: Infinity } }], [5, 0])
 
   it('drops the phantom statement a client-only spelling leaves after the blob merge', () => {
     // 33 statements, 32 covered: the ssr spelling is hit while the client
     // spelling of the same source statement stays unhit, so a file whose every
     // statement ran fails the per-file 100% gate.
-    expect(uncoveredStarts(mergePartitionRecords([ssrRecord, clientRecord], false)))
-      .toEqual([{ line: 48, column: 21 }])
+    expect(uncoveredStarts(mergePartitionRecords([ssrRecord, clientRecord], false))).toEqual([{ line: 48, column: 21 }])
 
     expect(uncoveredStarts(mergePartitionRecords([ssrRecord, clientRecord], true))).toEqual([])
   })
@@ -466,7 +452,9 @@ describe('coverage partition coordinator', () => {
     const specDirectory = dirname(fileURLToPath(import.meta.url))
     const reporterPath = join(specDirectory, 'coverage-canonical-locations.ts')
     for (const command of commands.slice(0, 2)) {
-      const argument = command.args.find(candidate => candidate.startsWith('--reporter=') && candidate.endsWith('coverage-canonical-locations.ts'))
+      const argument = command.args.find(
+        (candidate) => candidate.startsWith('--reporter=') && candidate.endsWith('coverage-canonical-locations.ts'),
+      )
       if (argument === undefined) throw new Error(`${command.label} does not wire the coverage canonicalizer`)
       expect(resolve(specDirectory, '..', argument.slice('--reporter='.length))).toBe(reporterPath)
     }
@@ -478,7 +466,7 @@ describe('coverage partition coordinator', () => {
     const partitionConfigs: string[] = []
     const runCommand = vi.fn(async (command: CoverageCommand) => {
       commands.push(command)
-      const configArgument = command.args.find(argument => argument.startsWith('--config='))
+      const configArgument = command.args.find((argument) => argument.startsWith('--config='))
       if (configArgument !== undefined) {
         partitionConfigs.push(await readFile(join(root, configArgument.slice('--config='.length)), 'utf8'))
       }
@@ -496,26 +484,23 @@ describe('coverage partition coordinator', () => {
 
     await expect(coordinator.run()).resolves.toBe(0)
 
-    expect(commands.map(command => command.label)).toEqual([
-      'partition 1/3',
-      'partition 2/3',
-      'partition 3/3',
-      'merged coverage report',
-    ])
+    expect(commands.map((command) => command.label)).toEqual(['partition 1/3', 'partition 2/3', 'partition 3/3', 'merged coverage report'])
     for (const command of commands.slice(0, 3)) {
       expect(command.command).toBe(process.execPath)
       expect(command.args[0]).toBe('/pnpm.cjs')
-      expect(command.args).toEqual(expect.arrayContaining([
-        '--coverage',
-        '--coverage.reportOnFailure',
-        '--maxWorkers=1',
-        '--reporter=default',
-        '--reporter=blob',
-        '--reporter=json',
-        '--testTimeout=30000',
-      ]))
+      expect(command.args).toEqual(
+        expect.arrayContaining([
+          '--coverage',
+          '--coverage.reportOnFailure',
+          '--maxWorkers=1',
+          '--reporter=default',
+          '--reporter=blob',
+          '--reporter=json',
+          '--testTimeout=30000',
+        ]),
+      )
       expect(command.args).not.toContain('--shard=1/3')
-      expect(command.args.some(argument => argument.startsWith('--config='))).toBe(true)
+      expect(command.args.some((argument) => argument.startsWith('--config='))).toBe(true)
       expect(command.env).toEqual({
         [COVERAGE_PARTITIONS_ENV]: undefined,
         [COVERAGE_PARTITION_MODE_ENV]: '1',
@@ -534,7 +519,7 @@ describe('coverage partition coordinator', () => {
     const mergeCommand = commands[3]
     if (mergeCommand === undefined) throw new Error('coverage merge command was not observed')
     expect(mergeCommand.args).toContain('--coverage')
-    expect(mergeCommand.args.some(argument => argument.startsWith('--merge-reports='))).toBe(true)
+    expect(mergeCommand.args.some((argument) => argument.startsWith('--merge-reports='))).toBe(true)
     expect(mergeCommand.env).toEqual({
       [COVERAGE_PARTITIONS_ENV]: undefined,
       [COVERAGE_PARTITION_MODE_ENV]: undefined,
@@ -611,9 +596,7 @@ describe('coverage partition coordinator', () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const runCommand = vi.fn(async (command: CoverageCommand) => {
       await writeBlob(command)
-      return command.label === 'partition 2/2'
-        ? { exitCode: 1, signalCode: null, outputTail: 'specific Vitest failure' }
-        : passed
+      return command.label === 'partition 2/2' ? { exitCode: 1, signalCode: null, outputTail: 'specific Vitest failure' } : passed
     })
     const coordinator = new CoveragePartitionCoordinator({
       root,
@@ -625,9 +608,7 @@ describe('coverage partition coordinator', () => {
 
     await expect(coordinator.run()).resolves.toBe(1)
     expect(reported).toHaveBeenCalledWith('coverage-partitions: FAIL partition 2/2 (exit 1)')
-    expect(reported).toHaveBeenCalledWith(
-      'coverage-partitions: output tail for partition 2/2:\nspecific Vitest failure',
-    )
+    expect(reported).toHaveBeenCalledWith('coverage-partitions: output tail for partition 2/2:\nspecific Vitest failure')
     expect(runCommand).toHaveBeenCalledTimes(3)
   })
 
@@ -654,9 +635,7 @@ describe('coverage partition coordinator', () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const runCommand = vi.fn(async (command: CoverageCommand) => {
       if (command.label === 'partition 1/2') await writeBlob(command)
-      return command.label === 'partition 2/2'
-        ? { exitCode: null, signalCode: 'SIGTERM' as const }
-        : passed
+      return command.label === 'partition 2/2' ? { exitCode: null, signalCode: 'SIGTERM' as const } : passed
     })
     const coordinator = new CoveragePartitionCoordinator({
       root,

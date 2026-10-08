@@ -5,7 +5,7 @@
  * policy and lives in `dsh-fs-observation-policy`, so it is not tested here.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { chmod, mkdtemp, readFile, rename, rm, stat, symlink, unlink, writeFile, mkdir, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, parse, relative, resolve } from 'node:path'
@@ -142,7 +142,10 @@ describe('resolveLocalTarget', () => {
     // the raw Node error must be translated into the FsError taxonomy so the tool
     // result keeps its { name, code } metadata.
     await writeFile(join(dir, 'afile'), 'i am a file')
-    const err = await resolveLocalTarget(dir, 'afile/child.txt').then(() => undefined, (e: unknown) => e)
+    const err = await resolveLocalTarget(dir, 'afile/child.txt').then(
+      () => undefined,
+      (e: unknown) => e,
+    )
     expect(err).toBeInstanceOf(FsError)
     expect(err).toMatchObject({ code: 'FS_NOT_FOUND' })
   })
@@ -171,7 +174,9 @@ describe('probe', () => {
     try {
       await new Promise<void>((resolve, reject) => {
         server.once('error', reject)
-        server.listen(sockPath, () => { resolve() })
+        server.listen(sockPath, () => {
+          resolve()
+        })
       })
     } catch (error: unknown) {
       // A restricted sandbox may forbid unix-domain sockets; that is an
@@ -183,7 +188,11 @@ describe('probe', () => {
     try {
       expect((await probe(sockPath))?.type).toBe('other')
     } finally {
-      await new Promise<void>((resolve) => { server.close(() => { resolve() }) })
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve()
+        })
+      })
     }
   })
 
@@ -226,7 +235,7 @@ describe('listDirectory', () => {
 
     const parent = await resolveLocalTarget(dir, 'lexical/link/..')
     const entries = await listDirectory(parent)
-    const child = entries.find(entry => entry.name === 'same.txt')!
+    const child = entries.find((entry) => entry.name === 'same.txt')!
     expect(await readFile(child.target.displayPath, 'utf8')).toBe('physical file')
     expect((await resolveLocalTarget(dir, child.target.displayPath)).targetKey).toBe(child.target.targetKey)
   })
@@ -239,16 +248,16 @@ describe('listDirectory', () => {
     await symlink(join(root, 'missing-target'), join(root, 'broken-link'))
 
     const entries = await listDirectory(localTarget(root))
-    expect(entries.map(entry => [entry.name, entry.type])).toEqual([
+    expect(entries.map((entry) => [entry.name, entry.type])).toEqual([
       ['alpha.md', 'file'],
       ['broken-link', 'other'],
       ['dir-skill', 'directory'],
       ['zeta.md', 'file'],
     ])
-    expect(entries.find(entry => entry.name === 'alpha.md')?.size).toBe(5)
-    expect(typeof entries.find(entry => entry.name === 'alpha.md')?.version).toBe('string')
-    expect(entries.find(entry => entry.name === 'broken-link')?.version).toBeUndefined()
-    expect(entries.find(entry => entry.name === 'dir-skill')?.size).toBeUndefined()
+    expect(entries.find((entry) => entry.name === 'alpha.md')?.size).toBe(5)
+    expect(typeof entries.find((entry) => entry.name === 'alpha.md')?.version).toBe('string')
+    expect(entries.find((entry) => entry.name === 'broken-link')?.version).toBeUndefined()
+    expect(entries.find((entry) => entry.name === 'dir-skill')?.size).toBeUndefined()
   })
 
   it('derives child target keys from the listed parent identity', async () => {
@@ -290,7 +299,10 @@ describe('listDirectory', () => {
     await mkdir(root)
     await chmod(root, 0o000)
     try {
-      const error = await listDirectory(localTarget(root)).then(() => undefined, (caught: unknown) => caught)
+      const error = await listDirectory(localTarget(root)).then(
+        () => undefined,
+        (caught: unknown) => caught,
+      )
       // Root-like environments may still be able to list mode-000 directories.
       if (error === undefined) return
       expect(error).toBeInstanceOf(FsError)
@@ -323,7 +335,10 @@ describe('listDirectory', () => {
     await symlink(secret, join(root, 'secret-link'))
     await chmod(protectedRoot, 0o000)
     try {
-      const error = await listDirectory(localTarget(root)).then(() => undefined, (caught: unknown) => caught)
+      const error = await listDirectory(localTarget(root)).then(
+        () => undefined,
+        (caught: unknown) => caught,
+      )
       // Root-like environments may still resolve through mode-000 directories.
       if (error === undefined) return
       expect(error).toBeInstanceOf(FsError)
@@ -740,24 +755,27 @@ describe('writeFileAtomic — temp-file safety', () => {
     expect(inspected).toBe(true)
     expect(await readFile(file, 'utf8')).toBe('hello')
     if (posixModes) expect((await stat(file)).mode & 0o777).toBe(0o640)
-    expect((await readdir(dir)).filter(n => n.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((n) => n.includes('.tmp'))).toEqual([])
   })
 
-  it.skipIf(process.platform !== 'win32')('protects staged content with the existing target DACL and preserves it after replacement', async () => {
-    const file = join(dir, 'protected.txt')
-    await writeFile(file, 'old')
-    await copyFileDaclWin32(file, file)
-    const expectedDacl = await readFileDaclWin32(file)
+  it.skipIf(process.platform !== 'win32')(
+    'protects staged content with the existing target DACL and preserves it after replacement',
+    async () => {
+      const file = join(dir, 'protected.txt')
+      await writeFile(file, 'old')
+      await copyFileDaclWin32(file, file)
+      const expectedDacl = await readFileDaclWin32(file)
 
-    await writeFileAtomic(file, 'new', (await stat(file)).mode, undefined, {
-      inspectTemp: async ({ tempPath }) => {
-        expect(await readFileDaclWin32(tempPath)).toEqual(expectedDacl)
-      },
-    })
+      await writeFileAtomic(file, 'new', (await stat(file)).mode, undefined, {
+        inspectTemp: async ({ tempPath }) => {
+          expect(await readFileDaclWin32(tempPath)).toEqual(expectedDacl)
+        },
+      })
 
-    expect(await readFile(file, 'utf8')).toBe('new')
-    expect(daclAcePolicy(await readFileDaclWin32(file))).toEqual(daclAcePolicy(expectedDacl))
-  })
+      expect(await readFile(file, 'utf8')).toBe('new')
+      expect(daclAcePolicy(await readFileDaclWin32(file))).toEqual(daclAcePolicy(expectedDacl))
+    },
+  )
 
   it('copies a Windows target DACL before content and publishes through secure replacement', async () => {
     const file = join(dir, 'a.txt')
@@ -782,7 +800,9 @@ describe('writeFileAtomic — temp-file safety', () => {
 
   it('creates a new Windows file through directory inheritance without replacement calls', async () => {
     const file = join(dir, 'new.txt')
-    const unexpected = async (): Promise<void> => { throw new Error('unexpected native replacement call') }
+    const unexpected = async (): Promise<void> => {
+      throw new Error('unexpected native replacement call')
+    }
 
     await writeFileAtomic(file, 'new', undefined, undefined, {
       platform: 'win32',
@@ -801,7 +821,9 @@ describe('writeFileAtomic — temp-file safety', () => {
     await writeFileAtomic(file, 'new', 0o666, undefined, {
       platform: 'win32',
       copyFileDacl: () => Promise.resolve(),
-      replaceFile: async () => { throw missing },
+      replaceFile: async () => {
+        throw missing
+      },
     })
 
     expect(await readFile(file, 'utf8')).toBe('new')
@@ -812,24 +834,39 @@ describe('writeFileAtomic — temp-file safety', () => {
     await writeFile(file, 'old')
     const denied = Object.assign(new Error('replace denied'), { code: 'EACCES' })
 
-    await expect(writeFileAtomic(file, 'new', 0o666, undefined, {
-      platform: 'win32',
-      copyFileDacl: () => Promise.resolve(),
-      replaceFile: async () => { throw denied },
-    })).rejects.toBe(denied)
+    await expect(
+      writeFileAtomic(file, 'new', 0o666, undefined, {
+        platform: 'win32',
+        copyFileDacl: () => Promise.resolve(),
+        replaceFile: async () => {
+          throw denied
+        },
+      }),
+    ).rejects.toBe(denied)
     expect(await readFile(file, 'utf8')).toBe('old')
-    expect((await readdir(dir)).filter(name => name.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((name) => name.includes('.tmp'))).toEqual([])
   })
 
   it('maps a non-collision guarded-create publication failure and cleans staging', async () => {
     const file = join(dir, 'a.txt')
     const denied = Object.assign(new Error('link denied'), { code: 'EACCES' })
 
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      linkFile: async () => { throw denied },
-    }, { displayPath: file })).rejects.toMatchObject({ code: 'FS_IO_ERROR', cause: denied })
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          linkFile: async () => {
+            throw denied
+          },
+        },
+        { displayPath: file },
+      ),
+    ).rejects.toMatchObject({ code: 'FS_IO_ERROR', cause: denied })
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await readdir(dir)).filter(name => name.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((name) => name.includes('.tmp'))).toEqual([])
   })
 
   it('maps a guarded-create target-inspection failure and cleans staging', async () => {
@@ -837,45 +874,91 @@ describe('writeFileAtomic — temp-file safety', () => {
     const linkFailure = Object.assign(new Error('link failed'), { code: 'EIO' })
     const inspectionFailure = Object.assign(new Error('inspection denied'), { code: 'EACCES' })
 
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      linkFile: async () => { throw linkFailure },
-      inspectPublicationTarget: async () => { throw inspectionFailure },
-    }, { displayPath: file })).rejects.toMatchObject({ code: 'FS_IO_ERROR', cause: inspectionFailure })
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          linkFile: async () => {
+            throw linkFailure
+          },
+          inspectPublicationTarget: async () => {
+            throw inspectionFailure
+          },
+        },
+        { displayPath: file },
+      ),
+    ).rejects.toMatchObject({ code: 'FS_IO_ERROR', cause: inspectionFailure })
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await readdir(dir)).filter(name => name.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((name) => name.includes('.tmp'))).toEqual([])
   })
 
   it('rejects a guarded-create collision that vanishes before inspection', async () => {
     const file = join(dir, 'a.txt')
     const collision = Object.assign(new Error('target existed'), { code: 'EEXIST' })
 
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      linkFile: async () => { throw collision },
-    }, { displayPath: file })).rejects.toMatchObject({
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          linkFile: async () => {
+            throw collision
+          },
+        },
+        { displayPath: file },
+      ),
+    ).rejects.toMatchObject({
       code: 'FS_NOT_OBSERVED',
       message: `cannot overwrite existing "${file}" without reading it first`,
       cause: collision,
     })
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await readdir(dir)).filter(name => name.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((name) => name.includes('.tmp'))).toEqual([])
   })
 
   it('uses the display path and target type when guarded publication finds a competitor', async () => {
     const file = join(dir, 'a.txt')
     const displayPath = join(dir, 'linked-workspace', 'a.txt')
 
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      inspectTemp: async () => { await writeFile(file, 'competitor') },
-    }, { displayPath })).rejects.toMatchObject({
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          inspectTemp: async () => {
+            await writeFile(file, 'competitor')
+          },
+        },
+        { displayPath },
+      ),
+    ).rejects.toMatchObject({
       code: 'FS_NOT_OBSERVED',
       message: `cannot overwrite existing "${displayPath}" without reading it first`,
     })
     expect(await readFile(file, 'utf8')).toBe('competitor')
 
     await rm(file)
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      inspectTemp: async () => { await mkdir(file) },
-    }, { displayPath })).rejects.toMatchObject({
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          inspectTemp: async () => {
+            await mkdir(file)
+          },
+        },
+        { displayPath },
+      ),
+    ).rejects.toMatchObject({
       code: 'FS_NOT_REGULAR_FILE',
       message: `cannot write "${displayPath}": not a regular file`,
     })
@@ -886,9 +969,20 @@ describe('writeFileAtomic — temp-file safety', () => {
     const file = join(dir, 'a.txt')
     const cleanupFailure = new Error('staging cleanup failed')
 
-    await expect(writeFileAtomic(file, 'ours', undefined, undefined, {
-      removeStagingDir: async () => { throw cleanupFailure },
-    }, { displayPath: file })).resolves.toBeUndefined()
+    await expect(
+      writeFileAtomic(
+        file,
+        'ours',
+        undefined,
+        undefined,
+        {
+          removeStagingDir: async () => {
+            throw cleanupFailure
+          },
+        },
+        { displayPath: file },
+      ),
+    ).resolves.toBeUndefined()
     expect(await readFile(file, 'utf8')).toBe('ours')
   })
 
@@ -903,9 +997,9 @@ describe('writeFileAtomic — temp-file safety', () => {
     const tempDirName = '.fixed-temp.tmpdir'
     await mkdir(join(dir, tempDirName))
     await writeFile(join(dir, tempDirName, 'PRECIOUS'), 'keep')
-    await expect(
-      writeFileAtomic(file, 'hello', undefined, undefined, { tempDirName: () => tempDirName }),
-    ).rejects.toMatchObject({ code: 'EEXIST' })
+    await expect(writeFileAtomic(file, 'hello', undefined, undefined, { tempDirName: () => tempDirName })).rejects.toMatchObject({
+      code: 'EEXIST',
+    })
     expect(await readFile(join(dir, tempDirName, 'PRECIOUS'), 'utf8')).toBe('keep')
     await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -932,7 +1026,7 @@ describe('writeFileAtomic — temp-file safety', () => {
     const sub = join(dir, 'occupied')
     await mkdir(sub)
     await expect(writeFileAtomic(sub, 'hi', undefined, undefined)).rejects.toBeInstanceOf(Error)
-    expect((await readdir(dir)).filter(n => n.includes('.tmp'))).toEqual([])
+    expect((await readdir(dir)).filter((n) => n.includes('.tmp'))).toEqual([])
   })
 })
 

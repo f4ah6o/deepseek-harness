@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'vite-plus/pack'
 
 /**
  * Node-only host half. The `./shared` subpath (route paths and wire payload
@@ -7,6 +7,9 @@ import { defineConfig } from 'tsdown'
  */
 export default defineConfig([
   {
+    deps: {
+      resolveDepSubpath: true,
+    },
     entry: ['lib/types/index.js'],
     outDir: 'lib',
     format: ['esm'],

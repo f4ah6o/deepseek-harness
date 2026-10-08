@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { createInstalledUpdateRun } from '../scripts/installed-update-qualification.ts'
 import { prepareInstalledUpdateRuntime } from '../scripts/prepare-installed-update-runtime.ts'
 import { verifyDesktopRuntime } from '../src/runtime-tree.ts'
@@ -12,8 +12,11 @@ const source = { version: '0.1.5-rc.2', commit: 'a'.repeat(40), dirtyFiles: [] }
 
 async function fixture<T>(body: (directory: string) => Promise<T>): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-update-materials-'))
-  try { return await body(directory) }
-  finally { await rm(directory, { recursive: true, force: true }) }
+  try {
+    return await body(directory)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 }
 
 describe('installed-update runtime preparation', () => {
@@ -28,8 +31,8 @@ describe('installed-update runtime preparation', () => {
       for (const version of versions) {
         const runtime = join(run.root, version, 'dsh')
         const descriptor = await verifyDesktopRuntime(runtime, version)
-        expect(descriptor.sharedPackages.find(entry => entry.name === '@deepseek-ai/cordis')?.version).toBe(source.version)
-        expect(descriptor.sharedPackages.find(entry => entry.name === '@deepseek-ai/dsh')?.version).toBe(version)
+        expect(descriptor.sharedPackages.find((entry) => entry.name === '@deepseek-ai/cordis')?.version).toBe(source.version)
+        expect(descriptor.sharedPackages.find((entry) => entry.name === '@deepseek-ai/dsh')?.version).toBe(version)
         const metadata = JSON.parse(await readFile(join(runtime, 'node_modules/@deepseek-ai/dsh/package.json'), 'utf8')) as {
           dependencies: Record<string, string>
         }
@@ -52,8 +55,11 @@ describe('installed-update runtime preparation', () => {
       await expect(prepareInstalledUpdateRuntime(join(run.root, 'run.json'), original)).rejects.toMatchObject({ code: 'EEXIST' })
       const files = await readdir(join(run.root, 'runtime-preparation'))
       expect(files.sort()).toEqual(['failed.json', 'source.json', 'started.json'])
-      expect(JSON.parse(await readFile(join(run.root, 'runtime-preparation/failed.json'), 'utf8')))
-        .toMatchObject({ failed: true, completedVersions: 1, retryAllowed: false })
+      expect(JSON.parse(await readFile(join(run.root, 'runtime-preparation/failed.json'), 'utf8'))).toMatchObject({
+        failed: true,
+        completedVersions: 1,
+        retryAllowed: false,
+      })
       expect(await readFile(join(run.root, versions[1], 'owner.txt'), 'utf8')).toBe('do not overwrite')
     })
   })
@@ -66,8 +72,10 @@ describe('installed-update runtime preparation', () => {
       const run = await createInstalledUpdateRun(join(directory, 'runs'), versions, source)
       await expect(prepareInstalledUpdateRuntime(join(run.root, 'run.json'), original)).rejects.toThrow('integrity')
       expect((await readdir(run.root)).sort()).toEqual(['run.json', 'runtime-preparation'])
-      expect(JSON.parse(await readFile(join(run.root, 'runtime-preparation/failed.json'), 'utf8')))
-        .toMatchObject({ failed: true, completedVersions: 0 })
+      expect(JSON.parse(await readFile(join(run.root, 'runtime-preparation/failed.json'), 'utf8'))).toMatchObject({
+        failed: true,
+        completedVersions: 0,
+      })
     })
   })
 })
