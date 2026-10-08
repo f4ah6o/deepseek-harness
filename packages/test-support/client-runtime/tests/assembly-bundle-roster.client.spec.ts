@@ -98,6 +98,28 @@ describe('bundleRoster on a scratch installation', () => {
     expect(linked.roster(['@t/base', '@t/linked'])).toEqual(['@t/theme'])
   })
 
+  it('uses an anchor package manifest for its own bundle and client row before dependency lookup', () => {
+    const self = new Scratch()
+    onTestFinished(() => {
+      rmSync(self.root, { recursive: true, force: true })
+    })
+    writeFileSync(
+      self.anchor,
+      JSON.stringify({
+        name: '@t/self',
+        dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } },
+      }),
+    )
+    writeFileSync(join(self.root, 'app', 'cordis.patch.yml'), "- insert:\n    - id: self\n      name: '@t/self'\n")
+    self.pkg(
+      '@t/self',
+      { dsh: { bundle: { patch: './wrong.patch.yml' }, client: { platform: 'node' } } },
+      { 'wrong.patch.yml': '- insert: []\n' },
+    )
+
+    expect(bundleRoster(['@t/self'], self.anchor).rows).toEqual([{ name: '@t/self', inject: [], immediately: false }])
+  })
+
   it('applies the layers in order and keeps enabled browser rows once, with their dsh.client declaration', () => {
     scratch.web('@t/a', { inject: ['@t/b'], immediately: true })
     scratch.web('@t/b')

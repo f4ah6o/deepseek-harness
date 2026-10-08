@@ -15,7 +15,7 @@
  */
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -40,7 +40,7 @@ interface BundleLayer {
 /**
  * Compose the browser roster of `bundles`, applied in order.
  * @param bundles - bundle package names in application order.
- * @param anchor - file whose package resolution locates the bundles; default this package.
+ * @param anchor - file whose package can satisfy a request through its own manifest or dependency roots; default this package.
  * @param disabledContext - optional Loader evaluation scope for trusted `disabled` expressions.
  * @returns the roster in composition order, one row per package.
  * @throws {Error} when a bundle, its patch file, or an enabled row's package does not resolve, when the patch list
@@ -51,18 +51,22 @@ export function bundleRoster(
   anchor: string = fileURLToPath(import.meta.url),
   disabledContext?: object,
 ): ClientRoster {
-  const layers = bundles.map(name => readLayer(name, anchor))
-  const entries = applyEntryPatches([], layers.flatMap(layer => layer.patches), (message: string, ...args: unknown[]) => {
-    throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
-  })
-  const anchors = layers.map(layer => layer.manifestPath)
+  const layers = bundles.map((name) => readLayer(name, anchor))
+  const entries = applyEntryPatches(
+    [],
+    layers.flatMap((layer) => layer.patches),
+    (message: string, ...args: unknown[]) => {
+      throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
+    },
+  )
+  const anchors = layers.map((layer) => layer.manifestPath)
   const rows: ClientRosterRow[] = []
   const seen = new Set<string>()
   for (const { entry, disabled } of flattenGroups(entries)) {
     const name = exactPackageSpecifier(entry.name)
     if (name === undefined || disabled.includes(true) || seen.has(name)) continue
-    if (disabledContext !== undefined
-      && disabled.some(value => isJsExpr(value) && Boolean(evaluate(disabledContext, value.__jsExpr)))) continue
+    if (disabledContext !== undefined && disabled.some((value) => isJsExpr(value) && Boolean(evaluate(disabledContext, value.__jsExpr))))
+      continue
     seen.add(name)
     const manifestPath = locateManifest(anchors, name)
     if (manifestPath === undefined) {
@@ -74,8 +78,12 @@ export function bundleRoster(
     }
     const declaration = parseDshClient(name, manifest.dsh?.client)
     if (declaration === undefined || declaration.platform !== 'web') continue
-    if (disabled.some(value => value !== undefined && value !== null && typeof value !== 'boolean'
-      && !(disabledContext !== undefined && isJsExpr(value)))) {
+    if (
+      disabled.some(
+        (value) =>
+          value !== undefined && value !== null && typeof value !== 'boolean' && !(disabledContext !== undefined && isJsExpr(value)),
+      )
+    ) {
       throw new Error(`client-test-runtime: browser row ${name} has a \`disabled\` value this reader cannot evaluate (a !!js expression)`)
     }
     rows.push({ name, inject: declaration.inject ?? [], immediately: declaration.immediately === true })
@@ -88,7 +96,7 @@ function readLayer(bundle: string, anchor: string): BundleLayer {
   if (manifestPath === undefined) throw new Error(`client-test-runtime: cannot resolve bundle ${bundle} from ${anchor}`)
   const declared = readManifest(manifestPath).dsh?.bundle?.patch
   const files = typeof declared === 'string' ? [declared] : declared
-  if (!Array.isArray(files) || !files.every(file => typeof file === 'string')) {
+  if (!Array.isArray(files) || !files.every((file) => typeof file === 'string')) {
     throw new Error(`client-test-runtime: bundle ${bundle} declares no dsh.bundle.patch file list in ${manifestPath}`)
   }
   const patches = files.flatMap((patch) => {
@@ -130,10 +138,15 @@ function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
 }
 
-/** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+/** Use a same-name anchor manifest before searching package dependencies across anchors by resolution depth. */
 function locateManifest(anchors: readonly string[], name: string): string | undefined {
-  const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
-  for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+  for (const anchor of anchors) {
+    const manifestPath = anchorPackageManifest(anchor)
+    if (manifestPath !== undefined && readManifest(manifestPath).name === name) return realpathSync(manifestPath)
+  }
+
+  const paths = anchors.map((anchor) => createRequire(anchor).resolve.paths(name) ?? [])
+  for (let depth = 0; depth < Math.max(...paths.map((search) => search.length)); depth++) {
     for (const search of paths) {
       const directory = search[depth]
       if (directory === undefined) continue
@@ -142,6 +155,19 @@ function locateManifest(anchors: readonly string[], name: string): string | unde
     }
   }
   return undefined
+}
+
+/** Find the nearest package manifest that owns an anchor file. */
+function anchorPackageManifest(anchor: string): string | undefined {
+  if (basename(anchor) === 'package.json') return anchor
+  let directory = dirname(anchor)
+  while (true) {
+    const manifestPath = join(directory, 'package.json')
+    if (existsSync(manifestPath)) return manifestPath
+    const parent = dirname(directory)
+    if (parent === directory) return undefined
+    directory = parent
+  }
 }
 
 /** The include plugin's `%C` placeholders, filled the way the launcher prints them. */
