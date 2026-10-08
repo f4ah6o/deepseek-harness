@@ -2575,7 +2575,7 @@ export interface JsonRpcConfig {
 ```ts config-catalog
 /** Session-log request contribution configuration. */
 export interface Config {
-  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `true`. */
+  /** Contribute `dsh_session_log` to official DeepSeek requests. Defaults to `false`. */
   enabled: Volatile<boolean>
   /**
    * Largest serialized `dsh_session_log` field, in UTF-8 bytes, that one request carries.

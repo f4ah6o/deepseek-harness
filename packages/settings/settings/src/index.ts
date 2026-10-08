@@ -3,11 +3,12 @@ import { existsSync } from 'node:fs'
 import { readFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'yaml'
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { Context, FiberState, Service, resolveConfig, type Fiber } from '@deepseek-ai/cordis'
 import type z from '@deepseek-ai/schemastery'
 import { interpolate, type Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-config-editor'
-import type {} from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
 import { redactSecrets, type RedactedSecret } from './redact.ts'
 import { isVolatilePath, plainConfig, projectForm, volatileForm } from './schema.ts'
 import type { SettingsNamespace } from './types.ts'
@@ -241,10 +242,13 @@ export class SettingsForms extends Service {
   private async importLegacyDocument(): Promise<void> {
     const profile = this.ownerContext.profileContext
     const path = join(profile.home, 'settings.yaml')
-    if (!existsSync(path)) return
     const imported = `${path}.imported`
-    await rename(path, imported)
-    const sections = parse(await readFile(imported, 'utf8')) as Record<string, object> | null
+    const sections = await withFileLock(join(profile.home, PROFILE_PATCH_FILENAME), async () => {
+      if (!existsSync(path)) return undefined
+      await rename(path, imported)
+      return parse(await readFile(imported, 'utf8')) as Record<string, object> | null
+    })
+    if (sections === undefined) return
     for (const [section, values] of Object.entries(sections ?? {})) {
       const ns = LEGACY_SECTION_ENTRIES[section] ?? section
       try {
