@@ -97,18 +97,79 @@ describe('unknown assertion syntax', () => {
     expect(casts[0]?.fingerprint).toMatch(/^[a-f0-9]{64}$/u)
   })
 
-  it('keeps syntax fingerprints through whitespace and comment edits', () => {
+  it('keeps structural fingerprints through whitespace, comments, and formatter-only syntax', () => {
     const original = findUnknownCasts('input.ts', 'call(value, "text") as unknown')
     const formatted = findUnknownCasts('input.ts', '\ncall /* call */ (value,\n "text") as /* type */ unknown')
     expect(formatted.map((cast) => cast.fingerprint)).toEqual(original.map((cast) => cast.fingerprint))
+    const documented = findUnknownCasts('input.ts', 'call(/** @type {number} */ value, "text") as unknown')
+    expect(documented.map((cast) => cast.fingerprint)).toEqual(original.map((cast) => cast.fingerprint))
+    const beforeFormat = findUnknownCasts('input.ts', 'call(value => value) as unknown')
+    const afterFormat = findUnknownCasts('input.ts', 'call((value) => value,) as unknown')
+    expect(afterFormat.map((cast) => cast.fingerprint)).toEqual(beforeFormat.map((cast) => cast.fingerprint))
+    const beforeParenthesizing = findUnknownCasts('input.ts', 'const result = await import("module") as unknown')
+    const afterParenthesizing = findUnknownCasts('input.ts', 'const result = (await import("module")) as unknown')
+    expect(afterParenthesizing.map((cast) => cast.fingerprint)).toEqual(beforeParenthesizing.map((cast) => cast.fingerprint))
+    const beforeObjectParens = findUnknownCasts('input.ts', 'const result = { value } as unknown')
+    const afterObjectParens = findUnknownCasts('input.ts', 'const result = ({ value }) as unknown')
+    expect(afterObjectParens.map((cast) => cast.fingerprint)).toEqual(beforeObjectParens.map((cast) => cast.fingerprint))
+    const beforeTernaryParens = findUnknownCasts('input.ts', 'const result = { value: enabled ? value : undefined } as unknown')
+    const afterTernaryParens = findUnknownCasts('input.ts', 'const result = { value: (enabled ? value : undefined) } as unknown')
+    expect(afterTernaryParens.map((cast) => cast.fingerprint)).toEqual(beforeTernaryParens.map((cast) => cast.fingerprint))
+    const trailingListComma = findUnknownCasts('input.ts', 'call(value,) as unknown')
+    const plainList = findUnknownCasts('input.ts', 'call(value) as unknown')
+    expect(trailingListComma.map((cast) => cast.fingerprint)).toEqual(plainList.map((cast) => cast.fingerprint))
+    expect(findUnknownCasts('input.ts', 'call(((value))) as unknown').map((cast) => cast.fingerprint)).toEqual(
+      plainList.map((cast) => cast.fingerprint),
+    )
+    expect(findUnknownCasts('input.ts', 'call(value as (unknown))').map((cast) => cast.fingerprint)).toEqual(
+      findUnknownCasts('input.ts', 'call(value as unknown)').map((cast) => cast.fingerprint),
+    )
     expect(findUnknownCasts('input.ts', 'call(value, "other") as unknown').map((cast) => cast.fingerprint)).not.toEqual(
       original.map((cast) => cast.fingerprint),
+    )
+    expect(findUnknownCasts('input.ts', "call(value, 'text') as unknown").map((cast) => cast.fingerprint)).toEqual(
+      original.map((cast) => cast.fingerprint),
+    )
+    const numericOriginal = findUnknownCasts('input.ts', 'call(0xFFFFFFFF) as unknown')
+    const numericFormatted = findUnknownCasts('input.ts', 'call(0xffffffff,) as unknown')
+    expect(numericFormatted.map((cast) => cast.fingerprint)).toEqual(numericOriginal.map((cast) => cast.fingerprint))
+    expect(findUnknownCasts('input.ts', 'call(0xfffffffe) as unknown').map((cast) => cast.fingerprint)).not.toEqual(
+      numericOriginal.map((cast) => cast.fingerprint),
+    )
+    expect(findUnknownCasts('input.ts', 'call(1e400) as unknown').map((cast) => cast.fingerprint)).not.toEqual(
+      findUnknownCasts('input.ts', 'call(Infinity) as unknown').map((cast) => cast.fingerprint),
+    )
+    expect(findUnknownCasts('input.ts', 'call(1e401) as unknown').map((cast) => cast.fingerprint)).toEqual(
+      findUnknownCasts('input.ts', 'call(1e400) as unknown').map((cast) => cast.fingerprint),
+    )
+  })
+
+  it('preserves use-strict directive semantics while normalizing string values', () => {
+    const direct = findUnknownCasts('input.ts', "const fn = function () { 'use strict'; return this } as unknown")
+    const otherQuote = findUnknownCasts('input.ts', 'const fn = function () { "use strict"; return this } as unknown')
+    const parenthesized = findUnknownCasts('input.ts', "const fn = function () { ('use strict'); return this } as unknown")
+    const escaped = findUnknownCasts('input.ts', "const fn = function () { 'use\\u0020strict'; return this } as unknown")
+
+    expect(otherQuote.map((cast) => cast.fingerprint)).toEqual(direct.map((cast) => cast.fingerprint))
+    expect(parenthesized.map((cast) => cast.fingerprint)).not.toEqual(direct.map((cast) => cast.fingerprint))
+    expect(escaped.map((cast) => cast.fingerprint)).not.toEqual(direct.map((cast) => cast.fingerprint))
+  })
+
+  it.each([
+    ['comma expression versus arguments', 'call(value, other) as unknown', 'call((value, other)) as unknown'],
+    ['grouped expression', '(value + other) as unknown', 'value + (other as unknown)'],
+    ['optional chaining', 'value?.item as unknown', 'value.item as unknown'],
+    ['optional-chain termination', '(object?.field).next as unknown', 'object?.field.next as unknown'],
+    ['sparse array', '[value,,] as unknown', '[value] as unknown'],
+  ])('preserves semantic syntax in the %s fingerprint', (_name, original, changed) => {
+    expect(findUnknownCasts('input.ts', changed).map((cast) => cast.fingerprint)).not.toEqual(
+      findUnknownCasts('input.ts', original).map((cast) => cast.fingerprint),
     )
   })
 
   it.each([
-    ['value as unknown', '6fe9024d30e0d4757a348b83d246925b3f5aeaf2e79a0eff4bf12f3c9fb5826b'],
-    ['call() as unknown', '49f7ac9934e1a7fc08876cdf6f900bd05c74d7d25801b6ec2d4eed02c3221f8d'],
+    ['value as unknown', 'b5bc89bee2416893106ded67f284d8e7d941528eb1338e8758a1df3f7a516bb0'],
+    ['call() as unknown', '441909f0697df07183b394c913cebfb92fe9826e1152aa64d70be298962e353b'],
   ])('preserves the recorded fingerprint for %s', (text, fingerprint) => {
     expect(findUnknownCasts('input.ts', text)[0]?.fingerprint).toBe(fingerprint)
   })

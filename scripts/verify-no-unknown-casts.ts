@@ -18,19 +18,69 @@ export interface UnknownCast {
   file: string
   /** One-based source line. */
   line: number
-  /** SHA-256 of the assertion's syntax tokens, excluding comments and whitespace. */
+  /** SHA-256 of the ordered TypeScript AST after syntax-only formatting normalization. */
   fingerprint: string
 }
 
-function syntaxFingerprint(node: ts.Node, source: ts.SourceFile): string {
-  const tokens: string[] = []
-  const visit = (child: ts.Node): void => {
-    if (ts.isJSDoc(child)) return
-    if (ts.isToken(child)) tokens.push(child.getText(source))
-    else child.getChildren(source).forEach(visit)
+function isStrictDirective(statement: ts.ExpressionStatement, source: ts.SourceFile): boolean {
+  const parent = statement.parent
+  const statements =
+    ts.isSourceFile(parent) || (ts.isBlock(parent) && ts.isFunctionLike(parent.parent) && parent.parent.body === parent)
+      ? parent.statements
+      : undefined
+  if (statements === undefined) return false
+
+  for (const candidate of statements) {
+    if (candidate === statement) {
+      const expression = statement.expression
+      if (!ts.isStringLiteral(expression) || expression.text !== 'use strict') return false
+      const raw = expression.getText(source)
+      return !raw.slice(1, -1).includes('\\')
+    }
+    if (!ts.isExpressionStatement(candidate) || !ts.isStringLiteral(candidate.expression)) return false
   }
-  visit(node)
-  return createHash('sha256').update(JSON.stringify(tokens)).digest('hex')
+  return false
+}
+
+function numericLiteralValue(node: ts.NumericLiteral): string {
+  const value = Number(node.text)
+  if (Number.isNaN(value)) return `unparsed:${node.text}`
+  if (value === Number.POSITIVE_INFINITY) return 'positive-infinity'
+  if (value === Number.NEGATIVE_INFINITY) return 'negative-infinity'
+  return String(value)
+}
+
+function structuralSyntax(node: ts.Node, source: ts.SourceFile): unknown {
+  if (ts.isJSDoc(node)) return undefined
+  if (ts.isParenthesizedExpression(node)) return structuralSyntax(node.expression, source)
+  if (ts.isParenthesizedTypeNode(node)) return structuralSyntax(node.type, source)
+  if (ts.isIdentifier(node)) return ['name', node.text]
+  if (ts.isStringLiteral(node)) return ['literal', ts.SyntaxKind[node.kind], node.text]
+  if (ts.isNoSubstitutionTemplateLiteral(node)) return ['literal', ts.SyntaxKind[node.kind], node.getText(source)]
+  if (ts.isNumericLiteral(node)) return ['literal', ts.SyntaxKind[node.kind], numericLiteralValue(node)]
+  if (ts.isBigIntLiteral(node)) return ['literal', ts.SyntaxKind[node.kind], BigInt(node.text.slice(0, -1)).toString()]
+  if (ts.isToken(node)) return ['token', ts.SyntaxKind[node.kind], node.getText(source)]
+
+  const children: unknown[] = []
+  ts.forEachChild(
+    node,
+    (child) => {
+      if (!ts.isJSDoc(child)) children.push(structuralSyntax(child, source))
+      return undefined
+    },
+    (nodes) => {
+      children.push({ nodeArray: nodes.filter((child) => !ts.isJSDoc(child)).map((child) => structuralSyntax(child, source)) })
+      return undefined
+    },
+  )
+  const strictDirective = ts.isExpressionStatement(node) && isStrictDirective(node, source)
+  return ['node', ts.SyntaxKind[node.kind], (node.flags & ts.NodeFlags.OptionalChain) !== 0, strictDirective, children]
+}
+
+function syntaxFingerprint(node: ts.Node, source: ts.SourceFile): string {
+  return createHash('sha256')
+    .update(JSON.stringify(structuralSyntax(node, source)))
+    .digest('hex')
 }
 
 function assertsUnknown(type: ts.TypeNode): boolean {
