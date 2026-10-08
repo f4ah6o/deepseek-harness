@@ -98,6 +98,7 @@ class RecordingFileSystem extends FileSystem {
   omitSizes = new Set<string>()
   readTargets: string[] = []
   readTextTargets: string[] = []
+  statTargets: string[] = []
   signals: AbortSignal[] = []
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
@@ -128,6 +129,7 @@ class RecordingFileSystem extends FileSystem {
   override async stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined> {
     if (signal !== undefined) this.signals.push(signal)
     signal?.throwIfAborted()
+    this.statTargets.push(target.displayPath)
     if (this.throwOnStat.has(target.targetKey)) throw new Error(`stat failed: ${target.displayPath}`)
     const entry = this.entries.get(target.targetKey)
     if (entry === undefined) return undefined
@@ -650,6 +652,8 @@ describe('workspace context instruction discovery', () => {
   it('defaults dshHome and uses cwd itself as root when no project marker exists', async () => {
     const root = await tempRepo()
     const emptyHome = await tempRepo()
+    const cwd = join(root, 'child')
+    const ctx = new Context()
     // Isolate the default-home fallback: blank DSH_HOME is treated as unset, and
     // the home dirs point at an empty dir so the default ~/.dsh holds no global
     // scope. Windows homedir() reads USERPROFILE (not HOME), so both must be
@@ -658,16 +662,27 @@ describe('workspace context instruction discovery', () => {
     vi.stubEnv('HOME', emptyHome)
     if (process.platform === 'win32') vi.stubEnv('USERPROFILE', emptyHome)
     try {
-      const cwd = join(root, 'child')
-      await mkdir(cwd, { recursive: true })
-      await write(join(root, 'AGENTS.md'), 'parent without marker')
-      await write(join(cwd, 'AGENTS.md'), 'cwd without marker')
+      await ctx.plugin(RecordingFileSystem)
+      const fs = ctx.fs as RecordingFileSystem
+      fs.entries.set(join(root, 'AGENTS.md'), { type: 'file', content: 'parent without marker' })
+      fs.entries.set(join(cwd, 'AGENTS.md'), { type: 'file', content: 'cwd without marker' })
+      for (let current = cwd; ;) {
+        // Provider-owned missing probes keep host markers such as /tmp/.git out of this fixture.
+        fs.missingOnResolve.add(join(current, '.git'))
+        const parent = dirname(current)
+        if (parent === current) break
+        current = parent
+      }
+      await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
+      const agent = await stubAgent(cwd)
 
-      const files = await discoverBaselineInstructionFiles({ cwd, projectRootMarkers: [] })
+      await composeBaselinePrefix(ctx, agent)
 
-      expect(files.map((file) => file.displayPath)).toEqual(['AGENTS.md'])
-      expect(files.map((file) => file.absolutePath)).toEqual([join(cwd, 'AGENTS.md')])
+      expect(derivedText(agent)).toContain('cwd without marker')
+      expect(derivedText(agent)).not.toContain('parent without marker')
+      expect(fs.statTargets).toContain(join(emptyHome, '.dsh/AGENTS.md'))
     } finally {
+      await ctx.fiber.dispose()
       vi.unstubAllEnvs()
       await rm(root, { recursive: true, force: true })
       await rm(emptyHome, { recursive: true, force: true })
