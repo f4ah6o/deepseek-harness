@@ -12,7 +12,7 @@ import {
   captureStableAria, compareOrRefreshGolden, launchWebScaffold, readPersistedEvents, seedSession,
   watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { saveFailureShot } from './support.ts'
 
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
 const OVERLAY = fileURLToPath(new URL('./workspace-git-context.overlay.yml', import.meta.url))
@@ -20,7 +20,11 @@ const EXPECTED = fileURLToPath(new URL('./expected/workspace-git-context/ui.expe
 const MODE = webSnapshotMode()
 const PROJECT_SESSION = 'workspace-git-context-project'
 const OTHER_SESSION = 'workspace-git-context-other'
-const PROJECT_TITLE = 'Project Atlas'
+const PROJECT_TITLE = '長い日本語プロジェクト名を狭い画面で確認するテスト用ワークスペース'
+const PROVIDER_TITLE = '長い日本語プロバイダー名を狭い画面で確認するテスト用表示名'
+const MODEL_TITLE = '長い日本語モデル名を狭い画面で確認するテスト用モデル'
+const BRANCH_NAME = 'feature/長い日本語ブランチ名の表示を狭い画面で確認する'
+const REPOSITORY_NAME = 'long-project-name-for-narrow-viewport-git-context-display'
 
 /** Return a subprocess handle whose owner can observe and release cancellation. */
 function waitForAbort(
@@ -50,10 +54,10 @@ function waitForAbort(
 /** Create a committed local checkout with a credential-bearing GitHub origin. */
 async function initializeRepository(cwd: string): Promise<void> {
   const git = (...args: string[]): void => { execFileSync('git', args, { cwd, stdio: 'ignore' }) }
-  git('init', '-b', 'develop')
+  git('init', '-b', BRANCH_NAME)
   git('config', 'user.name', 'Web Context Fixture')
   git('config', 'user.email', 'web-context@example.invalid')
-  git('remote', 'add', 'origin', 'https://fixture-secret@github.com/shiguredo/zakuro-rs.git')
+  git('remote', 'add', 'origin', `https://fixture-secret@github.com/shiguredo/${REPOSITORY_NAME}.git`)
   await writeFile(join(cwd, 'README.md'), 'fixture\n')
   git('add', 'README.md')
   git('commit', '-m', 'fixture')
@@ -68,15 +72,14 @@ describe('web e2e: Session project, model provider, and Git context', () => {
   let otherCwd = ''
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY })
-    await scaffold.ctx.settings.update('locale', { preference: 'en' })
+    scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY, locale: null })
     await scaffold.ctx.settings.update('llm-pi-ai', {
       providers: {
         'fork-gateway': {
-          displayName: 'Fork Provider',
+          displayName: PROVIDER_TITLE,
           api: 'openai-completions',
           baseURL: 'https://gateway.fixture.invalid/v1',
-          models: [{ id: 'fork-model', name: 'Fork Model' }],
+          models: [{ id: 'fork-model', name: MODEL_TITLE }],
         },
       },
     })
@@ -99,7 +102,9 @@ describe('web e2e: Session project, model provider, and Git context', () => {
     await workspace.attachSession(projectSessionId)
 
     browser = await chromium.launch()
-    page = await newEnglishPage(browser)
+    page = await browser.newPage({
+      viewport: { width: 1680, height: 1000 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo',
+    })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     try {
@@ -121,8 +126,9 @@ describe('web e2e: Session project, model provider, and Git context', () => {
 
   it('renders the project, provider, and sanitized branch, then cancels a generated Remote on Session switch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-workspace-git-context'))
-    await page.getByRole('button', { name: 'View options' }).click()
-    await page.getByRole('menuitem', { name: 'In one list' }).click()
+    await expect.poll(() => page.locator('html').getAttribute('lang')).toBe('ja')
+    await page.getByRole('button', { name: '表示オプション' }).click()
+    await page.getByRole('menuitem', { name: '単一リスト' }).click()
 
     const projectRow = page.locator(`[data-row-key="session:${PROJECT_SESSION}"]`)
     const otherRow = page.locator(`[data-row-key="session:${OTHER_SESSION}"]`)
@@ -130,25 +136,38 @@ describe('web e2e: Session project, model provider, and Git context', () => {
     await otherRow.waitFor({ timeout: 15_000 })
     await expect.poll(() => projectRow.getByText(PROJECT_TITLE, { exact: true }).isVisible()).toBe(true)
     const rowText = await projectRow.innerText()
-    expect(rowText.indexOf(PROJECT_TITLE)).toBeLessThan(rowText.indexOf('Untitled'))
+    expect(rowText.indexOf(PROJECT_TITLE)).toBeLessThan(rowText.indexOf('無題'))
 
     await projectRow.click()
     const branchChip = page.locator('[data-composer-stat="git-branch"]')
     await expect.poll(() => branchChip.getAttribute('aria-label'), { timeout: 15_000 })
-      .toBe('Git branch: shiguredo/zakuro-rs:develop')
-    const modelTrigger = page.getByRole('button', { name: /^Select model/ })
+      .toBe(`ブランチ shiguredo/${REPOSITORY_NAME}:${BRANCH_NAME}`)
+    const modelTrigger = page.locator('[data-composer-card] button[aria-haspopup="menu"]')
     await expect.poll(() => modelTrigger.isVisible()).toBe(true)
-    await modelTrigger.click()
-    await page.getByRole('menuitem', { name: /^Model/ }).click()
-    const forkModel = page.getByRole('menuitemradio', { name: 'Fork Model', exact: true })
+    await modelTrigger.press('Enter')
+    const modelRow = page.getByRole('menuitem', { name: /^モデル/ })
+    await expect.poll(() => modelRow.count()).toBe(1)
+    await modelTrigger.press('Tab')
+    await expect.poll(() => modelRow.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Enter')
+    const forkModel = page.getByRole('menuitemradio', { name: MODEL_TITLE, exact: true })
     await expect.poll(() => forkModel.count()).toBe(1)
-    await forkModel.click()
-    const selectedModelTrigger = page.getByRole('button', { name: /Fork Provider.*Fork Model/ })
-    await expect.poll(() => selectedModelTrigger.count()).toBe(1)
-    await selectedModelTrigger.click()
-    await page.getByRole('menuitem', { name: /^Model/ }).click()
-    const modelMenu = page.getByRole('group', { name: 'Model and reasoning effort', exact: true })
-    await expect.poll(() => modelMenu.locator('[class*="providerValue"]').innerText()).toBe('Fork Provider')
+    const modelCount = await page.getByRole('menuitemradio').count()
+    for (let step = 0; step < modelCount; step++) {
+      if (await forkModel.evaluate(element => element === document.activeElement)) break
+      await page.keyboard.press('ArrowDown')
+    }
+    await expect.poll(() => forkModel.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Enter')
+    await expect.poll(() => modelTrigger.getAttribute('aria-label'))
+      .toBe(`モデルを選択、現在 ${PROVIDER_TITLE} · ${MODEL_TITLE}`)
+    await modelTrigger.press('Enter')
+    await expect.poll(() => modelRow.isVisible()).toBe(true)
+    await modelTrigger.press('Tab')
+    await expect.poll(() => modelRow.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Enter')
+    const modelMenu = page.getByRole('group', { name: 'モデルと推論レベル', exact: true })
+    await expect.poll(() => modelMenu.locator('[class*="providerValue"]').innerText()).toBe(PROVIDER_TITLE)
 
     await expect.poll(async () => (await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION)))
       .some(event => event.type === 'model/selection'
@@ -156,7 +175,7 @@ describe('web e2e: Session project, model provider, and Git context', () => {
     const beforeEvents = await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION))
     const expected = [
       '## Session list',
-      await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd, { normalizeAge: true }),
+      await captureStableAria(page, '[role="tree"][aria-label="セッション"]', scaffold.workspaceCwd, { normalizeAge: true }),
       '## Composer',
       await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd, { normalizeAge: true }),
       '## Model selector',
@@ -167,6 +186,56 @@ describe('web e2e: Session project, model provider, and Git context', () => {
       .toBe(JSON.stringify(beforeEvents))
 
     await page.keyboard.press('Escape')
+    await page.setViewportSize({ width: 900, height: 800 })
+    const narrowLabels = await Promise.all([
+      projectRow.locator('[class*="workspace"]').evaluate(element => ({
+        text: element.textContent,
+        width: element.clientWidth,
+        contentWidth: element.scrollWidth,
+      })),
+      modelTrigger.evaluate((element) => {
+        const provider = element.querySelector<HTMLElement>('[class*="triggerProvider"]')
+        const model = element.querySelector<HTMLElement>('[class*="triggerLabel"]')
+        return {
+          right: element.getBoundingClientRect().right,
+          width: element.clientWidth,
+          contentWidth: element.scrollWidth,
+          providerWidth: provider?.clientWidth ?? 0,
+          providerContentWidth: provider?.scrollWidth ?? 0,
+          modelWidth: model?.clientWidth ?? 0,
+          modelContentWidth: model?.scrollWidth ?? 0,
+          accessibleName: element.getAttribute('aria-label'),
+        }
+      }),
+      branchChip.evaluate((element) => {
+        const label = element.querySelector<HTMLElement>('[class*="label"]')
+        return {
+          right: element.getBoundingClientRect().right,
+          width: element.clientWidth,
+          contentWidth: element.scrollWidth,
+          labelWidth: label?.clientWidth ?? 0,
+          labelContentWidth: label?.scrollWidth ?? 0,
+          accessibleName: element.getAttribute('aria-label'),
+        }
+      }),
+      page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      })),
+    ])
+    expect(narrowLabels[0].text).toBe(PROJECT_TITLE)
+    expect(narrowLabels[0].contentWidth).toBeGreaterThan(narrowLabels[0].width)
+    expect(narrowLabels[1].right).toBeLessThanOrEqual(900)
+    expect(narrowLabels[1].contentWidth).toBeLessThanOrEqual(narrowLabels[1].width)
+    expect(narrowLabels[1].providerContentWidth).toBeGreaterThan(narrowLabels[1].providerWidth)
+    expect(narrowLabels[1].modelContentWidth).toBeGreaterThan(narrowLabels[1].modelWidth)
+    expect(narrowLabels[1].accessibleName).toContain(`${PROVIDER_TITLE} · ${MODEL_TITLE}`)
+    expect(narrowLabels[2].right).toBeLessThanOrEqual(900)
+    expect(narrowLabels[2].contentWidth).toBeLessThanOrEqual(narrowLabels[2].width)
+    expect(narrowLabels[2].labelContentWidth).toBeGreaterThan(narrowLabels[2].labelWidth)
+    expect(narrowLabels[2].accessibleName).toContain(BRANCH_NAME)
+    expect(narrowLabels[3].documentWidth).toBeLessThanOrEqual(narrowLabels[3].viewportWidth)
+
     const started = Promise.withResolvers<AbortSignal>()
     const cancellation = Promise.withResolvers<undefined>()
     const subprocess = scaffold.ctx.subprocess
