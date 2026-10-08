@@ -3,8 +3,15 @@ import type { LocaleDictOf } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: loads the `schedule.catalog` key union declared by @deepseek-ai/dsh-client-ui-schedule.
 import type {} from '@deepseek-ai/dsh-client-ui-schedule/client'
 
-/** Shared Japanese frequency and interval labels, typed against the catalog key union. */
-export const sharedScheduleJa: Partial<LocaleDictOf<'schedule.catalog'>> = {
+type SharedScheduleKey = Extract<
+  Extract<keyof LocaleDictOf<'schedule.catalog'>, keyof LocaleDictOf<'schedule.manager'>>,
+  `cron.${string}` | `frequency.${string}` | `relative.${string}` | `time.${string}` | `unit.${string}`
+>
+type SharedScheduleDictionary = Pick<LocaleDictOf<'schedule.catalog'>, SharedScheduleKey> &
+  Pick<LocaleDictOf<'schedule.manager'>, SharedScheduleKey>
+
+/** Required Japanese frequency and interval labels shared by both schedule dictionaries. */
+export const sharedScheduleJa: SharedScheduleDictionary = {
   'frequency.once': '1 回',
   'frequency.every': '{value}{unit}ごと',
   'time.locale': 'ja-JP',
