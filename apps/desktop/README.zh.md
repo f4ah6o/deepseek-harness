@@ -110,7 +110,7 @@ Electron 拥有 `$DSH_HOME/profiles/desktop`。其 `dependencies` 包含 pnpm �
 
 升级文案完整展示版本号（包括预发布后缀），不额外添加 v 或 V。无可用更新时，弹窗标题显示检查结果，正文显示当前版本。
 
-Electron 根据应用语言选择类型化的英文、中文或日文 shell 文案。没有已保存语言时，Desktop 默认使用日文，不受系统语言影响；已保存的英文或中文偏好仍然优先。macOS 应用包通过 `CFBundleLocalizations` 声明支持英语、简体中文和日语。在 Windows 上，主文档的语言会更新桌面菜单、恢复与更新提示。仓库 Client UI i18n 检查覆盖桌面端源码。
+Electron 根据应用语言选择类型化的英文、中文或日文 shell 文案。没有已保存语言时，Desktop 默认使用日文，不受系统语言影响；已保存的英文或中文偏好仍然优先。强制更新与策略认证窗口、更新通知均使用解析后的 shell 语言；启动时会等待读取 Host profile 偏好后再显示策略认证提示。macOS 应用包通过 `CFBundleLocalizations` 声明支持英语、简体中文和日语。在 Windows 上，主文档的语言会更新桌面菜单、恢复与更新提示。仓库 Client UI i18n 检查覆盖桌面端源码。
 
 Windows 和 macOS 会在原生全屏切换及每次页面加载后向渲染器同步全屏状态，让浮层调整顶栏避让距离。
 

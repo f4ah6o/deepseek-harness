@@ -9,10 +9,10 @@ export class DesktopUpdateAttention {
   private stop: (() => void) | undefined
 
   /**
-   * @param locale - Shell-owned notification copy.
+   * @param locale - Returns the current shell-owned notification copy.
    * @param platform - Native attention implementation, replaceable for platform tests.
    */
-  constructor(private readonly locale: DesktopLocale, private readonly platform: string = process.platform) {}
+  constructor(private readonly locale: () => DesktopLocale, private readonly platform: string = process.platform) {}
 
   /**
    * @param version - Prepared target whose confirmation is waiting.
@@ -40,8 +40,9 @@ export class DesktopUpdateAttention {
     } catch (error) { console.warn('desktop update: attention unavailable', error) }
     try {
       if (!Notification.isSupported()) return
-      const notification = new Notification({ title: this.locale.messages.mandatoryReady,
-        body: this.locale.messages.mandatoryNotification, silent: true })
+      const messages = this.locale().messages
+      const notification = new Notification({ title: messages.mandatoryReady,
+        body: messages.mandatoryNotification, silent: true })
       this.notification = notification
       notification.on('failed', () => {
         if (this.notification === notification) this.notification = undefined

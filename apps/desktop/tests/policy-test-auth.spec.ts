@@ -11,6 +11,7 @@ vi.mock('electron', () => ({ BrowserWindow: function (options: BrowserWindowCons
 let auth: DesktopPolicyTestAuth
 let browserSession: ReturnType<typeof makeSession>
 let window: ReturnType<typeof makeWindow>
+let currentLocale = resolveDesktopLocale('zh')
 const record = vi.fn()
 function makeSession() {
   return Object.assign(new EventEmitter(), { fetch: vi.fn(async () => Response.json({ code: 0 })),
@@ -25,8 +26,9 @@ function makeSession() {
 function makeWindow() {
   let destroyed = false
   const instance = Object.assign(new EventEmitter(), { webContents: Object.assign(new EventEmitter(), {
-    setWindowOpenHandler: vi.fn<(handler: () => { action: string }) => void>(), openDevTools: vi.fn() }),
-  show: vi.fn(), focus: vi.fn(), setMenu: vi.fn(), loadFile: vi.fn(async () => {}),
+    setWindowOpenHandler: vi.fn<(handler: () => { action: string }) => void>(), openDevTools: vi.fn(),
+    getURL: vi.fn(() => 'file:///app/renderer/policy-login-loading.html'), executeJavaScript: vi.fn(async () => undefined) }),
+  show: vi.fn(), focus: vi.fn(), setTitle: vi.fn(), setMenu: vi.fn(), loadFile: vi.fn(async () => {}),
   loadURL: vi.fn(async () => {}), isDestroyed: () => destroyed,
   destroy: () => { if (!destroyed) { destroyed = true; instance.emit('closed') } } })
   return instance
@@ -34,8 +36,9 @@ function makeWindow() {
 beforeEach(() => {
   vi.clearAllMocks()
   browserSession = makeSession(); window = makeWindow()
+  currentLocale = resolveDesktopLocale('zh')
   native.partition.mockReturnValue(browserSession); native.create.mockReturnValue(window)
-  auth = new DesktopPolicyTestAuth('https://policy.example.com', ['https://login.example.com'], resolveDesktopLocale('zh'), () => undefined, record)
+  auth = new DesktopPolicyTestAuth('https://policy.example.com', ['https://login.example.com'], () => currentLocale, () => undefined, record)
 })
 afterEach(async () => { await auth.dispose() })
 
@@ -70,6 +73,16 @@ it('opens a sandboxed window on explicit action and coalesces logins without aut
   expect(await pending).toBe('returned')
   expect(record.mock.calls).toEqual([['opened'], ['returned']])
   expect(browserSession.fetch).not.toHaveBeenCalled()
+})
+
+it('updates an already open login placeholder when the saved desktop language changes', async () => {
+  void auth.login()
+  currentLocale = resolveDesktopLocale('en')
+  auth.localeChanged()
+  expect(window.setTitle).toHaveBeenCalledWith('Sign in to the test environment')
+  expect(window.webContents.executeJavaScript).toHaveBeenCalledWith(
+    "document.getElementById('label').textContent = \"Loading sign-in page…\"",
+  )
 })
 
 it('opens only the Feishu login window DevTools on a single F12 keydown', () => {

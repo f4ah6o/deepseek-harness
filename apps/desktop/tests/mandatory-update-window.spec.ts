@@ -33,12 +33,13 @@ function setup(platform: NodeJS.Platform = 'darwin') {
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   window = fakeWindow()
   if (platform === 'win32') window.webContents.mainFrame.url = 'dsh-app://app/'
+  let currentLocale = resolveDesktopLocale('zh')
   let policy: DesktopPolicyState = { blocking: true, checking: false, page: 'https://downloads.example.com/desktop' }
   let update: DesktopUpdateState = { phase: 'ready', version: '1.0.1-nightly.1' }
   const install = vi.fn(async () => update)
   const createOverlay = (): WindowFixture => window
   const parent = createOverlay as () => BrowserWindow
-  ui = new DesktopMandatoryUpdateWindow({ overlays: { create: parent }, preload: 'owned', locale: resolveDesktopLocale('zh'),
+  ui = new DesktopMandatoryUpdateWindow({ overlays: { create: parent }, preload: 'owned', locale: () => currentLocale,
     allowedPageOrigins: ['https://downloads.example.com'], parent,
     policy: () => policy, update: () => update, refresh: async () => {}, download: async () => update, install })
   ui.sync()
@@ -47,7 +48,8 @@ function setup(platform: NodeJS.Platform = 'darwin') {
   const action = (name: string, version: string = '1.0.1-nightly.1', revision = view().confirmation?.revision) =>
     native.handlers.get(MANDATORY_IPC.action)!(event, name, version, revision)
   return { view, action, install, policy(next: DesktopPolicyState) { policy = next; ui!.sync() },
-    update(next: DesktopUpdateState) { update = next; ui!.sync() } }
+    update(next: DesktopUpdateState) { update = next; ui!.sync() },
+    locale(next: string) { currentLocale = resolveDesktopLocale(next); ui!.sync() } }
 }
 
 it('releases IPC after the Windows main window has already been destroyed', () => {
@@ -76,6 +78,13 @@ it('waits for a version-bound second click in the same modal and rejects obsolet
   ui!.preparingRestart(true)
   expect(f.view().restart).toBe('stopping-tasks')
   expect(window.loadURL).toHaveBeenCalledOnce()
+})
+
+it('refreshes the mandatory modal from the current saved locale', () => {
+  const f = setup()
+  f.locale('en')
+  expect(f.view().locale.messages.mandatoryTitle).toBe('Update to continue')
+  expect(window.setTitle).toHaveBeenLastCalledWith('Update to continue')
 })
 
 it('defers without dismissing, and cancels pending approval on policy clearance or disposal', async () => {

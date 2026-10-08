@@ -353,6 +353,8 @@ async function main(): Promise<void> {
   let updateState: DesktopUpdateState = { phase: 'idle' }
   const systemLanguages = app.getPreferredSystemLanguages()
   let locale = resolveDesktopStartupLocale(null, systemLanguages)
+  let localePreferenceReady = false
+  const localePreferenceLoaded = Promise.withResolvers<void>()
   windowsLanguage = locale.id
   let mandatoryPolicy: DesktopMandatoryUpdatePolicy | undefined
   let mandatoryUI: DesktopMandatoryUpdateWindow | undefined
@@ -763,9 +765,7 @@ async function main(): Promise<void> {
     const current = resolveDesktopStartupLocale(next, systemLanguages)
     if (current.id === locale.id) return
     locale = current
-    platformView.notifyLocaleChanged()
-    windowsLanguage = locale.id
-    refreshApplicationMenu()
+    notifyLocaleChanged()
   })
   ipcMain.handle(DESKTOP_IPC.updatesStatus, (event) => {
     assertProductSender(event)
@@ -868,11 +868,12 @@ async function main(): Promise<void> {
   let authenticationOperation: Promise<DesktopPolicyState | undefined> | undefined
   const authenticatePolicy = () => {
     if (authenticationOperation !== undefined) { policyAuth?.focus(); updateDialog.focus() }
-    authenticationOperation ??= runPolicyAuthentication().finally(() => { authenticationOperation = undefined })
+    authenticationOperation ??= localePreferenceLoaded.promise.then(() => runPolicyAuthentication())
+      .finally(() => { authenticationOperation = undefined })
     return authenticationOperation
   }
   const flushQueuedPolicyAuthentication = (): void => {
-    if (!policyAuthenticationQueued || promptOperation !== undefined || authenticationOperation !== undefined
+    if (!policyAuthenticationQueued || !localePreferenceReady || promptOperation !== undefined || authenticationOperation !== undefined
       || isMandatory() || quitting) return
     policyAuthenticationQueued = false
     void authenticatePolicy().catch((error: unknown) => { console.error(error) })
@@ -942,7 +943,7 @@ async function main(): Promise<void> {
   const platformMenus = (): MenuItemConstructorOptions[] => darwin
     ? [shortcuts.fileMenu(currentDesktopLocale().messages), { role: 'editMenu' }, { role: 'windowMenu' }]
     : [{ role: 'editMenu' }]
-  const hideCommands: MenuItemConstructorOptions[] = darwin
+  const hideCommands = (): MenuItemConstructorOptions[] => darwin
     ? [{ role: 'hide', label: currentDesktopLocale().messages.hideApplication },
       { role: 'hideOthers', label: currentDesktopLocale().messages.hideOtherApplications },
       { role: 'unhide', label: currentDesktopLocale().messages.showAllApplications }, { type: 'separator' }]
@@ -968,7 +969,7 @@ async function main(): Promise<void> {
       } },
     ] : [],
     { type: 'separator' },
-    ...hideCommands,
+    ...hideCommands(),
     { role: 'quit', ...(darwin ? { label: currentDesktopLocale().messages.quitApplication }
       : process.platform === 'win32' ? { label: currentDesktopLocale().messages.exitApplication } : {}) },
   ]
@@ -982,6 +983,13 @@ async function main(): Promise<void> {
       submenu: [...applicationItems(), ...devToolsItems],
     }, ...platformMenus()]))
     tray?.relabel()
+  }
+  const notifyLocaleChanged = (): void => {
+    platformView.notifyLocaleChanged()
+    windowsLanguage = locale.id
+    refreshApplicationMenu()
+    mandatoryUI?.sync()
+    policyAuth?.localeChanged()
   }
   refreshApplicationMenu()
   const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
@@ -1202,8 +1210,12 @@ async function main(): Promise<void> {
     const state = await readWelcomeState()
     if (isQuitting() || backend.state.phase !== 'ready') return
     locale = resolveDesktopStartupLocale(state.localePreference, systemLanguages)
-    windowsLanguage = locale.id
-    refreshApplicationMenu()
+    notifyLocaleChanged()
+    if (!localePreferenceReady) {
+      localePreferenceReady = true
+      localePreferenceLoaded.resolve()
+      flushQueuedPolicyAuthentication()
+    }
     if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })) {
       // A later login must retain its own activation policy instead of replaying startup focus.
       raiseAfterUpdate = false
@@ -1243,6 +1255,7 @@ async function main(): Promise<void> {
   if (process.platform !== 'win32') powerMonitor.on('shutdown', () => { sessionEnding = true })
   const finishQuit = (): void => {
     quitting = true
+    localePreferenceLoaded.resolve()
     shuttingDown = true
     updateJournal?.action('quit-requested')
     quitConfirmation.dispose()
@@ -1262,6 +1275,7 @@ async function main(): Promise<void> {
   app.on('before-quit', (event) => {
     if (shellInstallerOwnsQuit) {
       shuttingDown = true
+      localePreferenceLoaded.resolve()
       quitConfirmation.dispose()
       backgroundNotice?.dispose()
       updateJournal?.action('quit-requested')
@@ -1293,7 +1307,7 @@ async function main(): Promise<void> {
   const policyConfig = resolveDesktopPolicyConfig(policyInput, !app.isPackaged)
   if (policyConfig !== undefined) {
     if (policyConfig.authentication === 'feishu-test') {
-      policyAuth = new DesktopPolicyTestAuth(policyConfig.origin, policyConfig.allowedAuthOrigins, locale,
+      policyAuth = new DesktopPolicyTestAuth(policyConfig.origin, policyConfig.allowedAuthOrigins, () => locale,
         () => mandatoryUI?.confirmationWindow ?? currentDialogWindow(),
         (event) => { console.info(`desktop policy authentication: ${event}`); updateJournal?.action(`policy-login-${event}`) })
     }
@@ -1315,7 +1329,7 @@ async function main(): Promise<void> {
     const policy = mandatoryPolicy
     mandatoryUI = new DesktopMandatoryUpdateWindow({
       overlays: updateOverlays,
-      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale,
+      preload: fileURLToPath(new URL('./preload-mandatory.cjs', import.meta.url)), locale: () => locale,
       allowedPageOrigins: policyConfig.allowedPageOrigins, parent: () => mainWindow,
       policy: () => policy.state, update: () => updates.state,
       refresh: async () => { await Promise.all([checkPolicyManually(), updateSchedule.check(true)]) },

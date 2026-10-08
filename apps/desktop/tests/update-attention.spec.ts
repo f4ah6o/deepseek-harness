@@ -19,13 +19,14 @@ vi.mock('electron', () => ({ Notification: native.Notice, app: { dock: native.do
 let attention: DesktopUpdateAttention | undefined
 afterEach(() => { attention?.reset(); native.notices.length = 0; vi.clearAllMocks(); native.Notice.isSupported.mockReturnValue(true) })
 function setup(platform: string) {
+  let locale = resolveDesktopLocale('zh')
   const window = Object.assign(new EventEmitter(), { focused: false, isFocused() { return this.focused },
     isDestroyed: () => false, flashFrame: vi.fn() })
   const modal = Object.assign(new EventEmitter(), { isFocused: () => false })
   const returned = vi.fn()
-  attention = new DesktopUpdateAttention(resolveDesktopLocale('zh'), platform)
+  attention = new DesktopUpdateAttention(() => locale, platform)
   const ready = () => { attention!.ready('1.0.1-nightly.1', window as unknown as BrowserWindow, modal as unknown as BrowserWindow, returned) }
-  return { window, modal, returned, ready }
+  return { window, modal, returned, ready, locale(next: string) { locale = resolveDesktopLocale(next) } }
 }
 
 it.each(['win32', 'darwin'])('requests one silent reminder and returns to confirmation without installing: %s', (platform) => {
@@ -78,4 +79,12 @@ it('keeps icon attention when the system rejects a notification', () => {
   attention!.reset()
   expect(native.dock.cancelBounce).toHaveBeenCalledWith(17)
   expect(f.modal.listenerCount('focus')).toBe(0)
+})
+
+it('uses the current saved locale when a background reminder is created', () => {
+  const f = setup('darwin')
+  f.locale('en')
+  f.ready()
+  expect(native.notices[0]!.options).toEqual({ title: 'Update ready',
+    body: 'Return to the application to confirm installation and restart.', silent: true })
 })

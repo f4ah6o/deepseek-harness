@@ -108,7 +108,7 @@ The product UI retains Web actions, including "Open In..." through the shared au
 
 Update copy preserves the complete version, including prerelease suffixes, without adding v or V. When no update is available, the dialog title reports the result and the body shows the current version.
 
-Electron chooses typed English, Chinese, or Japanese shell copy. Japanese is the first-run default regardless of system language, and a saved English or Chinese preference remains authoritative. The macOS application bundle declares English, Simplified Chinese, and Japanese in `CFBundleLocalizations`. On Windows, the main document's language updates desktop menus, recovery and update prompts. The repository Client UI i18n gate checks desktop sources.
+Electron chooses typed English, Chinese, or Japanese shell copy. Japanese is the first-run default regardless of system language, and a saved English or Chinese preference remains authoritative. Mandatory-update and policy-authentication windows and update notifications use the resolved shell language; startup policy-authentication prompts wait until the Host profile preference is read. The macOS application bundle declares English, Simplified Chinese, and Japanese in `CFBundleLocalizations`. On Windows, the main document's language updates desktop menus, recovery and update prompts. The repository Client UI i18n gate checks desktop sources.
 
 Windows and macOS relay native fullscreen transitions and the state after each page load to the renderer, so overlays can adapt their caption clearance.
 

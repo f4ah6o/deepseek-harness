@@ -26,12 +26,12 @@ export class DesktopPolicyTestAuth {
   /**
    * @param origin Validated HTTPS policy origin; login always starts at its root with fresh gateway state.
    * @param allowedAuthOrigins Validated HTTPS origins for login document navigation.
-   * @param locale Shell-owned login title.
+   * @param locale Returns the current shell-owned login copy.
    * @param parent Current application or mandatory-update window.
    * @param record Fixed, nonsecret login outcomes for diagnostic evidence.
    */
   constructor(private readonly origin: string, private readonly allowedAuthOrigins: readonly string[],
-    private readonly locale: DesktopLocale,
+    private readonly locale: () => DesktopLocale,
     private readonly parent: () => BrowserWindow | undefined,
     private readonly record: (event: 'opened' | DesktopPolicyLoginResult) => void) {
     this.browserSession.setPermissionRequestHandler((_contents, _permission, callback) => { callback(false) })
@@ -61,6 +61,18 @@ export class DesktopPolicyTestAuth {
     return this.browserSession.fetch(url.href, { ...init, credentials: 'include', redirect: 'error', cache: 'no-store' })
   }
 
+  /** Refresh the title and local loading copy after Desktop adopts a saved language. */
+  localeChanged(): void {
+    const window = this.window
+    if (window === undefined || window.isDestroyed()) return
+    const locale = this.locale()
+    window.setTitle(locale.messages.policyLoginTitle)
+    if (!this.isLoadingDocument(window.webContents.getURL())) return
+    const source = `document.getElementById('label').textContent = ${JSON.stringify(locale.messages.policyLoginLoading)}`
+    void window.webContents.executeJavaScript(source)
+      .catch((error: unknown) => { console.warn('desktop policy authentication: could not update loading message', error) })
+  }
+
   /**
    * Open only after a user action; repeated callers focus and join the same login.
    * @returns Navigation, cancellation, or failure; the caller must query policy after returning.
@@ -70,8 +82,9 @@ export class DesktopPolicyTestAuth {
     if (this.pending !== undefined) { this.focus(); return this.pending }
     const result = Promise.withResolvers<DesktopPolicyLoginResult>()
     const parent = this.parent()
+    const messages = this.locale().messages
     const window = new BrowserWindow({ width: 720, height: 760, ...(parent === undefined ? {} : { parent }),
-      title: this.locale.messages.policyLoginTitle, autoHideMenuBar: true,
+      title: messages.policyLoginTitle, autoHideMenuBar: true,
       webPreferences: { session: this.browserSession, nodeIntegration: false, contextIsolation: true,
         sandbox: true, webSecurity: true, webviewTag: false, devTools: true, spellcheck: false } })
     this.pending = result.promise
@@ -125,7 +138,7 @@ export class DesktopPolicyTestAuth {
     // third-party page, and no later subresource keeps a placeholder on screen.
     // A placeholder that cannot load leaves the window blank, as before.
     void window.loadFile(LOGIN_LOADING_PAGE,
-      { query: { label: this.locale.messages.policyLoginLoading } }).then(loadLogin, loadLogin)
+      { query: { label: messages.policyLoginLoading } }).then(loadLogin, loadLogin)
     return result.promise
   }
 
