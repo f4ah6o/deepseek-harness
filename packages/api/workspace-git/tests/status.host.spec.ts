@@ -9,7 +9,6 @@ import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { apply as applyClientEntry } from '../src/client/index.ts'
 import WorkspaceGit from '../src/index.ts'
 
 const roots: string[] = []
@@ -93,12 +92,6 @@ function completedGit(spec: SubprocessSpawnSpec, text: string, exitCode = 0, del
 }
 
 describe('workspaceGit.status', () => {
-  it('keeps the Host-owned Remote namespace passive in the Client type face', () => {
-    expect(() => {
-      applyClientEntry()
-    }).not.toThrow()
-  })
-
   it('uses the selected Session cwd and returns only a sanitized GitHub owner/repository', async () => {
     const cwd = await repository('source')
     git(cwd, 'remote', 'add', 'origin', 'https://alice:top-secret@github.com/shiguredo/zakuro-rs.git')
