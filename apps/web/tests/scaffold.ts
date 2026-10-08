@@ -297,9 +297,10 @@ export interface WebScaffold {
 /** Options for {@link launchWebScaffold}. */
 export interface LaunchOptions {
   /**
-   * Explicit locale preference for stable UI tests. Defaults to English so
-   * scenarios keep their established anchors; `null` leaves the preference
-   * absent and exercises the shipped language-pack default.
+   * Initial locale preference for stable UI tests. A fresh home defaults to
+   * English so scenarios keep their established anchors; `null` leaves the
+   * preference absent and exercises the shipped language-pack default. A
+   * scaffold reusing a home retains its initialized defaults and saved values.
    */
   locale?: 'en' | 'zh' | 'ja' | null
   /** Override the developer-tools preference; omitted uses the shipped default. */
@@ -815,11 +816,17 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       // Fixture deployment defaults remain below editable profile values.
       const fixtureDir = join(profileDir, 'node_modules', SCAFFOLD_DEFAULTS_BUNDLE)
       await mkdir(fixtureDir, { recursive: true })
-      await writeFile(
-        join(fixtureDir, 'package.json'),
-        JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }),
-      )
-      await writeFile(join(fixtureDir, 'cordis.patch.yml'), yaml.dump(formDefaults, { schema: entryListSchema }))
+      const fixtureManifest = join(fixtureDir, 'package.json')
+      const fixturePatch = join(fixtureDir, 'cordis.patch.yml')
+      if (!existsSync(fixtureManifest)) {
+        await writeFile(
+          fixtureManifest,
+          JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }),
+        )
+      }
+      if (!existsSync(fixturePatch)) {
+        await writeFile(fixturePatch, yaml.dump(formDefaults, { schema: entryListSchema }))
+      }
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)

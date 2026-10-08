@@ -660,6 +660,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const secondTripwire = watchConsole(secondPage)
     try {
       expect(second.baseUrl).not.toBe(scaffold.baseUrl)
+      expect(second.ctx.settings.describe().find((row) => row.ns === 'locale')?.value).toEqual({ preference: 'zh' })
       await secondPage.goto(second.authenticatedUrl, { waitUntil: 'load' })
       await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       await openSettings(secondPage, 'zh')
@@ -745,10 +746,32 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.getByRole('menuitem', { name: '中文' }).click()
     await page.getByRole('dialog', { name: '设置' }).waitFor({ timeout: 10_000 })
     expect(await page.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
+    await expect.poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 5_000 }).toBe('zh-CN')
     await expect
       .poll(async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'), { timeout: 5_000 })
-      .toContain('preference: zh')
+      .not.toContain('preference: en')
     await page.keyboard.press('Escape')
+
+    const restored = await launchWebScaffold({ locale: null, developerTools: false, harnessHome: scaffold.harnessHome })
+    const restoredPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const restoredTripwire = watchConsole(restoredPage)
+    try {
+      const locale = restored.ctx.settings.describe().find((row) => row.ns === 'locale')
+      expect(locale?.value).toEqual({ preference: 'zh' })
+      expect(locale?.base).toEqual({ preference: 'zh' })
+      expect(locale?.user).toEqual({})
+      await restoredPage.goto(restored.authenticatedUrl, { waitUntil: 'load' })
+      await restoredPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await openSettings(restoredPage, 'zh')
+      await restoredPage.getByRole('dialog', { name: '设置' }).waitFor({ timeout: 10_000 })
+      await restoredPage.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '中文' }).waitFor()
+      expect(await restoredPage.evaluate(() => document.documentElement.lang)).toBe('zh-CN')
+      expect(restoredTripwire.pageErrors).toEqual([])
+      expect(restoredTripwire.warnings).toEqual([])
+    } finally {
+      await restoredPage.close()
+      await restored.close()
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
