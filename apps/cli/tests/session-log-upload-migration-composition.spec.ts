@@ -6,6 +6,7 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
+import { parseDocument } from 'yaml'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { migrateSessionLogUploadDefaults } from '../src/session-log-upload-migration.ts'
 
@@ -48,6 +49,67 @@ async function firstRequestHasSessionLog(enabled: boolean | undefined, id: strin
 }
 
 describe('session-log migration through real patch composition', () => {
+  it('materializes an aliased inserted uploader without changing its source before the first request', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-upload-inserted-row-alias-'))
+    homes.push(home)
+    const profileDir = makeProfile(
+      home,
+      [
+        '- id: unrelated-source',
+        '  config: { retained: &upload { id: session-log-deepseek, name: cordis:uploader, config: { enabled: true } } }',
+        '- insert:',
+        '    - *upload # inserted uploader copy',
+        '',
+      ].join('\n'),
+    )
+    const profilePatch = join(profileDir, 'cordis.patch.yml')
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, '[]\n')
+
+    await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
+
+    const entries = composeEntries([loadOverlayPatches('dsh-test', profilePatch)])
+    const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
+    const enabled = configuredEnabled(uploader?.config)
+    expect(enabled).toBe(false)
+    expect(await firstRequestHasSessionLog(enabled, 'inserted-row-alias-reset')).toBe(false)
+    const migrated = readFileSync(profilePatch, 'utf8')
+    const document = parseDocument(migrated)
+    expect(document.getIn([0, 'config', 'retained', 'config', 'enabled'])).toBe(true)
+    expect(document.getIn([1, 'insert', 0, 'config', 'enabled'])).toBe(false)
+    expect(migrated).toContain('inserted uploader copy')
+  })
+
+  it('turns a profile enabled alias off without changing its source before the first request', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-upload-profile-enabled-alias-'))
+    homes.push(home)
+    const profileDir = makeProfile(
+      home,
+      [
+        '- insert:',
+        '    - id: shared-value',
+        '      config: { enabled: &enabled true }',
+        '    - id: session-log-deepseek',
+        "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+        '      config: { enabled: *enabled }',
+        '',
+      ].join('\n'),
+    )
+    const profilePatch = join(profileDir, 'cordis.patch.yml')
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, '[]\n')
+
+    await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
+
+    const entries = composeEntries([loadOverlayPatches('dsh-test', profilePatch)])
+    const shared = entries.find((entry) => entry.id === 'shared-value')
+    const uploader = entries.find((entry) => entry.id === 'session-log-deepseek')
+    expect(shared?.config).toEqual({ enabled: true })
+    const enabled = configuredEnabled(uploader?.config)
+    expect(enabled).toBe(false)
+    expect(await firstRequestHasSessionLog(enabled, 'profile-enabled-alias-reset')).toBe(false)
+  })
+
   it('resets a profile uploader inserted by a saved patch while preserving an aliased source', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-upload-profile-alias-'))
     homes.push(home)
