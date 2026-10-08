@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 /**
- * Real tsdown artifact shape: lib/client.js hands off through
+ * Real Vite+ pack artifact: lib/client.js hands off through
  * window.__ModuleLoader__.load, resolves externals through the injected
  * require, returns the exports (apply + inject), and a mounted apply
- * registers the view tab into a real SlotRegistry ring. Skips when dist/ is
- * not built (`pnpm --filter @deepseek-ai/dsh-client-ui-trajectory bundle`).
+ * registers the view tab into a real SlotRegistry ring. The artifact cases
+ * skip when this package's `lib/client.js` has not been built.
  */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 
@@ -19,7 +19,12 @@ const PLUGIN_ID = '@deepseek-ai/dsh-client-ui-trajectory'
 
 interface Handoff {
   id: string
-  factory: (require: (spec: string) => unknown) => Record<string, unknown>
+  factory: (require: (spec: string) => unknown) => ClientExports
+}
+
+interface ClientExports {
+  apply: (ctx: Context) => void
+  inject: readonly string[]
 }
 type Win = { __ModuleLoader__?: { load(h: Handoff): void } }
 
@@ -38,7 +43,7 @@ afterEach(() => {
   for (const el of document.querySelectorAll('style')) el.remove()
 })
 
-describe('tsdown client artifact', () => {
+describe('Vite+ pack client artifact', () => {
   const code = readBundle()
 
   async function loadArtifact() {
@@ -78,6 +83,7 @@ describe('tsdown client artifact', () => {
   it.skipIf(code === undefined)('mounted as an object plugin, apply registers the view tab on the real ring', async () => {
     const { exports } = await loadArtifact()
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     const slots = new SlotRegistry(ctx)
     ctx.provide('uiSession', { provide: () => () => {} } as never)
     // The conversation entry's role: the ring must be declared before riders land.
@@ -100,9 +106,14 @@ describe('tsdown client artifact', () => {
     ctx.provide('remote', { $on: () => () => {} } as never)
     ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
     const locale = await import('@deepseek-ai/dsh-client-locale/client')
-    ctx.plugin({ inject: [...locale.inject], apply: locale.apply })
-    const fiber = ctx.plugin(exports as { apply: (ctx: Context) => void })
+    const localeFiber = ctx.plugin({ inject: [...locale.inject], apply: locale.apply })
+    await localeFiber.await()
+    for (const name of exports.inject) {
+      expect(ctx.get(name), `missing injected service ${name}`).toBeDefined()
+    }
+    const fiber = ctx.plugin(exports)
     await fiber.await()
+    expect(fiber.state).toBe(FiberState.ACTIVE)
     expect(slots.entries('conversation.view').map((e) => e.options.id)).toEqual(['trajectory'])
     expect(events.entries().length).toBeGreaterThan(0)
     expect(views.entries()).toHaveLength(1)

@@ -211,9 +211,11 @@ describe('ui-settings-general apply', () => {
     const { c } = await client(mock, start)
     expect(c.connection.isLoopback).toBe(false)
     expect(ownEntries(c, 'settings.action')).toEqual([])
-    // Off-loopback settings stay process-local: no describe read, so the browser language stands.
+    // The shipped Japanese default wins over an ordinary English browser language.
+    expect(navigator.language).toBe('en-US')
+    expect('dshDesktop' in globalThis).toBe(false)
     expect(c.mock.log.calls('settings/describe')).toEqual([])
-    expect(c.ctx.locale.getSnapshot().active).toBe('en')
+    expect(c.ctx.locale.getSnapshot().active).toBe('ja')
     await c.unload(SELF)
     await c.flush()
     for (const [name] of SEATS) expect(ownEntries(c, name)).toEqual([])
