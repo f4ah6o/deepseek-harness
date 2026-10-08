@@ -19,7 +19,8 @@ pre-commit:
       exclude:
         - 'vendor/*/src/**'
         - '**/fixtures/**'
-      run: node_modules/vite-plus/bin/vp fmt --write {staged_files} && node_modules/.bin/tsx scripts/run-vp-lint.ts --staged --fix --no-error-on-unmatched-pattern {staged_files}
+      # Generated staged files may all be ignored by Oxfmt; keep the lint pass active either way.
+      run: node_modules/vite-plus/bin/vp fmt --write --no-error-on-unmatched-pattern {staged_files} && node_modules/.bin/tsx scripts/run-vp-lint.ts --staged --fix --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     # Regenerate rather than reject: a dependency edit that forgot the notices
