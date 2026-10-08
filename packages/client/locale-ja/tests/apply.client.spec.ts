@@ -108,4 +108,64 @@ describe('locale-ja apply', () => {
     // Dictionary disposal: translation falls back to the bare key.
     expect(locale.bind('common')('cancel')).toBe('cancel')
   })
+
+  it('rolls back earlier dictionaries when a later namespace is already owned', async () => {
+    const ctx = new Context()
+    const locale = new LocaleRuntime(ctx)
+    ctx.provide('locale', locale)
+    const disposeExisting = locale.register('approval', 'ja', { waiting: '既存辞書' })
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+
+    try {
+      const fiber = ctx.plugin({ inject: [...inject], apply })
+      await expect(fiber.await()).rejects.toThrow(/already has locale/u)
+      const disposeProbeLanguage = locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
+      try {
+        locale.setLocale('ja')
+        expect(locale.bind('agent-team')('trigger')).toBe('trigger')
+        expect(locale.bind('approval')('waiting')).toBe('既存辞書')
+      } finally {
+        disposeProbeLanguage()
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(rejections).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      process.off('unhandledRejection', onUnhandled)
+      disposeExisting()
+    }
+  })
+
+  it('rolls back its dictionaries when another provider already owns Japanese', async () => {
+    const ctx = new Context()
+    const locale = new LocaleRuntime(ctx)
+    ctx.provide('locale', locale)
+    const disposeExisting = locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+
+    try {
+      const fiber = ctx.plugin({ inject: [...inject], apply })
+      await expect(fiber.await()).rejects.toThrow('locale "ja" is already registered')
+      expect(locale.getSnapshot().locales.map((entry) => entry.id)).toContain('ja')
+      locale.setLocale('ja')
+      expect(locale.bind('agent-team')('trigger')).toBe('trigger')
+      expect(locale.bind('workspace')('session.new')).toBe('session.new')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(rejections).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      process.off('unhandledRejection', onUnhandled)
+      disposeExisting()
+    }
+  })
 })
