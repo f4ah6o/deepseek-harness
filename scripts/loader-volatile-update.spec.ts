@@ -331,7 +331,7 @@ it('reloads real YAML and persists plain values independently of custom update h
   expect(saved).not.toContain('ephemeral')
   expect(updates).toHaveBeenCalledTimes(2)
   const restored = context()
-  restored.baseUrl = ctx.baseUrl
+  if (ctx.baseUrl !== undefined) restored.baseUrl = ctx.baseUrl
   await restored.plugin(Loader)
   restored.loader.builtins.include = Include
   restored.loader.builtins.group = Group
