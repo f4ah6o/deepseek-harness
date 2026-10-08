@@ -58,7 +58,7 @@ export const ja: LocaleDictOf<'chat'> = {
   'message.compaction.unavailable': '圧縮サマリーは利用できません',
   'message.compaction.commandTitle': 'compact',
   'message.think': '思考',
-  'message.unknownSurface': '不明な surface イベント：{type}',
+  'message.unknownSurface': '不明な画面イベント：{type}',
   'message.unknownBlock': '不明なコンテンツブロック',
   'message.turnProcess.toolCalls.one': '{count} 件のツール呼び出し',
   'message.turnProcess.toolCalls.other': '{count} 件のツール呼び出し',

@@ -5,8 +5,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings-agent-loop/client'
 
 /** `settings.agentLoop` copy in Japanese, complete against the owner's key union. */
 export const ja: LocaleDictOf<'settings.agentLoop'> = {
-  title: 'Agent ループ',
-  description: 'Agent がツール呼び出しをディスパッチする方法を制御します。',
+  title: 'エージェントループ',
+  description: 'エージェントがツール呼び出しを振り分ける方法を制御します。',
   maxParallel: '並列ツール呼び出し数',
   maxParallelHint: '1 つのステップ内で同時に実行できる並列安全な呼び出しの上限です。',
   overridden: 'オーバーライド済み',

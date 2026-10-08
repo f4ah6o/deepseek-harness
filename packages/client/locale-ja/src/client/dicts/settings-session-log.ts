@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings-session-log/client'
 
 /** `settings.sessionLog` copy in Japanese, complete against the owner's key union. */
 export const ja: LocaleDictOf<'settings.sessionLog'> = {
-  title: '公式モデル API の利用時に Session Log をアップロード',
+  title: '公式モデル API の利用時にセッションログをアップロード',
   description: 'DeepSeek のモデルと製品の改善にご協力ください。',
   saved: '設定を保存しました',
   failed: '設定を保存できませんでした',

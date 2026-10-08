@@ -83,7 +83,7 @@ export const ja: LocaleDictOf<'trajectory'> = {
   'source.plugin': 'プラグイン',
   'source.pluginNamed': 'プラグイン · {plugin}',
   'source.goal': 'ゴール',
-  'source.goalRound': 'ゴール · Round {round}',
+  'source.goalRound': 'ゴール · ラウンド {round}',
   'source.notRecorded': 'ソース未記録',
   'source.messageJson': 'メッセージソース JSON',
   'tab.summary': '概要',

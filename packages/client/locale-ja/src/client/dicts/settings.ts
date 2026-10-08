@@ -40,6 +40,6 @@ export const ja: LocaleDictOf<'settings'> = {
   'connection.restart': '接続が切断されました。自動再接続中です。クリックして今すぐ再接続',
   'general.currentVersion': '現在のバージョン: {version}',
   'developerTools.title': 'コード作業ツール',
-  'developerTools.description': '軌跡、このターンのコード差分、新しい会話での Agent プリセット切り替えを表示します',
+  'developerTools.description': '軌跡、このターンのコード差分、新しい会話でのエージェントプリセット切り替えを表示します',
   'developerTools.error': '設定を保存できませんでした。再試行してください',
 }
