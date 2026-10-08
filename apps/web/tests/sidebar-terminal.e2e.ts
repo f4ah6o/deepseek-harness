@@ -512,9 +512,14 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const saved = await bindings()
     expect(saved).toHaveLength(2)
     const selected = second.locator('[data-dockkit-tab][aria-selected="true"]')
+    const closeCalls = vi.spyOn(scaffold.ctx.terminalController, 'close')
     await selected.hover()
     await selected.locator('[data-dockkit-tab-close]').click()
-    await expect.poll(() => alive(secondProcess)).toBe(false)
+    await expect.poll(() => closeCalls.mock.results.length).toBe(1)
+    const closeResult = closeCalls.mock.results[0]
+    if (closeResult?.type !== 'return') throw new Error('Terminal close did not return its cleanup promise')
+    await closeResult.value
+    expect(alive(secondProcess)).toBe(false)
     expect(alive(firstProcess)).toBe(true)
     await expect.poll(() => bindings()).toHaveLength(1)
     expect(saved).toContain((await bindings())[0])
