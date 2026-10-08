@@ -1,4 +1,5 @@
 # SDK snapshot-record composition without provider-specific upload metadata.
+# Leave the Session uploader at the profile default to exercise default-off behavior.
 
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
@@ -25,7 +26,3 @@
     backgroundMode: one-shot
     enableRunInBackground: false
     maxDepth: 1
-
-- id: session-log-deepseek
-  config:
-    enabled: false

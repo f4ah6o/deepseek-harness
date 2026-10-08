@@ -28,6 +28,11 @@
     enableRunInBackground: false
     maxDepth: 1
 
+# This composition exercises session upload explicitly; the profile default is off.
+- id: session-log-deepseek
+  config:
+    enabled: true
+
 - insert:
     - id: snapshot-message-feedback
       name: '@deepseek-ai/dsh-message-feedback'

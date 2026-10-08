@@ -154,12 +154,37 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
   })
 
-  it('sends the canonical session suffix by default through Loader composition', async () => {
+  it('omits session upload by default through Loader composition', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const { ctx } = await loadComposition({
       withDynamic: false,
       baseURL: server.url,
+    })
+    const session = ctx.sessions.create(SessionId('extension-composition-enabled'))
+    session.append('turn/start', { turn: 1 })
+
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id })
+    const request = server.requests[0] as {
+      dsh_session_log?: {
+        version: number
+        session: { id: string }
+        afterSeq: number
+        throughSeq: number
+        events: Array<{ type: string; seq: number }>
+      }
+    }
+    expect(request).not.toHaveProperty('dsh_session_log')
+    expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
+  })
+
+  it('sends the canonical session suffix after explicit Loader opt-in', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
+    const server = await mockServer([{ kind: 'sse', events: textEvents }])
+    const { ctx } = await loadComposition({
+      withDynamic: false,
+      baseURL: server.url,
+      enableSessionLog: true,
     })
     const session = ctx.sessions.create(SessionId('extension-composition-enabled'))
     session.append('turn/start', { turn: 1 })
