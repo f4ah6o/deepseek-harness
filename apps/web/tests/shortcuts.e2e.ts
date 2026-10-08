@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { chromium, type Browser } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { openSettings } from './support.ts'
+import { openSettings, selectLocalePreference } from './support.ts'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 
 const expected = fileURLToPath(new URL('./expected/shortcuts', import.meta.url))
@@ -31,6 +31,7 @@ describe('web e2e: shortcut reference', () => {
       const console = watchConsole(page)
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await selectLocalePreference(page, locale === 'zh-CN' ? 'zh' : 'en')
       const trigger = page.getByRole('button', { name: settings, exact: true })
       expect(await trigger.getAttribute('aria-keyshortcuts')).toBe(key === 'Meta' ? 'Alt+Meta+,' : 'Control+Alt+,')
       const settingsHint = `${settings} ${key === 'Meta' ? '⌥ ⌘ ,' : 'Ctrl + Alt + ,'}`

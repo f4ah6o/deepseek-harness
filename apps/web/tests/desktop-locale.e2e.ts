@@ -1,4 +1,4 @@
-// Native initialization supplies system languages; the existing Host preference remains the only durable choice.
+// Native initialization supplies system languages; the shipped pack default remains provisional and unsaved.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,7 +23,7 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   const reported: string[] = []
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold()
+    scaffold = await launchWebScaffold({ locale: null })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'en-US' })
     tripwire = watchConsole(page)
@@ -51,17 +51,18 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     await scaffold?.close()
   })
 
-  it('uses OS languages without saving them, then shares an explicit choice across reloads', async () => {
+  it('uses the Japanese pack default without saving it, then shares an explicit choice across reloads', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-locale'))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await openSettings(page, 'zh')
-    const zhDialog = page.getByRole('dialog', { name: '设置', exact: true })
-    await zhDialog.getByRole('button', { name: '中文', exact: true }).waitFor()
-    await expect.poll(() => reported).toEqual(['zh'])
+    await openSettings(page, 'ja')
+    const jaDialog = page.getByRole('dialog', { name: '設定', exact: true })
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
+    await expect.poll(() => reported.at(-1)).toBe('ja')
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value).toEqual({})
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic.expected.md'),
       await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, versionCapture), MODE)
-    await zhDialog.getByRole('button', { name: '中文', exact: true }).click()
+    await jaDialog.getByRole('button', { name: '日本語', exact: true }).click()
     await page.getByRole('menuitem', { name: 'English', exact: true }).click()
     const enDialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     await enDialog.getByRole('button', { name: 'English', exact: true }).waitFor()

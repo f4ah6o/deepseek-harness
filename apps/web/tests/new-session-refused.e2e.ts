@@ -21,6 +21,7 @@ const BROKEN_PRESET = {
 describe.skipIf(MODE === 'record')('web e2e: refused New Session', () => {
   it('shows the Host refusal as a notice and leaves the Workspace without a Session', async () => {
     const scaffold = await launchWebScaffold({
+      locale: 'zh',
       firstUse: true,
       agentPresets: { default: PRESET_ID, definitions: [BROKEN_PRESET] },
     })

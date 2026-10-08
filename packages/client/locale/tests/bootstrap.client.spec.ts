@@ -21,7 +21,7 @@ describe('native locale initialization', () => {
     }
   })
 
-  it('uses native language order without persisting a provisional choice', async () => {
+  it('uses native language order before the Japanese pack registers without persisting a provisional choice', async () => {
     vi.stubGlobal('window', {})
     vi.stubGlobal('navigator', { languages: ['en-US'], language: 'en-US' })
     const ctx = new Context()
@@ -32,6 +32,32 @@ describe('native locale initialization', () => {
       expect(host.set).not.toHaveBeenCalled()
       locale.setLocale('en')
       expect(host.set).toHaveBeenCalledExactlyOnceWith('preference', 'en')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('uses the registered default language after a late pack registers, regardless of system language', async () => {
+    const ctx = new Context()
+    try {
+      const locale = new LocaleRuntime(ctx, undefined, { languages: ['en-US', 'zh-CN'], preference: null })
+      expect(locale.getSnapshot().active).toBe('en')
+      locale.register('native-test', 'ja', { title: '日本語' })
+      locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en', default: true })
+      expect(locale.getSnapshot().active).toBe('ja')
+      expect(locale.bind('native-test')('title')).toBe('日本語')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['en', 'zh'] as const)('preserves saved %s after the default language registers', async (preference) => {
+    const ctx = new Context()
+    try {
+      const locale = new LocaleRuntime(ctx, undefined, { languages: ['ja-JP'], preference })
+      locale.register('native-test', 'ja', { title: '日本語' })
+      locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en', default: true })
+      expect(locale.getSnapshot().active).toBe(preference)
     } finally {
       await ctx.fiber.dispose()
     }

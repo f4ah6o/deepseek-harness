@@ -15,7 +15,7 @@ export {
 
 /** Runtime preferences projected to the browser. */
 export interface Config {
-  /** Explicit locale; omission follows the browser. */
+  /** Explicit locale; omission uses the available default or browser language. */
   preference: Volatile<string | undefined>
 }
 

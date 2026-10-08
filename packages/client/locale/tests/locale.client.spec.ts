@@ -348,6 +348,18 @@ describe('LocaleRuntime', () => {
     expect(svc.getLocale().active).toBe('zh')
   })
 
+  it('uses one pack default ahead of browser languages and restores detection when it unloads', () => {
+    stubLanguages('zh-CN')
+    const { svc } = make()
+    expect(svc.getLocale().active).toBe('zh')
+    const remove = svc.addLanguage({ id: 'ja', label: '日本語', fallback: 'en', default: true })
+    expect(svc.getLocale().active).toBe('ja')
+    expect(() => svc.addLanguage({ id: 'pt-BR', label: 'Português', fallback: 'en', default: true }))
+      .toThrow('locale default language "ja" is already registered')
+    remove()
+    expect(svc.getLocale().active).toBe('zh')
+  })
+
   it('runs outside a browser (node boots): the default decides and the machine language does not', () => {
     vi.stubGlobal('window', undefined)
     // Node exposes its own global navigator; without a window it must not

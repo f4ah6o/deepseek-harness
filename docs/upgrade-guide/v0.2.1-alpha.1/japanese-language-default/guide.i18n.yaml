@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/japanese-language-default/guide.md
+/:
+  en: 11736e18be674507
+  zh: 6f8eda5122a63c67
+/japanese-first-run-language:
+  en: 8e60f4367dc246ec
+  zh: 0289549ee544a75f
+/japanese-first-run-language/change:
+  en: af78d5c894cbd7a9
+  zh: bdb09bb8fe0b7965
+/japanese-first-run-language/migration:
+  en: 0293d056619e913d
+  zh: d5edf7f2bd25ea8e

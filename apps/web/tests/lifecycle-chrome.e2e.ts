@@ -24,7 +24,7 @@ import {
 } from './scaffold.ts'
 import {
   connectFreshWorkspace, connectFreshWorkspaceZh, expandOwningTurnProcess, newEnglishPage, saveFailureShot,
-  writeComposerDraft, ZH_BROWSER_LOCALE,
+  selectLocalePreference, writeComposerDraft, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome', import.meta.url))
@@ -114,13 +114,14 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await expect.poll(() => menu.count()).toBe(0)
   })
 
-  it.skipIf(MODE === 'record')('localizes slash-command descriptions from the browser language', async () => {
+  it.skipIf(MODE === 'record')('localizes slash-command descriptions for the selected locale', async () => {
     const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     const zhTripwire = watchConsole(zhPage)
     onTestFailed(() => saveFailureShot(zhPage, 'web-e2e-command-menu-zh'))
     try {
       await zhPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await zhPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await selectLocalePreference(zhPage, 'zh')
       const launcher = zhPage.getByRole('button', { name: '添加文件或调用指令' })
       await launcher.click()
       const menu = zhPage.getByRole('listbox', { name: '触发候选建议' })
@@ -131,7 +132,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(zhTripwire.pageErrors).toEqual([])
       expect(zhTripwire.warnings).toEqual([])
     } finally {
-      await zhPage.close()
+      try { await selectLocalePreference(zhPage, 'en') } finally { await zhPage.close() }
     }
   })
 
@@ -147,6 +148,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     try {
       await inputPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await inputPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await selectLocalePreference(inputPage, locale === ZH_BROWSER_LOCALE ? 'zh' : 'en')
       const input = inputPage.locator('[data-composer-input]').first()
       await writeComposerDraft(inputPage, input, '/')
       await inputPage.getByRole('listbox').getByRole('option', { name: row, exact: true }).click()
@@ -193,7 +195,9 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(inputTripwire.pageErrors).toEqual([])
       expect(inputTripwire.warnings).toEqual([])
     } finally {
-      await inputPage.close()
+      try {
+        if (locale === ZH_BROWSER_LOCALE) await selectLocalePreference(inputPage, 'en')
+      } finally { await inputPage.close() }
     }
   })
 
@@ -267,7 +271,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
   })
 
   it.skipIf(MODE === 'record')('shows the active Plan chip with the Chinese copy', async () => {
-    const zhScaffold = await launchWebScaffold()
+    const zhScaffold = await launchWebScaffold({ locale: 'zh' })
     const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     const zhTripwire = watchConsole(zhPage)
     try {

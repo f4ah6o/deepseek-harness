@@ -105,6 +105,7 @@ it.each([
     try { await resources.browser?.close() } finally { await resources.scaffold?.close() }
   })
   const scaffold = await launchWebScaffold({
+    locale: copy.locale === 'zh-CN' ? 'zh' : 'en',
     profile: { packages: [{ dir: bundle, enabled: true }], hmr: false },
     extraOverlayPath: [
       fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),

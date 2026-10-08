@@ -34,7 +34,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
   let bonusBalance = '0'
   let screenshots: string | undefined
 
-  beforeEach(async () => {
+  beforeEach(async ({ task }) => {
     balanceFailure = false
     balanceReads = 0
     walletBalance = '0E-16'
@@ -60,7 +60,8 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     origin = `http://127.0.0.1:${address.port}`
     const overlay = join(root, 'account.patch.yml')
     await writeFile(overlay, `- id: deepseek-account\n  config:\n    platformOrigin: ${origin}\n    allowLoopbackHttp: true\n`)
-    scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, extraOverlayPath: overlay })
+    const locale = task.name === 'keeps funded credit actions stable and rechecks on reload in English dark mode' ? 'en' : 'zh'
+    scaffold = await launchWebScaffold({ locale, deepSeekMissingCredential: true, extraOverlayPath: overlay })
     await scaffold.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), async () => ({
       kind: 'grant', payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
     }))

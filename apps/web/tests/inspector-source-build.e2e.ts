@@ -9,6 +9,7 @@ it.each([
   { locale: 'zh-CN', preference: 'zh' },
 ])('loads English DevTools under a prefix with browser locale $locale and saved preference $preference', async (copy) => {
   const scaffold = await launchWebScaffold({
+    locale: copy.locale === 'zh-CN' ? 'zh' : 'en',
     publicMount: { prefix: 'nested/devtools-test/' },
     profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/inspector-profile', import.meta.url)), enabled: true }], hmr: false },
     extraOverlayPath: [

@@ -118,7 +118,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'locale',
     summary: 'Dictionary registry plus locale preference.',
-    description: 'Dictionary registry plus locale preference. Lookup walks the active language\'s declared fallback chain in the entry namespace, then repeats it in the shared common namespace before showing the key itself. Reads go through getLocale; preferences change only through setLocale, while language packs extend the catalog through addLanguage. Continuous sync uses the `locale/change` event or the LocaleFace getSnapshot/subscribe pair installed through `ctx.slots.installLocale`.',
+    description: 'Dictionary registry plus locale preference. Lookup walks the active language\'s declared fallback chain in the entry namespace, then repeats it in the shared common namespace before showing the key itself. Reads go through getLocale; preferences change only through setLocale, while language packs extend the catalog through addLanguage. A pack may designate one provisional default when no saved preference is available. Continuous sync uses the `locale/change` event or the LocaleFace getSnapshot/subscribe pair installed through `ctx.slots.installLocale`.',
     methods: [
       {
         signature: 'getLocale(): LocaleSnapshot',
@@ -145,10 +145,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'addLanguage(input: LanguageRegistration): () => void',
-        description: 'Add one selectable language to the shared catalog. Its fallback must already be registered, and following fallback definitions must terminate at English. Dictionaries may register before or after this definition. Registration rechecks an unresolved Host preference and the browser\'s ordered language list. The caller owns the returned disposer; removing an active language falls back without clearing the stored id.',
-        parameters: [{ name: 'input', description: 'stable id, self-described label, and fallback language id.' }],
+        description: 'Add one selectable language to the shared catalog. Its fallback must already be registered, and following fallback definitions must terminate at English. Dictionaries may register before or after this definition. Registration rechecks an unresolved Host preference and the provisional locale. One language may set `default: true` to take precedence over browser language detection when no saved preference exists. The caller owns the returned disposer; removing an active language falls back without clearing the stored id.',
+        parameters: [{ name: 'input', description: 'stable id, self-described label, fallback language id, and optional initial-default flag.' }],
         returns: 'idempotent disposer removing this exact definition.',
-        throws: ['when fields are malformed, the id is occupied, or the fallback target is unknown or creates a cycle.'],
+        throws: ['when fields are malformed, the id or default role is occupied, or the fallback target is unknown or creates a cycle.'],
       },
       {
         signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void',

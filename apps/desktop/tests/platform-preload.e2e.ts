@@ -76,6 +76,15 @@ it('caches language changes before subscription and removes disposed listeners',
   expect(invoke).toHaveBeenCalledOnce()
 })
 
+it('accepts and publishes the Japanese locale through the bridge', () => {
+  const { bridge, ipc } = load(true, { origin: 'https://platform.deepseek.com', token: 'fixture-secret', locale: 'ja_JP' })
+  expect(bridge!.getLocale()).toBe('ja_JP')
+  const listener = vi.fn()
+  bridge!.onLocaleChange(listener)
+  ipc.emit('dsh-platform:locale-changed', {}, 'ja_JP')
+  expect(listener).toHaveBeenCalledWith('ja_JP')
+})
+
 it('rejects invalid bootstrap languages', () => {
   const { bridge } = load(true, { origin: 'https://platform.deepseek.com', token: 'fixture-secret', locale: 'invalid' })
   expect(() => bridge!.getAuthToken()).toThrow()

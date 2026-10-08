@@ -33,7 +33,7 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold(AUTO_REVIEW_FIXTURE)
+    scaffold = await launchWebScaffold({ ...AUTO_REVIEW_FIXTURE, locale: 'zh' })
     // CI uses Playwright's pinned browser. A developer may point this one
     // scenario at an installed Chromium when the matching browser download
     // is temporarily unavailable.
@@ -278,7 +278,7 @@ describe('web e2e: default permission choices', () => {
   let browser: Browser
   let page: Page
   beforeAll(async () => {
-    scaffold = await launchWebScaffold()
+    scaffold = await launchWebScaffold({ locale: 'zh' })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE, colorScheme: 'light' })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })

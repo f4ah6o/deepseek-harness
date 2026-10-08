@@ -32,9 +32,8 @@ export function requireBuilt(name: string): unknown {
 }
 
 /**
- * Browser language a page must advertise to boot into the product's Chinese
- * surface: with no stored preference the client derives its initial locale
- * from the browser, and Playwright's default browser asks for English.
+ * Chinese browser locale used by Web scenarios whose Host fixture explicitly
+ * saves `locale.preference: zh`.
  */
 export const ZH_BROWSER_LOCALE = 'zh-CN'
 
@@ -94,11 +93,10 @@ export async function pinBrowserClock(page: Page): Promise<() => void> {
 
 /**
  * Open the standard browser-test page advertising English before client boot.
- * This keeps role locators and goldens deterministic while leaving the Host
- * settings document free to override the provisional browser-derived locale;
- * scenarios asserting the Chinese surface advertise
- * {@link ZH_BROWSER_LOCALE} instead. The context uses Asia/Shanghai to preserve
- * the recorded Web user-source timezone independently of the host timezone.
+ * Scaffolds save the explicit preference separately; the page language keeps
+ * browser APIs consistent with the interface being tested. The context uses
+ * Asia/Shanghai to preserve the recorded Web user-source timezone regardless
+ * of the host timezone.
  * @param browser - Playwright browser owning the page.
  * @param height - Viewport height; width is fixed to the lane baseline.
  * @returns the initialized page.
@@ -322,12 +320,32 @@ export function conversationContextKey(kind: string, id: string): string {
  * @param page - browser page with the mounted sidebar.
  * @param locale - current UI language.
  */
-export async function openSettings(page: Page, locale: 'en' | 'zh'): Promise<void> {
-  const label = locale === 'zh' ? '设置' : 'Settings'
+export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+  const label = locale === 'zh' ? '设置' : locale === 'ja' ? '設定' : 'Settings'
   if (await page.evaluate(() => 'dshDesktop' in globalThis)) {
-    await page.getByRole('button', { name: locale === 'zh' ? '账号菜单' : 'Account menu', exact: true }).click()
+    const accountMenu = locale === 'zh' ? '账号菜单' : locale === 'ja' ? 'アカウントメニュー' : 'Account menu'
+    await page.getByRole('button', { name: accountMenu, exact: true }).click()
     await page.getByRole('menuitem', { name: label, exact: true }).click()
   } else {
     await page.getByRole('button', { name: label, exact: true }).click()
   }
+}
+
+/**
+ * Save a locale through the visible Settings control in a page attached to a
+ * running Web scaffold. This keeps tests of shared-Host preferences realistic.
+ * @param page - browser page with the mounted sidebar.
+ * @param locale - locale to save.
+ */
+export async function selectLocalePreference(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+  const activeTag = await page.evaluate(() => document.documentElement.lang)
+  const active: 'en' | 'zh' | 'ja' = activeTag === 'zh-CN' ? 'zh' : activeTag === 'ja' ? 'ja' : 'en'
+  const labels = { en: 'English', zh: '中文', ja: '日本語' } as const
+  const dialogs = { en: 'Settings', zh: '设置', ja: '設定' } as const
+  await openSettings(page, active)
+  const dialog = page.getByRole('dialog', { name: dialogs[active], exact: true })
+  await dialog.getByRole('button', { name: labels[active], exact: true }).click()
+  await page.getByRole('menuitem', { name: labels[locale], exact: true }).click()
+  await page.getByRole('dialog', { name: dialogs[locale], exact: true }).waitFor()
+  await page.keyboard.press('Escape')
 }

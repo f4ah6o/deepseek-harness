@@ -58,6 +58,8 @@ export interface LanguageRegistration {
   label: string
   /** Registered language consulted when this language lacks a dictionary key. */
   fallback: LocaleId
+  /** Make this language the provisional choice when no saved preference exists. */
+  default?: boolean
 }
 
 /** One normalized selectable locale published in snapshots. */
@@ -98,13 +100,10 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * English is both the locale the UI opens in when the browser names no registered
- * language (and for non-browser runs), and the dictionary consulted after the
- * active locale misses a key. One constant serves both because the shipped
- * `zh`/`en` dictionaries carry identical key sets, so neither direction can
- * leave a key unresolved; the residual case points at English rather than
- * zh because a browser naming no registered language is the reader least
- * likely to read Chinese.
+ * English is the dictionary consulted after the active locale misses a key.
+ * The shipped `zh`/`en` dictionaries carry identical key sets, so neither
+ * direction can leave a key unresolved; the Japanese language pack also falls
+ * back to this locale when it does not yet carry a namespace key.
  */
 export const FALLBACK_LOCALE: BuiltInLocaleId = 'en'
 
@@ -137,7 +136,7 @@ function normalizeLanguage(input: LanguageRegistration): Readonly<LanguageRegist
   if (!LOCALE_ID_PATTERN.test(input.fallback)) {
     throw new Error(`locale fallback "${input.fallback}" is not a BCP 47-style tag`)
   }
-  return Object.freeze({ id: input.id, label: input.label, fallback: input.fallback })
+  return Object.freeze({ id: input.id, label: input.label, fallback: input.fallback, default: input.default === true })
 }
 
 /**
@@ -167,11 +166,12 @@ export class LocaleRuntime {
   private bound = new Map<string, Translate>()
   private catalog = new Map<string, LocaleDefinition>()
   private fallbackChains = new Map<string, readonly LocaleId[]>()
+  private defaultLanguage: LocaleId | undefined
   private snapshot: LocaleSnapshot
   private listeners = new Set<() => void>()
   private readonly ctx: ClientContext
   private readonly host: ConfigForm<LocaleSettings> | undefined
-  /** Browser-derived locale standing wherever no explicit Host selection does. */
+  /** Initial locale standing wherever no explicit Host selection does. */
   private provisional: LocaleId
   /** Last explicit selection, including one awaiting an external registration. */
   private preference: LocaleId | undefined
@@ -244,8 +244,8 @@ export class LocaleRuntime {
    * Switch the active locale — the only user preference write entry.
    *
    * The durable write happens even when the id already matches the active
-   * locale, because the active value may be a provisional browser-derived or
-   * fallback resolution that nothing has stored yet. Picking the language
+   * locale, because the active value may be a provisional pack default,
+   * browser-derived, or fallback resolution that nothing has stored yet. Picking the language
    * already on screen is still an explicit choice, and it must survive a
    * different browser sharing the same DSH home. Only the render notification
    * is conditional: republishing an unchanged locale would churn every
@@ -264,13 +264,15 @@ export class LocaleRuntime {
    * Add one selectable language to the shared catalog. Its fallback must
    * already be registered, and following fallback definitions must terminate
    * at English. Dictionaries may register before or after this definition.
-   * Registration rechecks an unresolved Host preference and the browser's
-   * ordered language list. The caller owns the returned disposer; removing an
-   * active language falls back without clearing the stored id.
+   * Registration rechecks an unresolved Host preference and the initial
+   * locale. At most one language may be the provisional default; without one,
+   * the browser's ordered language list chooses among registered locales.
+   * The caller owns the returned disposer; removing an active language falls
+   * back without clearing the stored id.
    * @param input - stable id, self-described label, and fallback language id.
    * @returns idempotent disposer removing this exact definition.
-   * @throws when fields are malformed, the id is occupied, or the fallback
-   * target is unknown or creates a cycle.
+   * @throws when fields are malformed, the id is occupied, another default
+   * language is registered, or the fallback target is unknown or creates a cycle.
    */
   addLanguage(input: LanguageRegistration): () => void {
     const candidate = normalizeLanguage(input)
@@ -280,7 +282,10 @@ export class LocaleRuntime {
     if (fallback === undefined) {
       throw new Error(`locale fallback "${candidate.fallback}" is not registered`)
     }
-    const language = Object.freeze({ ...candidate, fallback: fallback.id })
+    const language = Object.freeze({ id: candidate.id, label: candidate.label, fallback: fallback.id })
+    if (candidate.default && this.defaultLanguage !== undefined) {
+      throw new Error(`locale default language "${this.defaultLanguage}" is already registered`)
+    }
     this.catalog.set(key, language)
     try {
       this.assertFallbackChain(language.id)
@@ -288,17 +293,19 @@ export class LocaleRuntime {
       this.catalog.delete(key)
       throw error
     }
+    if (candidate.default) this.defaultLanguage = language.id
     this.publishCatalog()
     return () => {
       if (this.catalog.get(key) !== language) return
       this.catalog.delete(key)
+      if (this.defaultLanguage === language.id) this.defaultLanguage = undefined
       this.publishCatalog()
     }
   }
 
   /**
    * Adopt the scope's accepted durable selection without writing it back; an
-   * absent selection returns to the browser-derived locale.
+   * absent selection returns to the initial locale.
    * @param host - the constructor-narrowed scope driving this adoption.
    */
   private adopt(host: ConfigForm<LocaleSettings>): void {
@@ -310,11 +317,11 @@ export class LocaleRuntime {
     this.publish(target, true)
   }
 
-  /** Recompute browser fallback and publish the current catalog. */
+  /** Recompute the initial locale and publish the current catalog. */
   private publishCatalog(): void {
     this.fallbackChains.clear()
     const locales = this.localeList()
-    this.provisional = resolveInitialLocale(locales, this.bootstrap?.languages)
+    this.provisional = resolveInitialLocale(locales, this.bootstrap?.languages, this.defaultLanguage)
     const active = this.resolveActive()
     this.publish(active, active !== this.snapshot.active, locales)
   }
@@ -513,10 +520,21 @@ export class LocaleRuntime {
 }
 
 /**
- * The browser's own language wins over {@link FALLBACK_LOCALE}; an explicit
- * Host preference may replace this provisional value after plugin activation.
+ * A language pack may designate the default provisional locale regardless of
+ * browser or operating-system language. Before that late-loaded pack
+ * registers, supported browser languages choose the provisional locale and
+ * English is the final fallback. An explicit Host preference may replace
+ * either provisional value.
  */
-function resolveInitialLocale(locales: readonly LocaleDefinition[], languages?: readonly string[]): LocaleId {
+function resolveInitialLocale(
+  locales: readonly LocaleDefinition[],
+  languages?: readonly string[],
+  defaultLanguage?: LocaleId,
+): LocaleId {
+  const preferred = defaultLanguage === undefined
+    ? undefined
+    : locales.find(locale => localeKey(locale.id) === localeKey(defaultLanguage))
+  if (preferred !== undefined) return preferred.id
   return detectBrowserLocale(locales, languages) ?? FALLBACK_LOCALE
 }
 
@@ -600,7 +618,7 @@ export async function apply(ctx: ClientContext): Promise<void> {
   }
   ctx.effect(() => locale.subscribe(sync), 'locale: language row and document synchronization')
   // The served markup declares one language; the resolved locale may differ
-  // (browser detection, or a stored preference adopted after activation), so
+  // (initial locale detection, or a stored preference adopted after activation), so
   // state it once at activation rather than waiting for the first change.
   sync()
   const injected = (actions: BoundActions<typeof store>): LanguageRowInjected => {

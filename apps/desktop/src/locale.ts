@@ -1,4 +1,4 @@
-/** Typed English and Chinese copy owned by the Electron shell. */
+/** Typed English, Chinese, and Japanese copy owned by the Electron shell. */
 
 export const en = {
   cliCommandMenu: 'Manage dsh Command…',
@@ -339,33 +339,202 @@ export const zh = {
   mandatoryNotification: '返回应用确认安装并重启。',
 } as const satisfies DesktopMessages
 
+/** Japanese Desktop strings. */
+export const ja = {
+  cliCommandMenu: 'dsh コマンドを管理…',
+  cliCommandTitle: 'dsh コマンドの管理',
+  cliCommandLocation: 'Desktop コマンド：{path}',
+  cliCommandSelected: '現在の dsh コマンド：{path}',
+  cliCommandTarget: '現在のランチャーの実行先：{path}',
+  cliCommandShadowed: '別の dsh が優先されています。Desktop コマンドを既定で使うには、そのインストールを削除するか優先順位を変更してください。Desktop コマンドはフルパスでも実行できます。',
+  cliCommandSelectionUnknown: 'シェルのコマンドを確認できませんでした。エイリアスまたは別の dsh のインストールが優先されている可能性があります。',
+  cliCommandInstalled: 'Desktop コマンドはインストール済みです。',
+  cliCommandNotInstalled: 'Desktop コマンドをターミナルに追加してください。',
+  cliCommandBroken: 'Desktop コマンドの修復が必要です。',
+  cliCommandInstall: 'インストール',
+  cliCommandRepair: '修復',
+  cliCommandRemove: '削除',
+  cliCommandClose: '閉じる',
+  cliCommandSwitch: 'Desktop コマンドに切り替えますか？',
+  cliCommandPreserve: '既存のコマンドは維持されます。他のインストールやシェルの起動ファイルは変更されません。',
+  cliCommandContinue: '続ける',
+  cliCommandInstallApp: 'dsh コマンドを管理する前に、Desktop を「アプリケーション」フォルダにインストールしてください。',
+  cliCommandUpdating: 'アップデートをインストール中です。完了後にコマンドを管理してください。',
+  cliCommandNewTerminal: '新しいターミナルを開き、dsh --version を実行してください。',
+  cliCommandRemoved: 'Desktop コマンドの登録を解除しました。',
+  cliCommandPreviousRestored: '以前のランチャーを復元しました。',
+  cliCommandOtherKept: '他のコマンドのインストールはそのままです。',
+  cliCommandBackupKept: '以前のランチャーは次の場所に保管されています：{path}',
+  cliCommandChanged: 'ダイアログを開いている間にコマンドまたは PATH が変更されました。「dsh コマンドの管理」を再度開き、現在の状態を確認してください。',
+  cliCommandOwnershipError: 'コマンドの登録情報またはバックアップが変更されました。関係のないコマンドは削除していません。',
+  cliCommandFailed: 'コマンドを更新できませんでした。アプリがインストール済みで、インストール先に書き込みできることを確認してから、もう一度お試しください。',
+  application: 'アプリケーション',
+  fileMenu: 'ファイル',
+  closePage: 'ページまたはウィンドウを閉じる',
+  aboutMenu: 'DeepSeek Harness について',
+  aboutProduct: 'DeepSeek Harness',
+  aboutVersion: 'バージョン V{version}',
+  hideApplication: 'DeepSeek Harness を隠す',
+  hideOtherApplications: 'ほかを隠す',
+  showAllApplications: 'すべてを表示',
+  quitApplication: 'DeepSeek Harness を終了',
+  openApplication: 'DeepSeek Harness を開く',
+  quit: '終了',
+  cancel: 'キャンセル',
+  quitTitle: 'DeepSeek Harness を終了しますか？',
+  quitActiveTasks: '実行中のタスクは中断されます。',
+  quitScheduledTasks: 'アプリの終了中、スケジュール済みタスクは実行されません。',
+  quitActiveAndScheduledTasks: '実行中のタスクは中断され、アプリの終了中はスケジュール済みタスクも実行されません。',
+  backgroundNoticeBody: '実行中のタスクは続行します。システムトレイからウィンドウを再度開けます。',
+  backgroundNoticeConfirm: '確認',
+  edit: '編集',
+  menuBar: 'アプリケーションメニュー',
+  delete: '削除',
+  undo: '元に戻す',
+  redo: 'やり直す',
+  cut: '切り取り',
+  copy: 'コピー',
+  paste: '貼り付け',
+  selectAll: 'すべて選択',
+  startupFailed: 'DeepSeek Harness を利用できません',
+  fatalSummary: 'アプリケーションを起動できなかったか、予期せず停止しました。',
+  startupAddressInUse: '別の DSH（dsh web やデスクトップアプリなど）が実行中です。同時に起動できません。実行中の別の DSH を終了してから、再起動してください。',
+  diagnosticTruncated: '… エラーの詳細を省略しました。',
+  reportWrittenTo: '診断レポート：{path}',
+  startupReinstallAdvice: 'アプリのファイルが見つからないか破損している場合は、アプリを終了して再インストールしてください。タスクは別の場所に保存されています。',
+  exitApplication: '終了',
+  restartApplication: '再起動',
+  recoveryOperationFailed: '復旧処理に失敗しました',
+  disableThirdPartyPlugins: 'サードパーティ製プラグインを無効にし、profile patch をバックアップして再起動してください',
+  welcomeTitle: 'DeepSeek Harness',
+  welcomeBrand: 'DeepSeek Harness',
+  welcomeTaglineBefore: '',
+  welcomeTaglineBrand: 'DeepSeek Harness',
+  welcomeTaglineAfter: 'へようこそ',
+  welcomeDescription: '可能性を広げ、知性を探る。',
+  welcomeAuthStarting: 'サインインを開始しています…',
+  welcomeAuthWaiting: 'ブラウザーが自動で開きませんか？',
+  welcomeAuthWaitingDescription: 'サインインリンクをコピーしてブラウザーで開き、サインインしてください。',
+  welcomeAuthExchanging: 'サインインを完了しています…',
+  welcomeAuthExpired: 'サインインがタイムアウトしました',
+  welcomeAuthExpiredDescription: '続けるには、もう一度サインインしてください',
+  welcomeAuthFailed: 'サインインを完了できませんでした。もう一度お試しください。',
+  welcomeAuthCopyLink: 'サインインリンクをコピー',
+  welcomeAuthCopied: 'コピーしました',
+  welcomeAuthCopyFailed: 'コピーできませんでした。もう一度お試しください。',
+  welcomeAuthCancel: 'キャンセル',
+  welcomeAuthRetry: 'もう一度サインイン',
+  welcomeSignIn: 'サインイン',
+  welcomeApiKey: 'API Key を追加',
+  welcomeKeyTitle: '利用を開始するには API Key を追加してください',
+  welcomeKeyDescription: 'DeepSeek 公式モデルを設定して Harness を使い始めましょう',
+  welcomeKeyPlaceholder: 'API Key を入力',
+  welcomeKeySave: '保存して続ける',
+  welcomeKeyLater: '後で設定',
+  welcomeKeyBack: 'サインインに戻る',
+  welcomeSessionExpired: 'アカウントからサインアウトしました。もう一度サインインしてください。',
+  welcomeKeyBlank: 'API Key を入力してください。',
+  welcomeKeyInvalid: 'API Key 自体を入力してください。引用符、空白、環境変数の代入形式は含めないでください。',
+  welcomeKeyFailed: 'API Key を保存できませんでした。もう一度お試しください。',
+  welcomeContinueFailed: 'ワークスペースを開けませんでした。もう一度お試しください。',
+  checkUpdatesMenu: 'アップデートを確認…',
+  reloadPageMenu: 'ページを再読み込み',
+  restartAppHostMenu: 'アプリと Host を再起動',
+  updateCheckFailedTitle: 'アップデートを確認できませんでした',
+  updateCheckFailed: 'アップデートを確認できませんでした。後でもう一度お試しください。',
+  updateDownloadFailed: 'アップデートをダウンロードできませんでした。もう一度お試しください。',
+  updateInstallFailed: 'アップデートをインストールできませんでした。後でもう一度お試しください。',
+  updateCheckNetworkFailed: 'アップデートを確認できませんでした。接続を確認して、もう一度お試しください。',
+  updateDownloadNetworkFailed: 'アップデートをダウンロードできませんでした。接続を確認して、もう一度お試しください。',
+  updateInstallNetworkFailed: 'アップデートをインストールできませんでした。接続を確認して、もう一度お試しください。',
+  unknownError: '不明なエラー',
+  updateCheckTitle: 'アップデートを確認',
+  updateCurrentDetail: '現在のバージョン：{version}',
+  updateCurrent: '最新バージョンです！',
+  updateChecking: 'アップデートを確認しています…',
+  updateDownload: 'アップデートをダウンロード',
+  updateDownloadedTitle: 'バージョン {version} をインストールできます',
+  updateDownloadedDetail: 'アップデート中はアプリが終了し、完了後に自動で再起動します。',
+  updateDownloadedDetailWindows: 'アップデート中はアプリが一時的に終了し、完了後に自動で再起動します。\n\nアップデートには時間がかかる場合があります。完了までお待ちください。インストール中はアプリを再度起動しないでください。',
+  updateClose: '閉じる',
+  updateAcknowledge: 'OK',
+  updateLater: '後でアップデート',
+  updateDownloading: 'アップデートをダウンロード中：{percent}%…',
+  updateVerifying: 'アップデートファイルを検証しています…',
+  updateInstalling: '再起動の準備中…',
+  updateRetry: 'アップデートを再試行',
+  updateActiveTasks: '実行中のタスクがあります',
+  updateActiveTasksDetail: 'アップデートすると実行中のタスクが停止し、アプリが再起動します。続けますか？',
+  updateStopTasks: 'タスクを停止してアップデート',
+  updateTasksChanged: '新しいタスクが開始されました。タスクを停止してアップデートするには、もう一度確認してください。',
+  updateTasksUnavailable: 'タスクの状態を確認できません。ワークスペースの準備ができてから、アップデートを再試行してください。',
+  updateStopFailed: 'タスクを安全に停止できなかったため、アップデートはインストールされていません。後でもう一度お試しください。',
+  updateTechnicalDetails: '技術的な詳細を表示',
+  updateTitle: 'DeepSeek Harness のアップデート',
+  updateAvailable: '新しいバージョンがあります：{version}',
+  updateDetail: 'ダウンロードが完了したら、アップデートをインストールしてアプリを再起動できます。',
+  installAndRestart: 'インストールして再起動',
+  later: '後で',
+  updateFailedTitle: 'アップデートに失敗しました',
+  mandatoryTitle: '続けるにはアップデートが必要です',
+  mandatoryDetail: 'このバージョンのサポートは終了しました。続けるにはアップデートしてください。インストールと再起動を確認するまでは、実行中のタスクは続行します。',
+  mandatoryUnavailable: 'アップデート要件を確認できませんでした。後でもう一度お試しください。',
+  policyLoginTitle: 'テスト環境にサインイン',
+  policyLoginRequired: 'このテストビルドのアップデート要件を確認するには、Feishu でサインインしてください。サインインしてもアップデートはダウンロードもインストールもされません。',
+  policyLogin: 'Feishu でサインイン',
+  policyLoginFailed: 'Feishu のサインインを完了できませんでした。もう一度お試しください。',
+  policyLoginLoading: 'サインインページを読み込んでいます…',
+  mandatoryNoRelease: '互換性のあるアップデートが見つかりませんでした。もう一度確認するか、サポートにお問い合わせください。',
+  mandatoryRefresh: '再確認',
+  mandatoryPage: '公式サイトからダウンロード',
+  mandatoryCopy: 'ダウンロードリンクをコピー',
+  mandatoryPageFailed: '公式ダウンロードページを開けませんでした。リンクをコピーしてブラウザーで開いてください。',
+  mandatoryActionFailed: '操作に失敗しました。もう一度お試しください。アップデートの完了後にアプリを再び使えます。',
+  mandatoryReady: 'アップデートの準備ができました',
+  mandatoryVersion: '新しいバージョン：{version}',
+  mandatoryReadyDetail: 'アップデート中はアプリが終了し、完了後に自動で再起動します。',
+  mandatoryDeferred: '実行中のタスクは続行します。アプリを再び使う前にアップデートを完了してください。',
+  mandatoryContinue: 'アップデートを続ける',
+  mandatoryInspecting: 'タスクを確認しています…',
+  mandatoryStopping: 'タスクを停止しています…',
+  mandatoryRestarting: 'アプリはまもなく再起動します。お待ちください。',
+  mandatoryDownloadFailed: 'アップデートファイルをダウンロードまたは準備できませんでした。もう一度お試しください。',
+  mandatoryInstallFailed: 'アップデートはインストールされていません。タスクを再確認して、もう一度お試しください。',
+  mandatoryOpenHelp: 'ページが開きませんか？',
+  mandatoryReopen: '公式ダウンロードページを再度開く',
+  mandatoryCopied: 'リンクをコピーしました',
+  mandatoryCopyFailed: 'リンクをコピーできませんでした。下のリンクを選択してコピーしてください。',
+  mandatoryAddress: 'ダウンロードリンク',
+  mandatoryNotification: 'アプリに戻り、インストールと再起動を確認してください。',
+} as const satisfies DesktopMessages
+
 /** Locale payload exposed to the Desktop-owned renderer. */
 export interface DesktopLocale {
-  readonly id: 'en' | 'zh-CN'
+  readonly id: 'en' | 'zh-CN' | 'ja'
   readonly messages: DesktopMessages
 }
 
 /** Resolve Electron's locale to one shipped Desktop dictionary. */
 export function resolveDesktopLocale(locale: string): DesktopLocale {
-  return locale.toLowerCase().startsWith('zh')
-    ? { id: 'zh-CN', messages: zh }
-    : { id: 'en', messages: en }
+  const normalized = locale.toLowerCase()
+  if (normalized.startsWith('zh')) return { id: 'zh-CN', messages: zh }
+  if (normalized === 'ja' || normalized.startsWith('ja-') || normalized === 'ja_jp') {
+    return { id: 'ja', messages: ja }
+  }
+  return { id: 'en', messages: en }
 }
 
 /**
- * Choose a built-in dictionary from the shared preference, then ordered OS languages.
+ * Choose a dictionary from the explicit shared preference, defaulting to Japanese.
  * @param preference - explicit locale.preference, or null when no language was selected.
- * @param languages - operating-system languages in preference order.
- * @returns the supported dictionary, falling back to English.
+ * @param _languages - operating-system languages retained for callers; first-run language does not depend on them.
+ * @returns the supported dictionary; an absent or unsupported preference uses Japanese.
  */
-export function resolveDesktopStartupLocale(preference: string | null, languages: readonly string[]): DesktopLocale {
+export function resolveDesktopStartupLocale(preference: string | null, _languages: readonly string[]): DesktopLocale {
   const selected = preference?.toLowerCase()
   if (selected === 'zh' || selected === 'en') return resolveDesktopLocale(selected)
-  for (const language of languages) {
-    const primary = language.toLowerCase().split('-')[0]
-    if (primary === 'zh' || primary === 'en') return resolveDesktopLocale(primary)
-  }
-  return resolveDesktopLocale('en')
+  if (selected === 'ja' || selected === 'ja-jp' || selected === 'ja_jp') return resolveDesktopLocale('ja')
+  return resolveDesktopLocale('ja')
 }
 
 /** Replace named placeholders in one locale-owned message. */

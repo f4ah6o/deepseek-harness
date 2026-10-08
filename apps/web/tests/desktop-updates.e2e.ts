@@ -19,7 +19,7 @@ type FixtureWindow = Window & typeof globalThis & { updateFixture: CarrierFixtur
 
 describe('web e2e: Desktop update workspace chrome', () => {
   it.each(['zh-CN', 'en-US'])('renders update states and routes explicit actions in %s', async (locale) => {
-    const scaffold = await launchWebScaffold({})
+    const scaffold = await launchWebScaffold({ locale: locale === 'zh-CN' ? 'zh' : 'en' })
     try {
       const browser = await chromium.launch()
       try {

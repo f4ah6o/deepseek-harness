@@ -14,7 +14,7 @@ import {
   assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, saveFailureShot } from './support.ts'
+import { openSettings, saveFailureShot, selectLocalePreference } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/bonus-notice', import.meta.url))
 const OVERLAY_TEMPLATE = fileURLToPath(new URL('./fixtures/bonus-notice/cordis.patch.yml', import.meta.url))
@@ -243,9 +243,24 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     return opened
   }
 
+  /** @param locale - locale to save in the shared Host before opening a measured page. */
+  const configureLocale = async (locale: 'en' | 'zh'): Promise<void> => {
+    const page = await browser.newPage({ locale: locale === 'zh' ? 'zh-CN' : 'en-US' })
+    try {
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await selectLocalePreference(page, locale)
+    } finally {
+      await page.close()
+    }
+    // Opening Settings may read account data; those setup requests have no grant
+    // and are outside the scenario's request counts.
+    platform.gets.length = 0
+    platform.served.length = 0
+    platform.summaries.length = 0
+  }
+
   beforeAll(async () => {
     platform = await mockPlatform()
-    platform.grant(ORDER_FIRST, '5.00')
     root = await mkdtemp(join(tmpdir(), 'dsh-bonus-notice-'))
     const home = join(root, 'home')
     await mkdir(home, { recursive: true })
@@ -277,6 +292,8 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     const zhLater = '已赠送您 8.00 元 DSH 体验赠金。'
     const enBonus = 'You received a CNY 9.00 DSH trial credit.'
     const observations: string[] = []
+    await configureLocale('zh')
+    platform.grant(ORDER_FIRST, '5.00')
     const page = await openDesktopPage('zh-CN')
     onTestFailed(() => saveFailureShot(page, 'web-e2e-bonus-notice'))
     /** @returns every browser storage key of the started page, so a baseline can be taken before a notice shows. */
@@ -556,6 +573,7 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     await page.close()
 
     // Another device in another language gets the copy the server localized for it.
+    await configureLocale('en')
     platform.grant(ORDER_EN, '9.00')
     const enPage = await openDesktopPage('en-US')
     await enPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })

@@ -254,6 +254,9 @@
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
 
+    - id: locale-ja
+      name: '@deepseek-ai/dsh-client-locale-ja'
+
     - id: shortcuts
       name: '@deepseek-ai/dsh-client-shortcuts'
 

@@ -304,6 +304,12 @@ export interface WebScaffold {
 
 /** Options for {@link launchWebScaffold}. */
 export interface LaunchOptions {
+  /**
+   * Explicit locale preference for stable UI tests. Defaults to English so
+   * scenarios keep their established anchors; `null` leaves the preference
+   * absent and exercises the shipped language-pack default.
+   */
+  locale?: 'en' | 'zh' | 'ja' | null
   /** Override the developer-tools preference; omitted uses the shipped default. */
   developerTools?: boolean
   /** Enable the real Open In rows with deterministic launch-environment facts. */
@@ -692,6 +698,12 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     Reflect.deleteProperty(ordinary, 'config')
     return ordinary
   })
+  // Most browser scenarios exercise copy through English anchors. Model that
+  // saved preference in the test profile instead of relying on navigator
+  // language, which the shipped Japanese pack intentionally overrides.
+  if (options.locale !== null) {
+    formDefaults.push({ id: 'locale', config: { preference: options.locale ?? 'en' } })
+  }
 
   // Sessions inherit the gateway's process.cwd() default; run the boot from
   // the temp workspace so tool cwd, session cwd, and fixtures agree.

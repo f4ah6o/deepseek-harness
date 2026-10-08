@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, newEnglishPage, saveFailureShot, selectLocalePreference, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 /** The produced file the seeded turn writes, and what the preview should show. */
@@ -1148,6 +1148,7 @@ describe('web e2e: shipped right Sidebar', () => {
       try {
         await zhPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
         await zhPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+        await selectLocalePreference(zhPage, 'zh')
         // A fresh page opens the workspace on a blank session's hero, which has
         // no session header and so no expand button. The settled session is the
         // second row of the tree; pick it the way a user would.
@@ -1188,7 +1189,7 @@ describe('web e2e: shipped right Sidebar', () => {
         expect(zhTripwire.pageErrors).toEqual([])
         expect(zhTripwire.warnings).toEqual([])
       } finally {
-        await zhPage.close()
+        try { await selectLocalePreference(zhPage, 'en') } finally { await zhPage.close() }
       }
     }, 120_000)
   })

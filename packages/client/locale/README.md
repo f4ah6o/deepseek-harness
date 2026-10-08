@@ -1,5 +1,5 @@
 ---
-description: "Localization for the web GUI: the zh/en preference, browser-derived fallback, typed namespace dictionaries, and the framework translation seat, for users and plugin authors."
+description: "Localization for the web GUI: persisted language choice, pack defaults, browser fallback, typed namespace dictionaries, and the framework translation seat."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/cordis.patch.yml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
+Use `dsh-client-locale` to switch the web GUI between English, Chinese, or client-plugin languages. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/cordis.patch.yml`, while other pages keep them only for the process. A language pack may choose the provisional default; otherwise the browser's first supported language wins, with English as fallback. The web-app Japanese pack defaults to Japanese regardless of browser language, while saved English or Chinese selections remain authoritative. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without reload.
 
 ## Table of Contents
 
@@ -29,9 +29,9 @@ Use it wherever the web GUI needs a language switch or translated copy: the ship
 
 ### Choosing a language
 
-Open Settings → General and select a registered language. The active locale is applied immediately: the UI copy switches, `<html lang>` points at the external id or built-in document tag, and the choice is written to the durable settings section. A browser without an explicit Host preference selects the first registered language that matches `navigator` by full tag and then primary subtag, falling back to English. A stored external locale waits for its definition to register instead of becoming active while unavailable.
+Open Settings → General and select a registered language. The active locale is applied immediately: the UI copy switches, `<html lang>` points at the external id or built-in document tag, and the choice is written to the durable settings section. Without a saved Host preference, a registered pack marked `default: true` takes precedence; if none is marked, the browser's first supported language is selected by full tag and then primary subtag, falling back to English. A stored external locale waits for its definition to register instead of becoming active while unavailable.
 
-Native shells may provide `__DSH_LOCALE__` with an asynchronous `read()` and an `onChange(locale)` callback. Initialization supplies the current Host preference and ordered OS languages before the Client mounts. Automatic selection stays provisional; only Settings selections write `locale.preference`. A fresh read on each page load prevents a stale preload preference after reload. Ordinary browsers keep navigator-based detection and their existing settings-scope policy.
+Native shells may provide `__DSH_LOCALE__` with an asynchronous `read()` and an `onChange(locale)` callback. Initialization supplies the current Host preference and ordered OS languages before the Client mounts. Automatic selection stays provisional; only Settings selections write `locale.preference`. A fresh read on each page load prevents a stale preload preference after reload. Ordinary browsers keep navigator-based detection when no pack default is registered, together with their existing settings-scope policy.
 
 ### Registering a dictionary
 
@@ -43,27 +43,33 @@ Use `ctx.locale.resolveText(text)` for [`LocalizedText`](../../util/package-mani
 
 ### Registering a language pack
 
-An external client plugin registers the language definition and each translated namespace as owned effects; definitions and dictionaries may register in either order:
+An external client plugin may register translated namespaces first, then expose a language as the initial default in one owned effect:
 
 ```js
 export const inject = ['locale']
 
 export function apply(ctx) {
-  ctx.effect(
-    () => ctx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }),
-    'my-locale: language',
-  )
-  ctx.effect(
-    () => ctx.locale.register('common', 'ja', {
+  ctx.effect(() => {
+    const removeDictionary = ctx.locale.register('common', 'ja', {
       cancel: 'キャンセル',
       close: '閉じる',
-    }),
-    'my-locale: common dictionary',
-  )
+    })
+    try {
+      const removeLanguage = ctx.locale.addLanguage({
+        id: 'ja', label: '日本語', fallback: 'en', default: true,
+      })
+      return () => { removeLanguage(); removeDictionary() }
+    } catch (error) {
+      removeDictionary()
+      throw error
+    }
+  }, 'my-locale: language and dictionary')
 }
 ```
 
-An external id is a non-empty ASCII BCP 47-style tag. Its fallback must already be registered, and the chain must terminate at `en`; unknown targets, duplicate ids, and cycles fail at registration. Lookup walks the fallback chain in the requested namespace, repeats it in `common`, then displays the key. Unloading a definition removes it from the selector and returns an active selection to the available browser/default locale.
+Only one registered language may use `default: true`. The default affects automatic selection only; an explicit Host preference still wins.
+
+An external id is a non-empty ASCII BCP 47-style tag. Its fallback must already be registered, and the chain must terminate at `en`; unknown targets, duplicate ids, duplicate default declarations, and cycles fail at registration. Lookup walks the fallback chain in the requested namespace, repeats it in `common`, then displays the key. Unloading a definition removes it from the selector and returns an active selection to the available browser/default locale.
 
 ### What the Host half does
 
@@ -85,7 +91,7 @@ One `LocaleRuntime` owns the preference and the dictionary registry, and is itse
 
 ### Preference resolution
 
-The provisional locale comes from the browser (`navigator.languages` matched by full tag and then primary subtag, English as the fallback), standing in until the allowed Host-backed settings scope delivers its stored preference. The Host read runs after plugin activation so an unavailable or withheld settings scope cannot block the page, and the result replaces the provisional value live. A stored external locale waits for its definition to register. `setLocale` is the only write entry; it persists even when the id already matches the active locale, because the active value may be provisional and must survive a different browser sharing the same home.
+The provisional locale comes from a registered pack default when one exists; otherwise it comes from the browser (`navigator.languages` matched by full tag and then primary subtag, English as the fallback). It stands in until the allowed Host-backed settings scope delivers its stored preference. The Host read runs after plugin activation so an unavailable or withheld settings scope cannot block the page, and the result replaces the provisional value live. A stored external locale waits for its definition to register. `setLocale` is the only write entry; it persists even when the id already matches the active locale, because the active value may be provisional and must survive a different browser sharing the same home.
 
 ### Dictionary lookup
 

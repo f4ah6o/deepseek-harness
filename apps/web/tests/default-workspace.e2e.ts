@@ -71,7 +71,7 @@ describe.skipIf(MODE === 'record')('web e2e: default Workspace', () => {
   })
 
   it('reports a startup directory conflict and opens the composed folder picker for recovery', async () => {
-    const scaffold = await launchWebScaffold({ firstUse: true })
+    const scaffold = await launchWebScaffold({ locale: 'zh', firstUse: true })
     onTestFinished(() => scaffold.close())
     const parent = join(scaffold.workspaceCwd, 'Documents', 'deepseek-harness')
     await mkdir(parent, { recursive: true })

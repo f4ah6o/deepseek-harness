@@ -20,6 +20,7 @@ describe.skipIf(MODE === 'record')('web e2e: remote welcome notice', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
+      locale: 'zh',
       remoteAuthority: 'remote.localhost',
       welcomeNoticePending: true,
     })

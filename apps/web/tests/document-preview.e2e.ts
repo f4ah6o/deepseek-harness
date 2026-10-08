@@ -172,7 +172,7 @@ async function expectExcelLayout(excel: Locator): Promise<void> {
 }
 
 it.skipIf(MODE === 'record').each(['en-US', 'zh-CN'])('fills the spreadsheet pane with read-only controls in %s', async (locale) => {
-  const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, paceMs: 5, compareReplaySession: false })
+  const scaffold = await launchWebScaffold({ locale: locale === 'zh-CN' ? 'zh' : 'en', replayFixture: FIXTURE, paceMs: 5, compareReplaySession: false })
   let browser: Browser | undefined
   try {
     browser = await chromium.launch()

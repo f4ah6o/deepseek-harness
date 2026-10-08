@@ -93,6 +93,19 @@ it('bootstraps only the owned main frame and never puts the token in a URL', asy
   manager.close()
 })
 
+it('passes Japanese to the embedded Platform locale bridge', async () => {
+  const { manager, owner } = setup()
+  manager.close()
+  const japanese = new DesktopPlatformView('/bundled/preload.cjs', () => 'ja_JP', 'darwin')
+  japanese.setSession({ origin: 'https://platform.deepseek.com', userId: 'fixture-user' as AccountUserId, token: 'fixture-secret' })
+  await japanese.open(owner, 'usage', bounds)
+  const sender = view().webContents
+  expect(japanese.bootstrap({ sender, senderFrame: sender.mainFrame })).toEqual({
+    origin: 'https://platform.deepseek.com', token: 'fixture-secret', locale: 'ja_JP',
+  })
+  japanese.close()
+})
+
 it('destroys old documents on sign-out or credential replacement', async () => {
   const { manager, owner } = setup()
   await manager.open(owner, 'usage', bounds)

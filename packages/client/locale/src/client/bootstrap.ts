@@ -4,7 +4,7 @@
 export interface LocaleBootstrap {
   /** Operating-system language tags in preference order. */
   readonly languages: readonly string[]
-  /** Stored locale.preference; null preserves automatic language selection. */
+  /** Stored locale.preference; null preserves the pack default or browser language. */
   readonly preference: string | null
 }
 

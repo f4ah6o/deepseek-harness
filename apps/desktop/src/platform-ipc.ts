@@ -8,5 +8,5 @@ export const PLATFORM_IPC = {
   close: 'dsh-platform:close',
 } as const
 
-/** Resolved Platform language; Desktop resolves the system preference before sending it. */
-export type PlatformLocale = 'en_US' | 'zh_CN'
+/** Resolved Platform language sent by Desktop's embedded-page bridge. */
+export type PlatformLocale = 'en_US' | 'zh_CN' | 'ja_JP'
