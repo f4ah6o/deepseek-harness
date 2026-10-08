@@ -3,8 +3,10 @@
  * disposal through the plugin fiber. */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-locale-ja/client'
+import type { LocaleSettings } from '@deepseek-ai/dsh-client-locale/src/locale-settings.ts'
 import { DICTIONARIES } from '../src/client/dicts/index.ts'
 
 async function bench(languages: readonly string[] = ['en-US'], preference: string | null = null) {
@@ -30,6 +32,42 @@ describe('locale-ja apply', () => {
       .toBe('ブランチ owner/repo:main')
     expect(locale.bind('gitBranch')('detached.aria', { ref: 'abc1234' }))
       .toBe('ブランチなしの HEAD abc1234')
+    expect(locale.bind('chat')('message.turnProcess.worked')).toBe('完了')
+    expect(locale.bind('chat')('message.turnProcess.took')).toBe('完了、所要時間 ')
+  })
+
+  it('keeps Japanese as the default when an English browser loads an empty Host preference', async () => {
+    const ctx = new Context()
+    const host = stubConfigForm<LocaleSettings>()
+    const locale = new LocaleRuntime(ctx, host.scope, { languages: ['en-US'], preference: null })
+    ctx.provide('locale', locale)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      expect(locale.getSnapshot().active).toBe('ja')
+      host.publish({ status: 'ready', value: {}, revision: 1, writable: true })
+      expect(locale.getSnapshot().active).toBe('ja')
+      expect(host.set).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['en', 'zh'] as const)('adopts saved %s from Host after the Japanese pack registers', async (preference) => {
+    const ctx = new Context()
+    const host = stubConfigForm<LocaleSettings>()
+    const locale = new LocaleRuntime(ctx, host.scope, { languages: ['en-US'], preference: null })
+    ctx.provide('locale', locale)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      expect(locale.getSnapshot().active).toBe('ja')
+      host.publish({ status: 'ready', value: { preference }, revision: 1, writable: true })
+      expect(locale.getSnapshot().active).toBe(preference)
+      expect(host.set).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it.each(['en', 'zh'] as const)('preserves the saved %s choice when Japanese registers', async (preference) => {

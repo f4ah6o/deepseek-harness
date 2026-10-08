@@ -51,6 +51,20 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
     await scaffold?.close()
   })
 
+  it('defaults an ordinary en-US Web page to Japanese without writing a preference', async () => {
+    const webPage = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'en-US' })
+    try {
+      await webPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await expect.poll(() => webPage.locator('html').getAttribute('lang')).toBe('ja')
+      await openSettings(webPage, 'ja')
+      const dialog = webPage.getByRole('dialog', { name: '設定', exact: true })
+      await dialog.getByRole('button', { name: '日本語', exact: true }).waitFor()
+      expect(scaffold.ctx.settings.describe().find(row => row.ns === 'locale')!.value).toEqual({})
+    } finally {
+      await webPage.close()
+    }
+  })
+
   it('uses the Japanese pack default without saving it, then shares an explicit choice across reloads', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-locale'))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
