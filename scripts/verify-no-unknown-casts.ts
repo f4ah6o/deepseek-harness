@@ -24,10 +24,9 @@ export interface UnknownCast {
 
 function isStrictDirective(statement: ts.ExpressionStatement, source: ts.SourceFile): boolean {
   const parent = statement.parent
-  const statements =
-    ts.isSourceFile(parent) || (ts.isBlock(parent) && ts.isFunctionLike(parent.parent) && parent.parent.body === parent)
-      ? parent.statements
-      : undefined
+  const functionParent = ts.isBlock(parent) && ts.isFunctionLike(parent.parent) ? parent.parent : undefined
+  const hasFunctionBody = functionParent !== undefined && 'body' in functionParent && functionParent.body === parent
+  const statements = ts.isSourceFile(parent) || (ts.isBlock(parent) && hasFunctionBody) ? parent.statements : undefined
   if (statements === undefined) return false
 
   for (const candidate of statements) {
