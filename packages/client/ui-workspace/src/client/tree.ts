@@ -45,6 +45,8 @@ export interface SessionNode {
   id: SessionId
   /** Stored title, or empty; the renderer localizes blank and unnamed row labels. */
   title: string
+  /** Owning Workspace title on flat rows; an empty string means ungrouped. */
+  workspace?: string
   /** The provisional blank session (renderer shows the localized New Session title). */
   blank: boolean
   /** A Session-scoped UI consumer is awaiting this user. */
@@ -511,10 +513,12 @@ export function deriveFlat(
   sessionIds: readonly SessionId[],
   rowState: SessionRowState,
   statuses: SessionStatuses,
+  workspaces: readonly WorkspaceView[] = [],
 ): SessionNode[] {
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
   const current = mainSessionId(list)
+  const workspaceTitles = workspaceTitleBySession(workspaces)
   const members = sessionIds.flatMap((id) => {
     const session = list.byId[id]
     return session !== undefined && sessionVisible(session, current, archived, rowState.archivedFilter)
@@ -522,7 +526,21 @@ export function deriveFlat(
       : []
   })
   return sectionMembers(members, pinned, archived)
-    .map(session => sessionNode(session, list, statuses, pinned, archived))
+    .map(session => ({
+      ...sessionNode(session, list, statuses, pinned, archived),
+      workspace: workspaceTitles.get(session.id) ?? workspaceLabel(session.cwd),
+    }))
+}
+
+/** First Workspace title accounting for each Session, ignoring later duplicates. */
+function workspaceTitleBySession(workspaces: readonly WorkspaceView[]): ReadonlyMap<SessionId, string> {
+  const titles = new Map<SessionId, string>()
+  for (const workspace of workspaces) {
+    for (const sessionId of workspace.sessionIds) {
+      if (!titles.has(sessionId)) titles.set(sessionId, workspace.title)
+    }
+  }
+  return titles
 }
 
 /**
@@ -554,14 +572,9 @@ export function deriveSearchResults(
   const archived = new Set(archivedSessionIds)
   const current = mainSessionId(list)
 
-  const workspaceBySession = new Map<SessionId, string>()
-  for (const workspace of workspaces) {
-    for (const sessionId of workspace.sessionIds) {
-      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
-    }
-  }
+  const workspaceTitles = workspaceTitleBySession(workspaces)
   const labelOf = (summary: SessionSummary): string =>
-    workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd)
+    workspaceTitles.get(summary.id) ?? workspaceLabel(summary.cwd)
   const contentBySession = new Map<SessionId, SessionSearchResultItem>()
   for (const item of content.items) {
     if (!contentBySession.has(item.sessionId)) contentBySession.set(item.sessionId, item)

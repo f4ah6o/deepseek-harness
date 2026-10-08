@@ -453,7 +453,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s']), workspace('beta', ['beta-s'])])),
     })
     expect(screen.getByText('工作区')).toBeTruthy()
-    expect(screen.getByText('alpha')).toBeTruthy()
+    expect(screen.getAllByText('alpha').length).toBeGreaterThan(0)
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
 
@@ -469,7 +469,7 @@ describe('WorkspaceBrowser', () => {
     // Store-driven flip: title changes, rows flatten newest-first, headers gone.
     expect(b.store.getSnapshot().groupBy).toBe('flat')
     expect(screen.getByText('会话')).toBeTruthy()
-    expect(screen.queryByText('alpha')).toBeNull()
+    expect(screen.getByText('alpha')).toBeTruthy()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
 
@@ -1647,7 +1647,7 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByRole('tree', { name: '搜索结果' })).toBeNull()
     const targetRow = screen.getByText('Needle session').closest('[role="treeitem"]')
     expect(targetRow).toBeTruthy()
-    expect(screen.queryByText('alpha')).toBeNull()
+    expect(screen.getAllByText('alpha').length).toBeGreaterThan(0)
     expect(scrollIntoView.mock.instances.at(-1)).toBe(targetRow)
     expect(b.store.getSnapshot().groupExpansion).toEqual({})
   })

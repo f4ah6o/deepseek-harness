@@ -416,14 +416,18 @@ export function ModelSelect(
     ? t('trigger.loading')
     : currentChoice?.model.name
       ?? (state.current === null ? t('trigger.fallback') : `${state.current.provider}/${state.current.model}`)
-  const triggerLabel = effortLabel === undefined ? modelLabel : `${modelLabel} · ${effortLabel}`
+  const providerLabel = currentChoice === undefined
+    ? undefined
+    : currentChoice.group.id === 'deepseek-account' ? t('provider.account') : currentChoice.group.name
+  const modelWithProvider = providerLabel === undefined ? modelLabel : `${providerLabel} · ${modelLabel}`
+  const triggerLabel = effortLabel === undefined ? modelWithProvider : `${modelWithProvider} · ${effortLabel}`
   const triggerAria = waiting
     ? t('trigger.loading')
     : state.current === null
       ? t('trigger.selectAria')
       : effortLabel === undefined
-        ? t('trigger.aria', { model: modelLabel })
-        : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+        ? t('trigger.aria', { model: modelWithProvider })
+        : t('trigger.ariaEffort', { model: modelWithProvider, effort: effortLabel })
   itemRefs.current = []
   let itemIndex = 0
   let modelIndex = 0
@@ -465,6 +469,12 @@ export function ModelSelect(
         }}
       >
         <IconDataOutlineRegular className={css.triggerIcon} size={16} />
+        {providerLabel !== undefined && (
+          <>
+            <span className={css.triggerProvider}>{providerLabel}</span>
+            <span className={css.triggerSeparator} aria-hidden="true">·</span>
+          </>
+        )}
         <span className={css.triggerLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
         {busy
@@ -548,6 +558,12 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
                 </div>
               ))}
+              {providerLabel !== undefined && (
+                <div className={css.providerRow}>
+                  <span>{t('menu.provider')}</span>
+                  <span className={css.providerValue}>{providerLabel}</span>
+                </div>
+              )}
               <div
                 ref={groupsRef}
                 id={`${id}-models`}

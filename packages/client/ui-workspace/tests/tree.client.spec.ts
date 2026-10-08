@@ -73,6 +73,21 @@ describe('owningGroupKey', () => {
   })
 })
 
+describe('flat Session Workspace labels', () => {
+  it('uses the first owning Workspace title, falls back to the Session cwd, and leaves missing cwd ungrouped', () => {
+    const sessions = list(summary('owned', 3, '/projects/folder-name'), summary('fallback', 2, 'C:\\projects\\checkout'), summary('loose', 1))
+    const rows = deriveFlat(sessions, sessions.ids, noRows, noAttention, [
+      workspace('first', ['owned'], 'Project title'),
+      workspace('duplicate', ['owned'], 'Later duplicate'),
+    ])
+    expect(rows.map(row => [row.id, row.workspace])).toEqual([
+      [sid('owned'), 'Project title'],
+      [sid('fallback'), 'checkout'],
+      [sid('loose'), ''],
+    ])
+  })
+})
+
 describe('Session ordering', () => {
   it.each(['workspace', 'ungrouped', 'flat'] as const)('keeps the current New Session before pins in %s', (mode) => {
     const sessions = withMain(list(

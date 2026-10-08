@@ -131,6 +131,8 @@
       name: '@deepseek-ai/dsh-api-terminal-controller'
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
+    - id: workspace-git
+      name: '@deepseek-ai/dsh-api-workspace-git'
 
     # The Schedule service owns the task store and delivers each due occurrence
     # as a follow-up in its original Session. The clock reading and the four
@@ -355,6 +357,9 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    - id: ui-git-branch
+      name: '@deepseek-ai/dsh-client-ui-git-branch'
 
     # Durable workflow lifecycle as an independent Chat node after the
     # existing generic workflow tool row.

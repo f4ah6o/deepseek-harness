@@ -43,10 +43,24 @@
 }
 
 .triggerLabel {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.triggerProvider {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triggerSeparator {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
 }
 
 /* Effort value beside the model name (mock's 'High': same 13/20/400, caption
@@ -216,6 +230,28 @@
 .groups {
   min-height: 0;
   overflow-y: auto;
+}
+
+.providerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  margin: 0 4px 3px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.providerValue {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .option {

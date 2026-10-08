@@ -179,6 +179,21 @@ describe('workspace browser rows', () => {
     expect(onOpen).toHaveBeenCalledWith(node.id)
   })
 
+  it('shows the Workspace eyebrow only in flat mode, including Ungrouped for loose Sessions', () => {
+    const node: SessionNode = {
+      id: sid('session'), title: 'Session', workspace: '', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    }
+    const { rerender } = render(
+      <SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()} t={t} />,
+    )
+    expect(screen.queryByText('未分组')).toBeNull()
+    rerender(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()} flat t={t} />)
+    expect(screen.getByText('未分组')).toBeTruthy()
+    expect(screen.getByText('Session')).toBeTruthy()
+    expect(screen.getByRole('treeitem').getAttribute('aria-selected')).toBe('true')
+  })
+
   it('keeps a row.action entry click in the strip, so a plain button does not open the row', () => {
     const node: SessionNode = {
       id: sid('session'), title: 'Session', blank: false, running: false,

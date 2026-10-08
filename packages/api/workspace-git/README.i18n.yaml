@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/api/workspace-git/README.md
+/:
+  en: 885cb7db9d272e80
+  zh: 6b816f5f4da5a4b4
+/deepseek-ai-dsh-api-workspace-git:
+  en: 6a1ab36b7e516d45
+  zh: 93531146eb8c909e
+/deepseek-ai-dsh-api-workspace-git/summary:
+  en: 3c713affeda293cd
+  zh: 9a181c244aec60cb
+/deepseek-ai-dsh-api-workspace-git/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 17a17bf6b7f14c4a
+/deepseek-ai-dsh-api-workspace-git/use-this-package:
+  en: c5763ac3a1e827a3
+  zh: 209cd57f6a9d5482
+/deepseek-ai-dsh-api-workspace-git/use-this-package/when-to-choose-it:
+  en: 3e3554b64f43b82e
+  zh: fc80cede278d53a3
+/deepseek-ai-dsh-api-workspace-git/use-this-package/minimal-configuration:
+  en: 7c312c94d36c7386
+  zh: e58d7e12a934ac73
+/deepseek-ai-dsh-api-workspace-git/understand-the-implementation:
+  en: 4e3545a7161cc425
+  zh: 82e9eb2aef95294a
+/deepseek-ai-dsh-api-workspace-git/further-exploration:
+  en: 0dd8c130af8d320e
+  zh: 8978ac56a895f124
+/deepseek-ai-dsh-api-workspace-git/model-experience:
+  en: 50bd5a46a3e07f74
+  zh: 6c88c136f285e7c2
+/deepseek-ai-dsh-api-workspace-git/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: 6e9f63985e00208e
+/deepseek-ai-dsh-api-workspace-git/known-limitations-and-deferred-work:
+  en: 6b20f3e428f9b3da
+  zh: e9c241dc71966f7f
+/deepseek-ai-dsh-api-workspace-git/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6
