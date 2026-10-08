@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { execa } from 'execa'
-import { parseDocument } from 'yaml'
+import { isScalar, parseDocument } from 'yaml'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { migrateSessionLogUploadDefaults } from '../src/session-log-upload-migration.ts'
 
@@ -234,9 +234,10 @@ describe('preboot Session-log upload migration', () => {
     expect(profileDocument.getIn([0, 'insert', 0, 'config', 'enabled'])).toBe(true)
     expect(profileDocument.getIn([0, 'insert', 1, 'config', 'enabled'])).toBe(false)
     const migratedEnabled = profileDocument.getIn([0, 'insert', 1, 'config', 'enabled'], true)
-    expect(migratedEnabled?.commentBefore).toContain('uploader-specific note')
-    expect(migratedEnabled?.comment).toContain('uploader-specific inline note')
-    expect(migratedEnabled?.spaceBefore).toBe(true)
+    if (!isScalar(migratedEnabled)) throw new Error('migrated uploader enabled value is not a YAML scalar')
+    expect(migratedEnabled.commentBefore).toContain('uploader-specific note')
+    expect(migratedEnabled.comment).toContain('uploader-specific inline note')
+    expect(migratedEnabled.spaceBefore).toBe(true)
     const legacyDocument = parseDocument(readFileSync(legacy, 'utf8'))
     expect(legacyDocument.get('shared')).toBe(true)
     expect(legacyDocument.getIn(['session-log-deepseek', 'enabled'])).toBe(false)
