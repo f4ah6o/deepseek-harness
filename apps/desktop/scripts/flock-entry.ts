@@ -104,7 +104,8 @@ export function hostFlockAddonBuilt(
   platform: HostPlatform,
   libc: LinuxLibc | undefined,
 ): boolean {
-  const binary = manifest.binaries.find((candidate) => candidate.tool === 'flock' && candidate.libc === libc)
+  const selectedLibc = platform === 'linux' ? libc : undefined
+  const binary = manifest.binaries.find((candidate) => candidate.tool === 'flock' && candidate.libc === selectedLibc)
   return binary !== undefined && existsSync(join(packageDirectory, binary.path))
 }
 
