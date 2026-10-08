@@ -54,7 +54,9 @@ function createAppReady(): { service: AppReady; commit(): void } {
           return () => {}
         }
         listeners.add(listener)
-        return () => { listeners.delete(listener) }
+        return () => {
+          listeners.delete(listener)
+        }
       },
     },
     commit() {
@@ -100,25 +102,20 @@ export const PROFILE_ROOT_FILENAME = 'cordis.yml'
  * @param home - Harness home containing the profile directory.
  * @throws when the template is unknown, the target name is shipped, or the target directory exists.
  */
-export function initializeProfileFromDefault(
-  name: string,
-  fromDefaultProfile: string,
-  home: string = resolveDshHome(),
-): void {
+export function initializeProfileFromDefault(name: string, fromDefaultProfile: string, home: string = resolveDshHome()): void {
   const dir = resolveProfileDir(name, home)
-  const template = Object.hasOwn(PROFILE_TEMPLATES, fromDefaultProfile)
-    ? PROFILE_TEMPLATES[fromDefaultProfile]
-    : undefined
+  const template = Object.hasOwn(PROFILE_TEMPLATES, fromDefaultProfile) ? PROFILE_TEMPLATES[fromDefaultProfile] : undefined
   if (template === undefined) {
-    const expected = Object.keys(PROFILE_TEMPLATES).sort().map(value => JSON.stringify(value)).join(', ')
-    throw new Error(
-      `${NAME}: unknown default profile ${JSON.stringify(fromDefaultProfile)}; expected one of ${expected}`,
-    )
+    const expected = Object.keys(PROFILE_TEMPLATES)
+      .sort()
+      .map((value) => JSON.stringify(value))
+      .join(', ')
+    throw new Error(`${NAME}: unknown default profile ${JSON.stringify(fromDefaultProfile)}; expected one of ${expected}`)
   }
   if (Object.hasOwn(PROFILE_TEMPLATES, name)) {
     throw new Error(
-      `${NAME}: profile ${JSON.stringify(name)} is shipped and cannot be a custom profile target; `
-      + 'omit --from-default-profile to use it',
+      `${NAME}: profile ${JSON.stringify(name)} is shipped and cannot be a custom profile target; ` +
+        'omit --from-default-profile to use it',
     )
   }
   mkdirSync(dirname(dir), { recursive: true })
@@ -129,13 +126,10 @@ export function initializeProfileFromDefault(
     const manifestPath = join(dir, 'package.json')
     if (existsSync(manifestPath)) {
       throw new Error(
-        `${NAME}: profile ${JSON.stringify(name)} already exists at ${manifestPath}; `
-        + 'omit --from-default-profile to use it',
+        `${NAME}: profile ${JSON.stringify(name)} already exists at ${manifestPath}; ` + 'omit --from-default-profile to use it',
       )
     }
-    throw new Error(
-      `${NAME}: profile directory ${dir} already exists; choose an unused profile name`,
-    )
+    throw new Error(`${NAME}: profile directory ${dir} already exists; choose an unused profile name`)
   }
   try {
     initProfile(dir, template.bundles)
@@ -143,10 +137,7 @@ export function initializeProfileFromDefault(
     try {
       rmSync(dir, { recursive: true, force: true })
     } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        `${NAME}: profile initialization failed and ${dir} could not be removed`,
-      )
+      throw new AggregateError([error, cleanupError], `${NAME}: profile initialization failed and ${dir} could not be removed`)
     }
     throw error
   }
@@ -225,24 +216,20 @@ async function composeProfile(
     throw new Error(`${NAME}: application-owned profile manifest does not exist at ${profileManifestPath}`)
   }
   const profilePatchPath = join(profileDir, PROFILE_PATCH_FILENAME)
-  await migrateSessionLogUploadDefaults(
-    profileDir,
-    profilePatchPath,
-    home,
-    join(home, PROFILE_PATCH_FILENAME),
-  )
-  const profile = resolvedProfile === undefined
-    ? loadProfile(NAME, name, INSTALL_ANCHOR, home)
-    : {
-      ...loadProfileDirectory(NAME, profileDir, resolvedProfile.installAnchor, { userLayer: false }),
-      patchPath: profilePatchPath,
-      patches: existsSync(profilePatchPath) ? loadOverlayPatches(NAME, profilePatchPath) : [],
-    }
+  await migrateSessionLogUploadDefaults(profileDir, profilePatchPath, home, join(home, PROFILE_PATCH_FILENAME))
+  const profile =
+    resolvedProfile === undefined
+      ? loadProfile(NAME, name, INSTALL_ANCHOR, home)
+      : {
+          ...loadProfileDirectory(NAME, profileDir, resolvedProfile.installAnchor, { userLayer: false }),
+          patchPath: profilePatchPath,
+          patches: existsSync(profilePatchPath) ? loadOverlayPatches(NAME, profilePatchPath) : [],
+        }
   reportSkippedBundles(NAME, profile)
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   const resolutionOptions = { installAnchor: resolvedProfile?.installAnchor ?? INSTALL_ANCHOR, profile }
   const resolution = await createRuntimeResolution(resolutionOptions)
-  const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
+  const overlays = patchFiles.flatMap((file) => loadOverlayPatches(NAME, resolve(file)))
   return { profile, resolution, overlays }
 }
 
@@ -284,25 +271,27 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // proxy environment on its own, so every profile would otherwise connect directly. Resolving from
   // the launcher's snapshot — not `process.env` — is what lets a proxy declared in a `.env` layer
   // work, which the NODE_USE_ENV_PROXY flag cannot do because Node samples the environment at start.
-  const disposeProxy = await installProxyFromEnvironment(
-    options.environment,
-    (message) => { process.stderr.write(`${NAME}: ${message}\n`) },
-  )
+  const disposeProxy = await installProxyFromEnvironment(options.environment, (message) => {
+    process.stderr.write(`${NAME}: ${message}\n`)
+  })
 
   const app: { current?: Context } = {}
   let disposal: Promise<void> | undefined
-  const dispose = (): Promise<void> => disposal ??= (async () => {
-    const failures: unknown[] = []
-    for (const release of [() => app.current?.fiber.dispose(), disposeProxy]) {
-      try { await release() } catch (error) { failures.push(error) }
-    }
-    if (failures.length === 1) throw failures[0]
-    if (failures.length > 1) throw new AggregateError(failures, 'dsh: profile cleanup failed')
-  })()
+  const dispose = (): Promise<void> =>
+    (disposal ??= (async () => {
+      const failures: unknown[] = []
+      for (const release of [() => app.current?.fiber.dispose(), disposeProxy]) {
+        try {
+          await release()
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+      if (failures.length === 1) throw failures[0]
+      if (failures.length > 1) throw new AggregateError(failures, 'dsh: profile cleanup failed')
+    })())
   try {
-    const composed = await composeProfile(
-      options.profile, options.patchFiles, options.fromDefaultProfile, options.resolvedProfile,
-    )
+    const composed = await composeProfile(options.profile, options.patchFiles, options.fromDefaultProfile, options.resolvedProfile)
     const appReady = createAppReady()
     const shutdown = createProcessShutdown(dispose)
     const signalShutdown = new AbortController()
@@ -315,8 +304,12 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     // SIGTERM is a supervisor's ordinary stop request and exits 0 on every
     // surface — the launcher does not know whether the app considered its work
     // complete; SIGINT is a user interrupt and reports 130.
-    process.on('SIGTERM', () => { interrupt(0) })
-    process.on('SIGINT', () => { interrupt(130) })
+    process.on('SIGTERM', () => {
+      interrupt(0)
+    })
+    process.on('SIGINT', () => {
+      interrupt(130)
+    })
     installFailLoud(NAME, process, async () => {
       await app.current?.fiber.dispose()
     })
@@ -325,11 +318,14 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     const profileContext: ProfileContext = {
       name: options.profile,
       ...(options.packageManager === undefined ? {} : { packageManager: options.packageManager }),
-      dir: composed.profile.dir, patchPath: composed.profile.patchPath,
+      dir: composed.profile.dir,
+      patchPath: composed.profile.patchPath,
       installAnchor: options.resolvedProfile?.installAnchor ?? INSTALL_ANCHOR,
-      startedBundles: composed.profile.layers.map(layer => layer.packageName),
-      cwd: process.cwd(), home: resolveDshHome(),
-      overlays: composed.overlays, telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+      startedBundles: composed.profile.layers.map((layer) => layer.packageName),
+      cwd: process.cwd(),
+      home: resolveDshHome(),
+      overlays: composed.overlays,
+      telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
     }
     const ctx = await boot(NAME, rootConfig, readProfilePatches(NAME, profileContext, composed.profile), async (hostCtx) => {
       app.current = hostCtx
@@ -344,19 +340,19 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       // to every app plugin that injects the argument snapshot.
       provideCmdline(hostCtx, {
         args: options.args,
-        exit: code => void shutdown.shutdown(code),
+        exit: (code) => void shutdown.shutdown(code),
         ready: appReady.service,
       })
     })
     app.current = ctx
-    if (!signalShutdown.signal.aborted
-      && ctx.fiber.state === FiberState.ACTIVE
-      && ctx.get('loader') !== undefined) {
+    if (!signalShutdown.signal.aborted && ctx.fiber.state === FiberState.ACTIVE && ctx.get('loader') !== undefined) {
       appReady.commit()
     }
     return { ctx, shutdown }
   } catch (error) {
-    try { await dispose() } catch (cleanupError) {
+    try {
+      await dispose()
+    } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'dsh: profile startup and cleanup failed')
     }
     throw error

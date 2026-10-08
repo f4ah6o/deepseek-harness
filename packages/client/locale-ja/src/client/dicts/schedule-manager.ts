@@ -5,8 +5,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-schedule/client'
 
 /** `schedule.manager` copy in Japanese, complete against the owner's key union. */
 export const ja: LocaleDictOf<'schedule.manager'> = {
-  'panel': '自動化タスク',
-  'title': '自動化タスク',
+  panel: '自動化タスク',
+  title: '自動化タスク',
   'new.action': '新規作成',
   'list.label': 'タスク一覧',
   'list.nextPrefix': '次回の実行予定：',
@@ -44,7 +44,8 @@ export const ja: LocaleDictOf<'schedule.manager'> = {
   'delivery.pruned': '以前の実行記録は削除されました',
   'delivery.retention': '保存ルール',
   'delivery.retentionBounds': '各タスクの実行記録は、直近 {days} 日分を最大 {records} 件まで保存します。',
-  'delivery.retentionExplanation': '新しい記録を保存すると、上限を超えた古い記録は自動で削除されます。記録を削除してもタスクは停止しません。',
+  'delivery.retentionExplanation':
+    '新しい記録を保存すると、上限を超えた古い記録は自動で削除されます。記録を削除してもタスクは停止しません。',
   'detail.name': '自動化タスク名',
   'detail.instruction': '自動化タスクの指示',
   'detail.status': '状態',
@@ -131,12 +132,17 @@ export const ja: LocaleDictOf<'schedule.manager'> = {
   'timing.unit.hour': '時間',
   'timing.unit.minute': '分',
   'timing.unit.second': '秒',
-  'timing.intervalHint.hour': '1 時間以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
-  'timing.intervalHint.minute': '1 分以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
-  'timing.intervalHint.second': '60 秒以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
-  'timing.zoneNoStored': '1 回限りのタスクには実行時刻のみが保存され、タイムゾーンは保存されません。日時は選択したタイムゾーンで解釈されます。',
+  'timing.intervalHint.hour':
+    '1 時間以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
+  'timing.intervalHint.minute':
+    '1 分以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
+  'timing.intervalHint.second':
+    '60 秒以上にしてください。間隔はタスクの作成時または最後にルールを変更した時点から数え、タイムゾーンには左右されません。',
+  'timing.zoneNoStored':
+    '1 回限りのタスクには実行時刻のみが保存され、タイムゾーンは保存されません。日時は選択したタイムゾーンで解釈されます。',
   'timing.inactive': '無効なタスクは読み取り専用です。実行時刻は編集できません。',
-  'timing.conflict': '編集中にタスクが変更されました。下書きは保持されています。最新のルールを編集するには、更新後にキャンセルし、編集画面を開き直してください。',
+  'timing.conflict':
+    '編集中にタスクが変更されました。下書きは保持されています。最新のルールを編集するには、更新後にキャンセルし、編集画面を開き直してください。',
   'timing.notFound': 'このタスクは利用できなくなりました。下書きは保持されています。キャンセルして編集画面を閉じてください。',
   'timing.subagentSession': 'このセッションはサブエージェントに属しているため、リマインダーは配信されません。',
   'timing.invalid': '有効な日時を入力するか、日時の各項目を確認してください。',
@@ -182,7 +188,8 @@ export const ja: LocaleDictOf<'schedule.manager'> = {
   'rule.error.unknown': 'ルールの変更を確認できませんでした。保存済みのルールを表示しています。',
   'delete.action': 'タスクを削除',
   'delete.title': 'このタスクを削除しますか？',
-  'delete.description': 'タスクの実行が停止され、保存済みの実行記録とともに削除されます。元のセッションとメッセージは残ります。キューに追加済みのメッセージは取り消されません。',
+  'delete.description':
+    'タスクの実行が停止され、保存済みの実行記録とともに削除されます。元のセッションとメッセージは残ります。キューに追加済みのメッセージは取り消されません。',
   'delete.confirm': '削除を確定',
   'delete.cancel': 'キャンセル',
   'delete.close': '削除の確認を閉じる',

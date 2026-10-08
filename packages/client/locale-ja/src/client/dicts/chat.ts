@@ -93,7 +93,8 @@ export const ja: LocaleDictOf<'chat'> = {
   'message.failure.quota': '現在のリクエストのクォータを使い切りました',
   'message.turnError': 'このターンは失敗しました',
   'message.maxTokens': '出力トークン数の上限に達しました',
-  'message.maxTokens.hint': '回答は途中で打ち切られました。それまでの出力は会話に残っています。「続けて」と送信すると、モデルが続きを出力します。',
+  'message.maxTokens.hint':
+    '回答は途中で打ち切られました。それまでの出力は会話に残っています。「続けて」と送信すると、モデルが続きを出力します。',
   'message.tokensPerSecond': '{tps} tok/s',
   'message.turnUsage.title': 'このターンの使用量',
   'message.turnUsage.consumed': '使用量 {total}',

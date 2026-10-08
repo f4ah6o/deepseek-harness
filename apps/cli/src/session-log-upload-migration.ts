@@ -21,10 +21,15 @@ type MigrationMarkers = Record<string, number>
 
 /** Validate the marker file without accepting a shape that a future write could damage. */
 function isMigrationMarkers(value: unknown): value is MigrationMarkers {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    && Object.getPrototypeOf(value) === Object.prototype
-    && Object.entries(value).every(([key, version]) => key.length > 0
-      && typeof version === 'number' && Number.isSafeInteger(version) && version > 0)
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    Object.entries(value).every(
+      ([key, version]) => key.length > 0 && typeof version === 'number' && Number.isSafeInteger(version) && version > 0,
+    )
+  )
 }
 
 /** Read one fork-owned marker map; malformed or unreadable state fails startup. */
@@ -69,11 +74,7 @@ async function readYamlDocument(path: string): Promise<ReturnType<typeof parseDo
 }
 
 /** Resolve YAML aliases without evaluating custom JavaScript-tagged scalars. */
-function resolveNode(
-  document: ReturnType<typeof parseDocument>,
-  node: Node | null | undefined,
-  path: string,
-): Node | undefined {
+function resolveNode(document: ReturnType<typeof parseDocument>, node: Node | null | undefined, path: string): Node | undefined {
   let current = node ?? undefined
   const seen = new Set<Node>()
   while (current !== undefined && isAlias(current)) {
@@ -109,11 +110,7 @@ function copyComments(source: Node, target: Node): void {
 }
 
 /** Replace every alias to a node before changing its anchored source value. */
-function detachAliasConsumers(
-  document: ReturnType<typeof parseDocument>,
-  target: Node,
-  path: string,
-): void {
+function detachAliasConsumers(document: ReturnType<typeof parseDocument>, target: Node, path: string): void {
   visit(document, {
     Alias(_key, alias, ancestry) {
       if (alias.resolve(document) !== target) return
@@ -161,9 +158,7 @@ function scalarValue(
   const resolved = resolveNode(document, raw, `${path}.${key}`)
   if (!isScalar(resolved)) return undefined
   const value = resolved.value
-  return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-    ? value
-    : undefined
+  return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : undefined
 }
 
 /** Return a literal false scalar without evaluating an aliased JavaScript expression. */
@@ -302,7 +297,9 @@ async function migrateLegacySettings(path: string): Promise<string | undefined> 
   const sectionNode = resolveNode(document, rawSection, `settings.yaml.${SESSION_LOG_ENTRY_ID}`)
   if (sectionNode === undefined) return undefined
   if (isScalar(sectionNode) && sectionNode.tag === YAML_JS_TAG) {
-    throw new Error(`dsh: cannot safely inspect the Session-log settings expression at settings.yaml.${SESSION_LOG_ENTRY_ID}; replace it with a YAML map`)
+    throw new Error(
+      `dsh: cannot safely inspect the Session-log settings expression at settings.yaml.${SESSION_LOG_ENTRY_ID}; replace it with a YAML map`,
+    )
   }
   if (!isMap(sectionNode)) return undefined
   let section = sectionNode
@@ -356,22 +353,30 @@ export async function migrateSessionLogUploadDefaults(
   }
   const profileMarkersPath = join(profileDir, PROFILE_MARKERS_FILENAME)
   const homeMarkersPath = join(home, HOME_MARKERS_FILENAME)
-  await withFileLock(profileManifestPath, async () => {
-    const profileMarkers = await readMarkers(profileMarkersPath)
-    const profileVersion = profileMarkers[MIGRATION_KEY]
-    const profileDone = profileVersion !== undefined && profileVersion >= MIGRATION_VERSION
-    await withFileLock(homePatchPath, async () => {
-      const homeMarkers = await readMarkers(homeMarkersPath)
-      const homeVersion = homeMarkers[MIGRATION_KEY]
-      const homeDone = homeVersion !== undefined && homeVersion >= MIGRATION_VERSION
-      const nextProfile = profileDone ? undefined : await migratePatch(profilePatchPath, false)
-      const nextHome = homeDone ? undefined : await migratePatch(homePatchPath, true)
-      const nextLegacy = homeDone ? undefined : await migrateLegacySettings(join(home, LEGACY_SETTINGS_FILENAME))
-      await commitYaml(profilePatchPath, nextProfile)
-      await commitYaml(homePatchPath, nextHome)
-      await commitYaml(join(home, LEGACY_SETTINGS_FILENAME), nextLegacy)
-      if (!profileDone) await writeMarker(profileMarkersPath, profileMarkers)
-      if (!homeDone) await writeMarker(homeMarkersPath, homeMarkers)
-    }, { waitMs: 120_000 })
-  }, { waitMs: 120_000 })
+  await withFileLock(
+    profileManifestPath,
+    async () => {
+      const profileMarkers = await readMarkers(profileMarkersPath)
+      const profileVersion = profileMarkers[MIGRATION_KEY]
+      const profileDone = profileVersion !== undefined && profileVersion >= MIGRATION_VERSION
+      await withFileLock(
+        homePatchPath,
+        async () => {
+          const homeMarkers = await readMarkers(homeMarkersPath)
+          const homeVersion = homeMarkers[MIGRATION_KEY]
+          const homeDone = homeVersion !== undefined && homeVersion >= MIGRATION_VERSION
+          const nextProfile = profileDone ? undefined : await migratePatch(profilePatchPath, false)
+          const nextHome = homeDone ? undefined : await migratePatch(homePatchPath, true)
+          const nextLegacy = homeDone ? undefined : await migrateLegacySettings(join(home, LEGACY_SETTINGS_FILENAME))
+          await commitYaml(profilePatchPath, nextProfile)
+          await commitYaml(homePatchPath, nextHome)
+          await commitYaml(join(home, LEGACY_SETTINGS_FILENAME), nextLegacy)
+          if (!profileDone) await writeMarker(profileMarkersPath, profileMarkers)
+          if (!homeDone) await writeMarker(homeMarkersPath, homeMarkers)
+        },
+        { waitMs: 120_000 },
+      )
+    },
+    { waitMs: 120_000 },
+  )
 }

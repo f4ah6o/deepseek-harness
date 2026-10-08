@@ -5,12 +5,18 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vite-plus/test'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  captureStableAria, compareOrRefreshGolden, launchWebScaffold, readPersistedEvents, seedSession,
-  watchConsole, webSnapshotMode, type WebScaffold,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  readPersistedEvents,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
 } from './scaffold.ts'
 import { saveFailureShot } from './support.ts'
 
@@ -27,17 +33,18 @@ const BRANCH_NAME = 'feature/長い日本語ブランチ名の表示を狭い画
 const REPOSITORY_NAME = 'long-project-name-for-narrow-viewport-git-context-display'
 
 /** Return a subprocess handle whose owner can observe and release cancellation. */
-function waitForAbort(
-  spec: SubprocessSpawnSpec,
-  aborted: () => void,
-): SubprocessHandle {
+function waitForAbort(spec: SubprocessSpawnSpec, aborted: () => void): SubprocessHandle {
   const signal = spec.signal
   if (signal === undefined) throw new Error('generated workspaceGit call must pass a cancellation signal')
   const done = new Promise<SubprocessOutcome>((_resolve, reject) => {
-    signal.addEventListener('abort', () => {
-      aborted()
-      reject(new Error('workspace Git subprocess was cancelled'))
-    }, { once: true })
+    signal.addEventListener(
+      'abort',
+      () => {
+        aborted()
+        reject(new Error('workspace Git subprocess was cancelled'))
+      },
+      { once: true },
+    )
   })
   return {
     stdin: undefined,
@@ -53,7 +60,9 @@ function waitForAbort(
 
 /** Create a committed local checkout with a credential-bearing GitHub origin. */
 async function initializeRepository(cwd: string): Promise<void> {
-  const git = (...args: string[]): void => { execFileSync('git', args, { cwd, stdio: 'ignore' }) }
+  const git = (...args: string[]): void => {
+    execFileSync('git', args, { cwd, stdio: 'ignore' })
+  }
   git('init', '-b', BRANCH_NAME)
   git('config', 'user.name', 'Web Context Fixture')
   git('config', 'user.email', 'web-context@example.invalid')
@@ -103,7 +112,9 @@ describe('web e2e: Session project, model provider, and Git context', () => {
 
     browser = await chromium.launch()
     page = await browser.newPage({
-      viewport: { width: 1680, height: 1000 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo',
+      viewport: { width: 1680, height: 1000 },
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -140,7 +151,8 @@ describe('web e2e: Session project, model provider, and Git context', () => {
 
     await projectRow.click()
     const branchChip = page.locator('[data-composer-stat="git-branch"]')
-    await expect.poll(() => branchChip.getAttribute('aria-label'), { timeout: 15_000 })
+    await expect
+      .poll(() => branchChip.getAttribute('aria-label'), { timeout: 15_000 })
       .toBe(`ブランチ shiguredo/${REPOSITORY_NAME}:${BRANCH_NAME}`)
     const modelTrigger = page.locator('[data-composer-card] button[aria-haspopup="menu"]')
     await expect.poll(() => modelTrigger.isVisible()).toBe(true)
@@ -148,30 +160,33 @@ describe('web e2e: Session project, model provider, and Git context', () => {
     const modelRow = page.getByRole('menuitem', { name: /^モデル/ })
     await expect.poll(() => modelRow.count()).toBe(1)
     await modelTrigger.press('Tab')
-    await expect.poll(() => modelRow.evaluate(element => element === document.activeElement)).toBe(true)
+    await expect.poll(() => modelRow.evaluate((element) => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Enter')
     const forkModel = page.getByRole('menuitemradio', { name: MODEL_TITLE, exact: true })
     await expect.poll(() => forkModel.count()).toBe(1)
     const modelCount = await page.getByRole('menuitemradio').count()
     for (let step = 0; step < modelCount; step++) {
-      if (await forkModel.evaluate(element => element === document.activeElement)) break
+      if (await forkModel.evaluate((element) => element === document.activeElement)) break
       await page.keyboard.press('ArrowDown')
     }
-    await expect.poll(() => forkModel.evaluate(element => element === document.activeElement)).toBe(true)
+    await expect.poll(() => forkModel.evaluate((element) => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Enter')
-    await expect.poll(() => modelTrigger.getAttribute('aria-label'))
-      .toBe(`モデルを選択、現在 ${PROVIDER_TITLE} · ${MODEL_TITLE}`)
+    await expect.poll(() => modelTrigger.getAttribute('aria-label')).toBe(`モデルを選択、現在 ${PROVIDER_TITLE} · ${MODEL_TITLE}`)
     await modelTrigger.press('Enter')
     await expect.poll(() => modelRow.isVisible()).toBe(true)
     await modelTrigger.press('Tab')
-    await expect.poll(() => modelRow.evaluate(element => element === document.activeElement)).toBe(true)
+    await expect.poll(() => modelRow.evaluate((element) => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Enter')
     const modelMenu = page.getByRole('group', { name: 'モデルと推論レベル', exact: true })
     await expect.poll(() => modelMenu.locator('[class*="providerValue"]').innerText()).toBe(PROVIDER_TITLE)
 
-    await expect.poll(async () => (await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION)))
-      .some(event => event.type === 'model/selection'
-        && event.data.provider === 'fork-gateway' && event.data.model === 'fork-model')).toBe(true)
+    await expect
+      .poll(async () =>
+        (await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION))).some(
+          (event) => event.type === 'model/selection' && event.data.provider === 'fork-gateway' && event.data.model === 'fork-model',
+        ),
+      )
+      .toBe(true)
     const beforeEvents = await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION))
     const expected = [
       '## Session list',
@@ -182,13 +197,14 @@ describe('web e2e: Session project, model provider, and Git context', () => {
       await modelMenu.ariaSnapshot(),
     ].join('\n\n')
     await compareOrRefreshGolden(EXPECTED, expected, MODE)
-    await expect.poll(async () => JSON.stringify(await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION))))
+    await expect
+      .poll(async () => JSON.stringify(await readPersistedEvents(scaffold, SessionId(PROJECT_SESSION))))
       .toBe(JSON.stringify(beforeEvents))
 
     await page.keyboard.press('Escape')
     await page.setViewportSize({ width: 900, height: 800 })
     const narrowLabels = await Promise.all([
-      projectRow.locator('[class*="workspace"]').evaluate(element => ({
+      projectRow.locator('[class*="workspace"]').evaluate((element) => ({
         text: element.textContent,
         width: element.clientWidth,
         contentWidth: element.scrollWidth,
@@ -243,12 +259,16 @@ describe('web e2e: Session project, model provider, and Git context', () => {
     const spawn = vi.spyOn(subprocess, 'spawn').mockImplementation((spec) => {
       if (spec.argv[0] === 'git' && spec.argv[1] === '-C' && spec.argv[2] === projectCwd) {
         started.resolve(spec.signal ?? AbortSignal.abort(new Error('Host call omitted its signal')))
-        return waitForAbort(spec, () => { cancellation.resolve(undefined) })
+        return waitForAbort(spec, () => {
+          cancellation.resolve(undefined)
+        })
       }
       return originalSpawn(spec)
     })
     try {
-      await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
       const signal = await started.promise
       expect(signal.aborted).toBe(false)
       await otherRow.click()

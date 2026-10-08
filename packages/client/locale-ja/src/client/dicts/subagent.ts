@@ -21,7 +21,7 @@ export const ja: LocaleDictOf<'subagent'> = {
   'tokens.total': '{value} tok',
   'loading.label': 'サブエージェントを読み込んでいます…',
   'load.error': 'サブエージェントを読み込めませんでした',
-  'retry': '再試行',
+  retry: '再試行',
   'mode.oneShot': '単発',
   'mode.continuable': '継続可能',
   'activity.running': '実行中',

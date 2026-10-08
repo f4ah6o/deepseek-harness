@@ -32,10 +32,28 @@ import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 
 export type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 export type {
-  BundleInfo, BundleRowInfo, ChangeResult, IncompatiblePlugin, InspectOptions, InstallBundleOptions, InstallSpecKind, ManagementError,
+  BundleInfo,
+  BundleRowInfo,
+  ChangeResult,
+  IncompatiblePlugin,
+  InspectOptions,
+  InstallBundleOptions,
+  InstallSpecKind,
+  ManagementError,
   PackageResult,
-  PluginChange, PluginEntryId, PluginInfo, PluginInspectProblem, PluginInstallCancellation, PluginInstallFailureKind,
-  PluginInstallLogChunk, PluginInstallProgress, PluginInstallRequestId, PluginRegistries, PluginSpecInspection, ReadOnlyReason, Registry,
+  PluginChange,
+  PluginEntryId,
+  PluginInfo,
+  PluginInspectProblem,
+  PluginInstallCancellation,
+  PluginInstallFailureKind,
+  PluginInstallLogChunk,
+  PluginInstallProgress,
+  PluginInstallRequestId,
+  PluginRegistries,
+  PluginSpecInspection,
+  ReadOnlyReason,
+  Registry,
 } from '@deepseek-ai/dsh-plugin-manager/types'
 export type {} from '@deepseek-ai/dsh-plugin-manager/remote'
 export type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/remote'
@@ -92,9 +110,15 @@ export type {} from '@deepseek-ai/dsh-api-session-controller/types'
  * the carrier's runtime values stay behind their own module edge.
  */
 export type {
-  ConnectionHandle, ConnectionSinks, ContentBlock,
+  ConnectionHandle,
+  ConnectionSinks,
+  ContentBlock,
   MessageId,
-  RpcId, RpcRequest, RpcResponse, RpcResult, SessionId,
+  RpcId,
+  RpcRequest,
+  RpcResponse,
+  RpcResult,
+  SessionId,
   StreamChunk,
 } from '@deepseek-ai/dsh-client-connection/client'
 export type {} from '@deepseek-ai/dsh-api-gateway/client'
@@ -141,14 +165,9 @@ export type {
 export type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 // Redacted namespace vocabulary for the settings namespace (secrets never ride
 // it). It travels with its seam, whose `./types` the Client face already reads.
-export type {
-  SettingsDescribeValue, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView,
-} from '@deepseek-ai/dsh-settings/types'
+export type { SettingsDescribeValue, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView } from '@deepseek-ai/dsh-settings/types'
 // Provider registry and discovery vocabulary for the llm namespace.
-export type {
-  LlmConfigurableProvider, LlmDiscoveredModel,
-  LlmModelDiscoveryRequest, LlmProviderInfo,
-} from '@deepseek-ai/dsh-llm/types'
+export type { LlmConfigurableProvider, LlmDiscoveredModel, LlmModelDiscoveryRequest, LlmProviderInfo } from '@deepseek-ai/dsh-llm/types'
 // Reference-discovery result vocabulary for the fileReferences and
 // sessionReferenceResolver namespaces.
 export type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
@@ -158,9 +177,7 @@ export type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-
 // this assembly alone. Types only: a value export would make spec imports load
 // this module's owner /remote artifacts; specs take RemoteError from
 // dsh-client-test-runtime instead.
-export type {
-  RemoteErrorCode, RemoteErrorDetailsMap, RemoteFailure, RemoteResult,
-} from '@deepseek-ai/dsh-typert-protocol'
+export type { RemoteErrorCode, RemoteErrorDetailsMap, RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 export type { RemoteHostFacts } from '@deepseek-ai/dsh-api-gateway/client'
 
 declare module '@deepseek-ai/cordis' {
@@ -182,13 +199,32 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const disposers: Array<() => Promise<void>> = []
   try {
     for (const contribution of [
-      productAnalyticsRemote, agentPresetsRemote, commandsRemote, settingsControllerRemote, accountRemote,
-      goalsRemote, llmRemote, dynamicRemote, scheduleRemote,
-      pluginInventoryRemote, pluginManagerRemote, pluginRegistryProbeRemote, messageFeedbackRemote, sessionFeedbackRemote,
-      fileUploadsRemote, sessionReferencesRemote,
-      permissionPresetsRemote, subagentsRemote, sessionRemote, jobRemote,
-      workspaceRemote, workspaceFilesRemote, workspaceGitRemote, terminalRemote,
-      officeToPdfRemote, userQuestionsRemote,
+      productAnalyticsRemote,
+      agentPresetsRemote,
+      commandsRemote,
+      settingsControllerRemote,
+      accountRemote,
+      goalsRemote,
+      llmRemote,
+      dynamicRemote,
+      scheduleRemote,
+      pluginInventoryRemote,
+      pluginManagerRemote,
+      pluginRegistryProbeRemote,
+      messageFeedbackRemote,
+      sessionFeedbackRemote,
+      fileUploadsRemote,
+      sessionReferencesRemote,
+      permissionPresetsRemote,
+      subagentsRemote,
+      sessionRemote,
+      jobRemote,
+      workspaceRemote,
+      workspaceFilesRemote,
+      workspaceGitRemote,
+      terminalRemote,
+      officeToPdfRemote,
+      userQuestionsRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }

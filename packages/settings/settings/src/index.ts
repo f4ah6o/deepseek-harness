@@ -79,9 +79,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * restating the section: a wholesale `replace` rebuilt from a redacted
  * document silently deletes every secret the wire never returned.
  */
-export type SettingsPathOp =
-  | { op: 'set'; path: readonly string[]; value: unknown }
-  | { op: 'unset'; path: readonly string[] }
+export type SettingsPathOp = { op: 'set'; path: readonly string[]; value: unknown } | { op: 'unset'; path: readonly string[] }
 
 /** Apply one path op to a detached section, returning the next section. */
 function applyPathOp(section: Record<string, unknown>, op: SettingsPathOp, schema: z): Record<string, unknown> {
@@ -90,10 +88,14 @@ function applyPathOp(section: Record<string, unknown>, op: SettingsPathOp, schem
     if (head === undefined) return op.op === 'set' ? op.value : undefined
     const value: unknown = input === undefined ? node?.meta.default : input
     if (Array.isArray(value)) {
-      if (!/^(0|[1-9][0-9]*)$/.test(head) || (Number(head) > value.length || Number(head) === value.length && (rest.length > 0 || op.op === 'unset'))) {
+      if (
+        !/^(0|[1-9][0-9]*)$/.test(head) ||
+        Number(head) > value.length ||
+        (Number(head) === value.length && (rest.length > 0 || op.op === 'unset'))
+      ) {
         throw new TypeError(`Config array index "${head}" is out of range`)
       }
-      const result: unknown[] = [...value as unknown[]]
+      const result: unknown[] = [...(value as unknown[])]
       const index = Number(head)
       if (rest.length === 0 && op.op === 'unset') result.splice(index, 1)
       else result[index] = edit(value[index], rest, node?.inner)
@@ -179,12 +181,13 @@ function mergeLayers(under: unknown, over: unknown): unknown {
   for (const [key, value] of Object.entries(over)) {
     Object.defineProperty(merged, key, {
       value: Object.hasOwn(merged, key) ? mergeLayers(merged[key], value) : value,
-      enumerable: true, configurable: true, writable: true,
+      enumerable: true,
+      configurable: true,
+      writable: true,
     })
   }
   return merged
 }
-
 
 /** Read one member of a plain object or array; `own` limits the read to own properties.
  * @param node Candidate container.
@@ -231,9 +234,18 @@ export class SettingsForms extends Service {
   constructor(private readonly ownerContext: Context) {
     super(ownerContext, 'settings')
     const ctx = ownerContext
-    ctx.effect(() => () => { this.closed = true })
-    ctx.on('app-boot/config-reload', () => { this.invalidate() })
-    void ctx.root.loader.await().then(() => this.importLegacyDocument()).catch((error: unknown) => { ctx.logger.error(error) })
+    ctx.effect(() => () => {
+      this.closed = true
+    })
+    ctx.on('app-boot/config-reload', () => {
+      this.invalidate()
+    })
+    void ctx.root.loader
+      .await()
+      .then(() => this.importLegacyDocument())
+      .catch((error: unknown) => {
+        ctx.logger.error(error)
+      })
   }
 
   /** Move the sections of the removed `settings.yaml` into the active profile once the Loader has settled every entry.
@@ -286,18 +298,28 @@ export class SettingsForms extends Service {
     queueMicrotask(() => {
       this.scheduled = false
       if (this.closed || this.ownerContext.fiber.state !== FiberState.ACTIVE) return
-      try { this.describe() } catch (error) { this.ownerContext.logger.error(error) }
+      try {
+        this.describe()
+      } catch (error) {
+        this.ownerContext.logger.error(error)
+      }
     })
   }
 
   /** Whether the active profile accepts form edits. */
-  get writable(): boolean { return true }
+  get writable(): boolean {
+    return true
+  }
   /** Current profile patch shown by the native configuration editor. */
-  get documentPath(): string { return this.ownerContext.configEditor.documentPath }
+  get documentPath(): string {
+    return this.ownerContext.configEditor.documentPath
+  }
   /** Locate the profile patch for native editing.
    * @returns The existing profile patch path.
    */
-  prepareDocument(): Promise<string> { return Promise.resolve(this.documentPath) }
+  prepareDocument(): Promise<string> {
+    return Promise.resolve(this.documentPath)
+  }
 
   /** Read active plugin schemas and their live values.
    * @param options Redaction required for remote callers.
@@ -307,8 +329,8 @@ export class SettingsForms extends Service {
     const active = new Set<string>()
     const descriptors = this.ownerContext.configEditor.configuration().flatMap(({ entry, inherited, override }) => {
       const schema = this.schema(entry)
-      if (schema === undefined || entry.fiber === undefined
-        || entry.fiber.runtime === null || entry.fiber.state !== FiberState.ACTIVE) return []
+      if (schema === undefined || entry.fiber === undefined || entry.fiber.runtime === null || entry.fiber.state !== FiberState.ACTIVE)
+        return []
       const form = volatileForm(schema)
       if (form === undefined) return []
       active.add(entry.id)
@@ -325,14 +347,19 @@ export class SettingsForms extends Service {
       const base = projectForm(form, plainConfig(inheritedConfig(entry.fiber.runtime, resolved)))
       const user = projectForm(form, override)
       const redacted = redactSecrets(form as z<never>, value)
-      return [{
-        autoGenerate,
-        ns: entry.options.id as SettingsNamespace, schema: form.toJSON(), revision, applies: 'live' as const,
-        value: options?.redactSecrets ? redacted.value : value,
-        base: options?.redactSecrets ? redactSecrets(form as z<never>, base).value : base,
-        user: options?.redactSecrets ? redactSecrets(form as z<never>, user).value : user,
-        ...options?.redactSecrets ? { secrets: redacted.secrets } : {},
-      }]
+      return [
+        {
+          autoGenerate,
+          ns: entry.options.id as SettingsNamespace,
+          schema: form.toJSON(),
+          revision,
+          applies: 'live' as const,
+          value: options?.redactSecrets ? redacted.value : value,
+          base: options?.redactSecrets ? redactSecrets(form as z<never>, base).value : base,
+          user: options?.redactSecrets ? redactSecrets(form as z<never>, user).value : user,
+          ...(options?.redactSecrets ? { secrets: redacted.secrets } : {}),
+        },
+      ]
     })
     for (const [id, previous] of this.revisions) {
       if (active.has(id) || previous.raw === undefined) continue
@@ -350,7 +377,7 @@ export class SettingsForms extends Service {
    */
   async update(ns: string, patch: object, expectedRevision?: number): Promise<void> {
     const input = cloneJsonShaped(patch)
-    await this.write(ns, current => mergeLayers(current, input) as Record<string, unknown>, expectedRevision)
+    await this.write(ns, (current) => mergeLayers(current, input) as Record<string, unknown>, expectedRevision)
   }
 
   /** Reset all live fields, then set the supplied fields; ordinary config is preserved.
@@ -369,21 +396,28 @@ export class SettingsForms extends Service {
    * @param expectedRevision Revision returned by describe.
    */
   async mutate(ns: string, ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<void> {
-    await this.write(ns, (current, base, schema) => ops.reduce((value, op) => {
-      if (op.op === 'set') return applyPathOp(value, op, schema)
-      const parent = op.path.slice(0, -1).reduce<unknown>((node, key) => member(node, key), value)
-      if (Array.isArray(parent)) return applyPathOp(value, op, schema)
-      const inherited = op.path.reduce<unknown>((node, key) => member(node, key, true), base)
-      return applyPathOp(value, inherited === undefined ? op : { op: 'set', path: op.path, value: inherited }, schema)
-    }, current), expectedRevision, ops.map(op => op.path))
+    await this.write(
+      ns,
+      (current, base, schema) =>
+        ops.reduce((value, op) => {
+          if (op.op === 'set') return applyPathOp(value, op, schema)
+          const parent = op.path.slice(0, -1).reduce<unknown>((node, key) => member(node, key), value)
+          if (Array.isArray(parent)) return applyPathOp(value, op, schema)
+          const inherited = op.path.reduce<unknown>((node, key) => member(node, key, true), base)
+          return applyPathOp(value, inherited === undefined ? op : { op: 'set', path: op.path, value: inherited }, schema)
+        }, current),
+      expectedRevision,
+      ops.map((op) => op.path),
+    )
   }
 
   private async write(
     ns: string,
     change: (current: Record<string, unknown>, base: Record<string, unknown>, schema: z) => Record<string, unknown>,
-    expected?: number, paths: readonly (readonly string[])[] = [],
+    expected?: number,
+    paths: readonly (readonly string[])[] = [],
   ): Promise<void> {
-    const entry = this.ownerContext.configEditor.entries().find(row => row.options.id === ns)
+    const entry = this.ownerContext.configEditor.entries().find((row) => row.options.id === ns)
     const schema = entry === undefined ? undefined : this.schema(entry)
     if (entry === undefined || schema === undefined) throw new Error(`No configurable plugin entry "${ns}"`)
     const form = volatileForm(schema)
@@ -392,7 +426,7 @@ export class SettingsForms extends Service {
       if (path.length && !isVolatilePath(schema, path)) throw new Error(`Config field "${path.join('.')}" is not volatile`)
     }
     await this.ownerContext.configEditor.edit(entry, (raw, inherited) => {
-      const descriptor = this.describe().find(row => row.ns === ns)
+      const descriptor = this.describe().find((row) => row.ns === ns)
       if (descriptor === undefined) throw new Error(`Plugin entry "${ns}" is no longer configurable`)
       if (expected !== undefined && descriptor.revision !== expected) {
         throw new SettingsConflictError(ns as SettingsNamespace, expected, descriptor.revision)
@@ -428,7 +462,7 @@ export class SettingsForms extends Service {
 
   private schema(entry: Entry): z | undefined {
     const schema = entry.fiber?.runtime?.Config
-    return schema !== undefined && 'toJSON' in schema ? schema as z : undefined
+    return schema !== undefined && 'toJSON' in schema ? (schema as z) : undefined
   }
 }
 

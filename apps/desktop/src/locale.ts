@@ -6,7 +6,8 @@ export const en = {
   cliCommandLocation: 'Desktop command: {path}',
   cliCommandSelected: 'Current dsh command: {path}',
   cliCommandTarget: 'Current launcher target: {path}',
-  cliCommandShadowed: 'Another dsh takes precedence. Remove or reorder that installation to use the Desktop command by default. You can also run the Desktop command by its full path.',
+  cliCommandShadowed:
+    'Another dsh takes precedence. Remove or reorder that installation to use the Desktop command by default. You can also run the Desktop command by its full path.',
   cliCommandSelectionUnknown: 'Your shell command could not be verified. An alias or another dsh installation may take precedence.',
   cliCommandInstalled: 'The Desktop command is installed.',
   cliCommandNotInstalled: 'Add the Desktop command to your terminal.',
@@ -27,7 +28,8 @@ export const en = {
   cliCommandBackupKept: 'A previous launcher is preserved at: {path}',
   cliCommandChanged: 'The command or PATH changed while this dialog was open. Open Manage dsh Command again to review the current state.',
   cliCommandOwnershipError: 'The command registration or backup changed. No unrelated command was removed.',
-  cliCommandFailed: 'The command could not be updated. Check that the application is installed and the destination is writable, then retry.',
+  cliCommandFailed:
+    'The command could not be updated. Check that the application is installed and the destination is writable, then retry.',
   application: 'Application',
   fileMenu: 'File',
   closePage: 'Close Page or Window',
@@ -58,10 +60,12 @@ export const en = {
   selectAll: 'Select All',
   startupFailed: 'DeepSeek Harness is unavailable',
   fatalSummary: 'The application could not start or stopped unexpectedly.',
-  startupAddressInUse: 'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
+  startupAddressInUse:
+    'Another DSH instance (such as dsh web or the desktop app) is running. They cannot start at the same time. Quit the other running DSH instance, then restart.',
   diagnosticTruncated: '… Error details shortened.',
   reportWrittenTo: 'Diagnostic report: {path}',
-  startupReinstallAdvice: 'If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.',
+  startupReinstallAdvice:
+    'If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.',
   exitApplication: 'Exit',
   restartApplication: 'Restart',
   recoveryOperationFailed: 'The recovery operation failed',
@@ -115,7 +119,8 @@ export const en = {
   updateDownload: 'Download update',
   updateDownloadedTitle: 'Version {version} is ready to install',
   updateDownloadedDetail: 'The app will close during the update and reopen automatically when it is complete.',
-  updateDownloadedDetailWindows: 'The app will close temporarily during the update and reopen automatically when it is complete.\n\nThe update may take some time. Please wait and do not launch the app again during installation.',
+  updateDownloadedDetailWindows:
+    'The app will close temporarily during the update and reopen automatically when it is complete.\n\nThe update may take some time. Please wait and do not launch the app again during installation.',
   updateClose: 'Close',
   updateAcknowledge: 'OK',
   updateLater: 'Update later',
@@ -137,10 +142,12 @@ export const en = {
   later: 'Later',
   updateFailedTitle: 'Update Failed',
   mandatoryTitle: 'Update to continue',
-  mandatoryDetail: 'This version is no longer supported. Update to continue. Tasks in progress will keep running until you confirm installation and restart.',
+  mandatoryDetail:
+    'This version is no longer supported. Update to continue. Tasks in progress will keep running until you confirm installation and restart.',
   mandatoryUnavailable: 'Could not check update requirements. Please try again later.',
   policyLoginTitle: 'Sign in to the test environment',
-  policyLoginRequired: 'Sign in with Feishu to check update requirements for this test build. Signing in will not download or install an update.',
+  policyLoginRequired:
+    'Sign in with Feishu to check update requirements for this test build. Signing in will not download or install an update.',
   policyLogin: 'Sign in with Feishu',
   policyLoginFailed: 'Feishu sign-in did not complete. Please try again.',
   policyLoginLoading: 'Loading sign-in page…',
@@ -346,8 +353,10 @@ export const ja = {
   cliCommandLocation: 'Desktop コマンド：{path}',
   cliCommandSelected: '現在の dsh コマンド：{path}',
   cliCommandTarget: '現在のランチャーの実行先：{path}',
-  cliCommandShadowed: '別の dsh が優先されています。Desktop コマンドを既定で使うには、そのインストールを削除するか優先順位を変更してください。Desktop コマンドはフルパスでも実行できます。',
-  cliCommandSelectionUnknown: 'シェルのコマンドを確認できませんでした。エイリアスまたは別の dsh のインストールが優先されている可能性があります。',
+  cliCommandShadowed:
+    '別の dsh が優先されています。Desktop コマンドを既定で使うには、そのインストールを削除するか優先順位を変更してください。Desktop コマンドはフルパスでも実行できます。',
+  cliCommandSelectionUnknown:
+    'シェルのコマンドを確認できませんでした。エイリアスまたは別の dsh のインストールが優先されている可能性があります。',
   cliCommandInstalled: 'Desktop コマンドはインストール済みです。',
   cliCommandNotInstalled: 'Desktop コマンドをターミナルに追加してください。',
   cliCommandBroken: 'Desktop コマンドの修復が必要です。',
@@ -365,9 +374,11 @@ export const ja = {
   cliCommandPreviousRestored: '以前のランチャーを復元しました。',
   cliCommandOtherKept: '他のコマンドのインストールはそのままです。',
   cliCommandBackupKept: '以前のランチャーは次の場所に保管されています：{path}',
-  cliCommandChanged: 'ダイアログを開いている間にコマンドまたは PATH が変更されました。「dsh コマンドの管理」を再度開き、現在の状態を確認してください。',
+  cliCommandChanged:
+    'ダイアログを開いている間にコマンドまたは PATH が変更されました。「dsh コマンドの管理」を再度開き、現在の状態を確認してください。',
   cliCommandOwnershipError: 'コマンドの登録情報またはバックアップが変更されました。関係のないコマンドは削除していません。',
-  cliCommandFailed: 'コマンドを更新できませんでした。アプリがインストール済みで、インストール先に書き込みできることを確認してから、もう一度お試しください。',
+  cliCommandFailed:
+    'コマンドを更新できませんでした。アプリがインストール済みで、インストール先に書き込みできることを確認してから、もう一度お試しください。',
   application: 'アプリケーション',
   fileMenu: 'ファイル',
   closePage: 'ページまたはウィンドウを閉じる',
@@ -398,10 +409,12 @@ export const ja = {
   selectAll: 'すべて選択',
   startupFailed: 'DeepSeek Harness を利用できません',
   fatalSummary: 'アプリケーションを起動できなかったか、予期せず停止しました。',
-  startupAddressInUse: '別の DSH（dsh web やデスクトップアプリなど）が実行中です。同時に起動できません。実行中の別の DSH を終了してから、再起動してください。',
+  startupAddressInUse:
+    '別の DSH（dsh web やデスクトップアプリなど）が実行中です。同時に起動できません。実行中の別の DSH を終了してから、再起動してください。',
   diagnosticTruncated: '… エラーの詳細を省略しました。',
   reportWrittenTo: '診断レポート：{path}',
-  startupReinstallAdvice: 'アプリのファイルが見つからないか破損している場合は、アプリを終了して再インストールしてください。タスクは別の場所に保存されています。',
+  startupReinstallAdvice:
+    'アプリのファイルが見つからないか破損している場合は、アプリを終了して再インストールしてください。タスクは別の場所に保存されています。',
   exitApplication: '終了',
   restartApplication: '再起動',
   recoveryOperationFailed: '復旧処理に失敗しました',
@@ -455,7 +468,8 @@ export const ja = {
   updateDownload: 'アップデートをダウンロード',
   updateDownloadedTitle: 'バージョン {version} をインストールできます',
   updateDownloadedDetail: 'アップデート中はアプリが終了し、完了後に自動で再起動します。',
-  updateDownloadedDetailWindows: 'アップデート中はアプリが一時的に終了し、完了後に自動で再起動します。\n\nアップデートには時間がかかる場合があります。完了までお待ちください。インストール中はアプリを再度起動しないでください。',
+  updateDownloadedDetailWindows:
+    'アップデート中はアプリが一時的に終了し、完了後に自動で再起動します。\n\nアップデートには時間がかかる場合があります。完了までお待ちください。インストール中はアプリを再度起動しないでください。',
   updateClose: '閉じる',
   updateAcknowledge: 'OK',
   updateLater: '後でアップデート',
@@ -477,10 +491,12 @@ export const ja = {
   later: '後で',
   updateFailedTitle: 'アップデートに失敗しました',
   mandatoryTitle: '続けるにはアップデートが必要です',
-  mandatoryDetail: 'このバージョンのサポートは終了しました。続けるにはアップデートしてください。インストールと再起動を確認するまでは、実行中のタスクは続行します。',
+  mandatoryDetail:
+    'このバージョンのサポートは終了しました。続けるにはアップデートしてください。インストールと再起動を確認するまでは、実行中のタスクは続行します。',
   mandatoryUnavailable: 'アップデート要件を確認できませんでした。後でもう一度お試しください。',
   policyLoginTitle: 'テスト環境にサインイン',
-  policyLoginRequired: 'このテストビルドのアップデート要件を確認するには、Feishu でサインインしてください。サインインしてもアップデートはダウンロードもインストールもされません。',
+  policyLoginRequired:
+    'このテストビルドのアップデート要件を確認するには、Feishu でサインインしてください。サインインしてもアップデートはダウンロードもインストールもされません。',
   policyLogin: 'Feishu でサインイン',
   policyLoginFailed: 'Feishu のサインインを完了できませんでした。もう一度お試しください。',
   policyLoginLoading: 'サインインページを読み込んでいます…',
@@ -538,10 +554,7 @@ export function resolveDesktopStartupLocale(preference: string | null, _language
 }
 
 /** Replace named placeholders in one locale-owned message. */
-export function formatDesktopMessage(
-  message: string,
-  values: Readonly<Record<string, string>>,
-): string {
+export function formatDesktopMessage(message: string, values: Readonly<Record<string, string>>): string {
   return message.replaceAll(/\{([^{}]+)\}/gu, (placeholder, key: string) => values[key] ?? placeholder)
 }
 

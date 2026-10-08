@@ -128,7 +128,18 @@ export const longProbe = ${'1 + '.repeat(40)}1
 
   it('keeps the formatter aligned with the stylistic policy and bounded paths', () => {
     expect(viteConfig.fmt).toMatchObject({
-      ignorePatterns: ['**/*.md', '.agents/notes/archived/**', 'vendor/**', '**/fixtures/**'],
+      ignorePatterns: [
+        '**/*.md',
+        '.agents/notes/archived/**',
+        'vendor/**',
+        '**/fixtures/**',
+        '**/lib/**',
+        '**/dist/**',
+        'packages/workflow/workflow-ptc/src/guest-source.ts',
+        'packages/extensions/cordis-client-runner/src/client/api-catalog.ts',
+        'packages/extensions/cordis-client-runner/src/client/slot-catalog.ts',
+        'packages/extensions/tool-cordis/src/api-catalog.ts',
+      ],
       singleQuote: true,
       semi: false,
       tabWidth: 2,
