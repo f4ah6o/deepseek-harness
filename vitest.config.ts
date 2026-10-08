@@ -236,7 +236,7 @@ export default defineConfig({
         // Client/web UI files whose remaining branches need a browser-grade
         // harness the jsdom lane doesn't cover yet. TODO(gui): cover and
         // remove as the client test lane matures.
-        'packages/client/ui-trajectory/src/*',
+        'packages/client/ui-trajectory/src/**',
         // Electron guest integration retains its unit specs; per-file coverage
         // is deferred until a native Electron harness covers guest behavior.
         'packages/client/ui-sidebar-browser/src/client/electron/**',
@@ -248,7 +248,7 @@ export default defineConfig({
         'packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx',
         'packages/client/ui-workspace/src/client/WorkspacePicker.tsx',
         'packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx',
-        'packages/client/ui-renderer/src/client/*',
+        'packages/client/ui-renderer/src/client/**',
         // Session object internals retain the runtime GUI debt exemption; the
         // assistant-stream reconciler, Controller entry, transport, Agent scope,
         // and adapters stay gated.
@@ -257,21 +257,21 @@ export default defineConfig({
         'packages/api/session-controller/src/client/time-zone.ts',
         // Keep the browser conversation tree under its existing GUI debt
         // exemption while gating the newly stateful Host half and vocabulary.
-        'packages/client/ui-conversation/src/client/*',
+        'packages/client/ui-conversation/src/client/**',
         // Chat presentation and assembly retain the same GUI debt exemption;
         // package wiring and the new approval-detail adapter remain gated.
         'packages/client/ui-chat/src/client/chat/!(ApprovalCommand).{ts,tsx}',
-        'packages/client/ui-chat/src/client/conversation-nodes/*',
-        'packages/client/ui-chat/src/client/details/*',
-        'packages/client/ui-chat/src/client/model/*',
+        'packages/client/ui-chat/src/client/conversation-nodes/**',
+        'packages/client/ui-chat/src/client/details/**',
+        'packages/client/ui-chat/src/client/model/**',
         'packages/client/ui-chat/src/client/contract/snapshot.ts',
         'packages/client/ui-chat/src/client/historical-images.ts',
         'packages/client/ui-primitives/src/DisclosureRow.tsx',
-        'packages/client/ui-tool/src/*',
-        'packages/client/ui-slots/src/*',
-        'packages/client/ui-layout/src/*',
-        'packages/client/web/src/*',
-        'packages/host/webserver/src/*',
+        'packages/client/ui-tool/src/**',
+        'packages/client/ui-slots/src/**',
+        'packages/client/ui-layout/src/**',
+        'packages/client/web/src/**',
+        'packages/host/webserver/src/**',
         // The browser-worker runtime and its image packer: the executing
         // composition is a real dedicated Worker driven by the web browser lane
         // (apps/web/tests/preview-boot.e2e.ts), which unit-process V8 coverage
@@ -279,7 +279,7 @@ export default defineConfig({
         // evidence is that boot. TODO(webworker): revisit when a browser-grade
         // coverage lane exists.
         'packages/experimental/webworker-runtime/src/**',
-        'packages/experimental/webworker-packer/src/*',
+        'packages/experimental/webworker-packer/src/**',
         // Inspector execution adapters run in a Node Worker, the Host native
         // inspector session, or a browser realm, outside attributable parent
         // Vitest coverage.
