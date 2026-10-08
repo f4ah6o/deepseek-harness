@@ -106,6 +106,152 @@ describe('preboot Session-log upload migration', () => {
       .toEqual({ [MIGRATION_KEY]: 1 })
   })
 
+  it('materializes uploader configs in saved insert rows and leaves shared aliases unchanged', async () => {
+    const home = makeHome()
+    const profileText = [
+      '- insert:',
+      '    - id: shared-config',
+      '      config: &upload { enabled: true, keep: !!js "\'preserved\'" }',
+      '    - id: session-log-deepseek',
+      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+      '      config: *upload',
+      '',
+    ].join('\n')
+    const profileDir = makeProfile(home, 'web', profileText)
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, '[]\n')
+
+    await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
+
+    const migrated = readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')
+    expect(migrated).toContain('config: &upload { enabled: true, keep: !!js "\'preserved\'" }')
+    expect(migrated).toContain('config: { enabled: false, keep: !!js "\'preserved\'" }')
+  })
+
+  it('removes an aliased home enabled scalar without changing its source value', async () => {
+    const home = makeHome()
+    const profileDir = makeProfile(home, 'web', '[]\n')
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, [
+      '- insert:',
+      '    - id: shared-value',
+      '      config: { enabled: &enabled true }',
+      '    - id: session-log-deepseek',
+      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+      '      config: { enabled: *enabled }',
+      '',
+    ].join('\n'))
+
+    await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
+
+    const document = parseDocument(readFileSync(homePatch, 'utf8'))
+    expect(document.getIn([0, 'insert', 0, 'config', 'enabled'])).toBe(true)
+    expect(document.getIn([0, 'insert', 1, 'config'])).toBeUndefined()
+    expect(readFileSync(homePatch, 'utf8')).toContain('enabled: &enabled true')
+  })
+
+  it('resets a legacy uploader map without changing another alias consumer', async () => {
+    const home = makeHome()
+    const profileDir = makeProfile(home, 'web', '[]\n')
+    const homePatch = join(home, 'cordis.patch.yml')
+    const legacy = join(home, 'settings.yaml')
+    writeFileSync(homePatch, '[]\n')
+    writeFileSync(legacy, [
+      'session-log-deepseek: &upload { enabled: true }',
+      'unrelated: *upload',
+      '',
+    ].join('\n'))
+
+    await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
+
+    const document = parseDocument(readFileSync(legacy, 'utf8'))
+    expect(document.getIn(['session-log-deepseek', 'enabled'])).toBe(false)
+    expect(document.getIn(['unrelated', 'enabled'])).toBe(true)
+  })
+
+  it('keeps aliases to a removed home enabled scalar resolvable', async () => {
+    const home = makeHome()
+    const profileDir = makeProfile(home, 'web', '[]\n')
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, [
+      '- insert:',
+      '    - id: session-log-deepseek',
+      "      name: '@deepseek-ai/dsh-session-log-deepseek'",
+      '      config: { enabled: &enabled true }',
+      '    - id: unrelated',
+      '      config: { retained: *enabled }',
+      '',
+    ].join('\n'))
+
+    await migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch)
+
+    const document = parseDocument(readFileSync(homePatch, 'utf8'))
+    expect(document.getIn([0, 'insert', 0, 'config'])).toBeUndefined()
+    expect(document.getIn([0, 'insert', 1, 'config', 'retained'])).toBe(true)
+  })
+
+  it('replaces target enabled expressions without evaluation and preserves unrelated expressions', async () => {
+    const home = makeHome()
+    const profileDir = makeProfile(home, 'web', [
+      '- id: session-log-deepseek',
+      '  config:',
+      '    enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
+      '    keep: !!js "\'preserved\'"',
+      '',
+    ].join('\n'))
+    const profilePatch = join(profileDir, 'cordis.patch.yml')
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, '[]\n')
+    writeFileSync(join(home, 'settings.yaml'), [
+      'session-log-deepseek:',
+      '  enabled: !!js "(() => { throw new Error(\'migration evaluated enabled\') })()"',
+      '  keep: !!js "\'preserved\'"',
+      '',
+    ].join('\n'))
+    await migrateSessionLogUploadDefaults(profileDir, profilePatch, home, homePatch)
+
+    expect(readFileSync(profilePatch, 'utf8')).toContain('enabled: false')
+    expect(readFileSync(profilePatch, 'utf8')).toContain('keep: !!js "\'preserved\'"')
+    expect(readFileSync(join(home, 'settings.yaml'), 'utf8')).toContain('enabled: false')
+    expect(readFileSync(join(home, 'settings.yaml'), 'utf8')).toContain('keep: !!js "\'preserved\'"')
+  })
+
+  it('fails before markers when an uploader config expression cannot be inspected', async () => {
+    const home = makeHome()
+    const profileText = '- id: session-log-deepseek\n  config: !!js "({ enabled: true })"\n'
+    const profileDir = makeProfile(home, 'web', profileText)
+    const homePatch = join(home, 'cordis.patch.yml')
+    writeFileSync(homePatch, '[]\n')
+
+    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
+      .rejects.toThrow(/cannot safely inspect the Session-log config expression/)
+
+    expect(readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')).toBe(profileText)
+    expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
+    expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(false)
+  })
+
+  it('fails before markers when a saved patch contains a cyclic group sequence', async () => {
+    const home = makeHome()
+    const profileDir = makeProfile(home, 'web', '[]\n')
+    const homePatch = join(home, 'cordis.patch.yml')
+    const patchText = [
+      '- insert: &entries',
+      '    - id: recursive-group',
+      '      group: true',
+      '      config: *entries',
+      '',
+    ].join('\n')
+    writeFileSync(homePatch, patchText)
+
+    await expect(migrateSessionLogUploadDefaults(profileDir, join(profileDir, 'cordis.patch.yml'), home, homePatch))
+      .rejects.toThrow(/cyclic Cordis group/)
+
+    expect(readFileSync(homePatch, 'utf8')).toBe(patchText)
+    expect(existsSync(join(profileDir, '.dsh-profile-migrations.json'))).toBe(false)
+    expect(existsSync(join(home, '.dsh-home-migrations.json'))).toBe(false)
+  })
+
   it('preserves false values and absent files while recording both owners', async () => {
     const home = makeHome()
     const profileDir = makeProfile(home, 'headless', '- id: session-log-deepseek\n  config: { enabled: false }\n')

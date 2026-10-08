@@ -247,7 +247,14 @@ describe('runProfile with an application-owned profile', () => {
     }
   })
 
-  it('does not boot or register request contributors when the preboot migration cannot parse a patch', async () => {
+  it.each([
+    { label: 'cannot parse a patch', patch: '- id: [\n', diagnostic: /invalid YAML/ },
+    {
+      label: 'cannot inspect an uploader config expression',
+      patch: '- id: session-log-deepseek\n  config: !!js "({ enabled: true })"\n',
+      diagnostic: /cannot safely inspect the Session-log config expression/,
+    },
+  ])('does not boot or register request contributors when preboot migration $label', async ({ patch, diagnostic }) => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-upload-preboot-failure-'))
     homes.push(home)
     const profileDir = join(home, 'profiles', 'desktop')
@@ -256,14 +263,14 @@ describe('runProfile with an application-owned profile', () => {
     writeFileSync(join(profileDir, 'package.json'), '{"name":"desktop-profile","private":true,"dsh":{"profile":{"bundles":[]}}}\n')
     writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n')
     writeFileSync(join(home, 'runtime/package.json'), '{"name":"test-runtime","version":"1.0.0"}\n')
-    writeFileSync(join(home, 'cordis.patch.yml'), '- id: [\n')
+    writeFileSync(join(home, 'cordis.patch.yml'), patch)
     vi.stubEnv('DSH_HOME', home)
     const disposeProxy = vi.fn().mockResolvedValue(undefined)
     vi.mocked(installProxyFromEnvironment).mockResolvedValue(disposeProxy)
     await expect(runProfile({
       environment: createLaunchEnvironmentSnapshot([]), profile: 'desktop', patchFiles: [], args: [],
       resolvedProfile: { profileDir, installAnchor: join(home, 'runtime/package.json') },
-    })).rejects.toThrow(/invalid YAML/)
+    })).rejects.toThrow(diagnostic)
 
     expect(boot).not.toHaveBeenCalled()
     expect(disposeProxy).toHaveBeenCalledOnce()
