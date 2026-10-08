@@ -6,9 +6,9 @@
  * long-lived watchers, then `dsh web` (skipped by `--no-serve`). The watchers
  * exist because the compile shell links built lib products rather than
  * sources: `tsc -b tsconfig.client.json --watch` emits `lib/types` (the pack
- * lib entries are that emit, not `src`), Vite+ Pack watches `lib/index.js`
- * and `lib/client.js`, and `vite build --watch` rewrites `apps/web/dist`, which
- * `dsh web` serves. A missing watcher does not fail — it silently shows the
+ * Client entries consume that emit, not `src`), Vite+ Pack watches those
+ * emitted type-program files and rewrites `lib/client.js`, and `vite build
+ * --watch` rewrites `apps/web/dist`, which `dsh web` serves. A missing watcher does not fail — it silently shows the
  * previous artifact, so an edit appears to do nothing; any stage exiting on its
  * own therefore stops the loop with exit code 1.
  *
@@ -105,6 +105,18 @@ export function withRootPackDependencyDefaults(config: InlineConfig): InlineConf
     ...config,
     deps: { ...ROOT_PACK_DEPENDENCY_DEFAULTS, ...config.deps },
   }
+}
+
+/**
+ * Add the emitted Client type program directory as an explicit Pack watch file.
+ * @param config - package pack config loaded from its Vite config.
+ * @param packageRoot - package root containing the tsc-emitted Client modules.
+ * @returns the config with watch enabled for its emitted modules and existing extra watch paths.
+ */
+export function withClientTypeInputWatches(config: InlineConfig, packageRoot: string): InlineConfig {
+  const configuredWatchFiles = typeof config.watch === 'string' ? [config.watch] : Array.isArray(config.watch) ? config.watch : []
+  const emittedTypeDirectory = resolve(packageRoot, 'lib/types')
+  return { ...config, watch: [...new Set([...configuredWatchFiles, emittedTypeDirectory])] }
 }
 
 /**
@@ -279,15 +291,19 @@ export async function watchClientPlugins(
           if (typeof configuredSuccess === 'function') await configuredSuccess(...args)
           markConfigInitialized()
         }
-        const watchConfig = withRootPackDependencyDefaults({
-          ...config,
-          cwd: packageRoot,
-          config: false,
-          watch: true,
-          env: { DSH_BUILD_FACE: 'client' },
-          onSuccess,
-          ...(pollInterval !== undefined ? { inputOptions: withPollingInputOptions(config.inputOptions, pollInterval) } : {}),
-        })
+        const watchConfig = withRootPackDependencyDefaults(
+          withClientTypeInputWatches(
+            {
+              ...config,
+              cwd: packageRoot,
+              config: false,
+              env: { DSH_BUILD_FACE: 'client' },
+              onSuccess,
+              ...(pollInterval !== undefined ? { inputOptions: withPollingInputOptions(config.inputOptions, pollInterval) } : {}),
+            },
+            packageRoot,
+          ),
+        )
         handles.push(await build(watchConfig))
       }
     }

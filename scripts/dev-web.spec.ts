@@ -10,6 +10,7 @@ import {
   discoverPluginDirs,
   parseDevWebArguments,
   StageSupervisor,
+  withClientTypeInputWatches,
   withPollingInputOptions,
   withRootPackDependencyDefaults,
   watchClientPlugins,
@@ -139,6 +140,12 @@ it('inherits root pack dependency defaults without replacing package Client sett
   expect(normalized.format).toBe('cjs')
   expect(normalized.platform).toBe('browser')
   expect(withRootPackDependencyDefaults({ deps: { resolveDepSubpath: false } }).deps?.resolveDepSubpath).toBe(false)
+})
+
+it('watches emitted Client modules and retains package watch paths', () => {
+  const normalized = withClientTypeInputWatches({ watch: ['config/locales.js'] }, '/packages/client/example')
+
+  expect(normalized.watch).toEqual(['config/locales.js', '/packages/client/example/lib/types'])
 })
 
 it('adds polling while preserving resolver and watcher options', () => {
@@ -282,7 +289,7 @@ it('discovers client-preset packages the shell links, excluding loader-delivered
   }
 })
 
-it('rebuilds a client-plugin bundle after its source changes', async () => {
+it('rebuilds a client-plugin bundle after an emitted type-program module changes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-dev-web-watch-'))
   let handle: Awaited<ReturnType<typeof watchClientPlugins>> | undefined
   try {
@@ -294,7 +301,7 @@ it('rebuilds a client-plugin bundle after its source changes', async () => {
 import { defineConfig } from 'vite-plus'
 export default defineConfig({
   pack: {
-  entry: { client: 'src.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser', dts: false, clean: false,
+  entry: { client: 'lib/types/client/index.js' }, outDir: 'lib', format: 'cjs', platform: 'browser', dts: false, clean: false,
   outputOptions: { entryFileNames: 'client.js' },
   onSuccess: async () => {
     const { appendFile } = await import('node:fs/promises')
@@ -308,17 +315,19 @@ export default defineConfig({
 })
 `,
     )
-    const sourcePath = join(root, 'src.ts')
+    const emittedModulePath = join(root, 'lib/types/client/locales.js')
     const bundlePath = join(root, 'lib/client.js')
     const successesPath = join(root, 'watch-successes')
-    await writeFile(sourcePath, 'export const version = "watch-v1"\n')
+    await mkdir(join(root, 'lib/types/client'), { recursive: true })
+    await writeFile(join(root, 'lib/types/client/index.js'), "export { version } from './locales.js'\n")
+    await writeFile(emittedModulePath, 'export const version = "watch-v1"\n')
     handle = await watchClientPlugins(root, ['.'], 50)
     expect(await readFile(bundlePath, 'utf8')).toContain('watch-v1')
     expect(await readFile(successesPath, 'utf8')).toBe('success')
     expect(await readFile(join(root, 'hook-complete'), 'utf8')).toBe('ready')
 
     await new Promise((resolve) => setTimeout(resolve, 1_000))
-    await writeFile(sourcePath, `export const version = "watch-v2-${'x'.repeat(100)}"\n`)
+    await writeFile(emittedModulePath, `export const version = "watch-v2-${'x'.repeat(100)}"\n`)
     await expect
       .poll(async () => (await readFile(bundlePath, 'utf8')).includes('watch-v2-'), {
         timeout: 10_000,
@@ -327,7 +336,7 @@ export default defineConfig({
     await expect.poll(() => readFile(successesPath, 'utf8'), { timeout: 10_000 }).toBe('successsuccess')
     await handle.watch.close()
     handle = undefined
-    await writeFile(sourcePath, 'export const version = "watch-v3-after-close"\n')
+    await writeFile(emittedModulePath, 'export const version = "watch-v3-after-close"\n')
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(await readFile(bundlePath, 'utf8')).not.toContain('watch-v3-after-close')
     expect(await readFile(successesPath, 'utf8')).toBe('successsuccess')
