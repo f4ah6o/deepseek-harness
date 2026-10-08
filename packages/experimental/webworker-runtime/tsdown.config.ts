@@ -86,7 +86,7 @@ export default defineConfig([
       resolveDepSubpath: true,
     },
     plugins: [moduleProxyPlugin, shellParserOnlyPlugin],
-    outputOptions: { inlineDynamicImports: true },
+    outputOptions: { codeSplitting: false },
   },
   {
     deps: {

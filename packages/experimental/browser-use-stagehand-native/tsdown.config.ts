@@ -11,6 +11,6 @@ export default defineConfig(
     fixedExtension: false,
     dts: false,
     clean: false,
-    outputOptions: { inlineDynamicImports: true },
+    outputOptions: { codeSplitting: false },
   })),
 )
