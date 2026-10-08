@@ -181,7 +181,7 @@ describe.skipIf(MODE === 'record').each([
     try {
       await expect.poll(() => menu.count()).toBe(1)
       await expect.poll(() => search.evaluate((element) => element === element.ownerDocument.activeElement)).toBe(true)
-      await page.getByText('Acme Gateway', { exact: true }).hover()
+      await page.getByLabel('模型', { exact: true }).getByText('Acme Gateway', { exact: true }).hover()
     } finally {
       await page.mouse.up()
     }

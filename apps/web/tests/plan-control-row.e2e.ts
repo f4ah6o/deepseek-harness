@@ -47,7 +47,7 @@ async function controlLayout(page: Page) {
       const rect = element.getBoundingClientRect()
       return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
     }
-    const label = trigger.querySelector(':scope > span')
+    const label = trigger.querySelector(':scope > span[class*="triggerLabel"]')
     const icon = trigger.querySelector(':scope > svg')
     if (label === null || icon === null) throw new Error('model trigger label or icon is missing')
     const rect = row.getBoundingClientRect()
@@ -92,7 +92,7 @@ async function selectModel(page: Page, name: string): Promise<void> {
   await trigger.click()
   await page.getByRole('menuitem', { name: /^Model/ }).click()
   await page.getByRole('menuitemradio', { name, exact: true }).click()
-  await expect.poll(() => trigger.getAttribute('title')).toMatch(new RegExp(`^${name}(?: ·|$)`))
+  await expect.poll(() => trigger.getAttribute('title')).toMatch(new RegExp(`^DeepSeek · ${name}(?: ·|$)`))
 }
 
 /** A compact decision must remain stable across observer deliveries and paints. */
