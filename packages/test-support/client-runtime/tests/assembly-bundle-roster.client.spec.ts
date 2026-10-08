@@ -3,9 +3,21 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getStaticModules } from '@deepseek-ai/dsh-client-web/src/seed.ts'
-import { afterAll, describe, expect, it, onTestFinished } from 'vite-plus/test'
+import { afterAll, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { MODULES_PACKAGE } from '../src/assembly/modules.ts'
 import { WEB_PROFILE_BUNDLES, bundleRoster, webApp } from '../src/assembly/bundle-roster.ts'
+import { dirname } from 'node:path'
+
+const absentAnchorManifests = vi.hoisted(() => new Set<string>())
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    existsSync(path: Parameters<typeof actual.existsSync>[0]): boolean {
+      return !absentAnchorManifests.has(String(path)) && actual.existsSync(path)
+    },
+  }
+})
 
 function profileScope(name: string) {
   const services: Record<string, object | undefined> = { profileContext: { name } }
@@ -389,4 +401,38 @@ it('exhausts uneven linked-bundle search paths before reporting a missing plugin
   scratch.bundle('@t/base', '- insert: []\n')
   symlinkSync(bundle, join(scratch.root, 'app', 'node_modules', '@t', 'deep'), 'junction')
   expect(() => scratch.roster(['@t/base', '@t/deep'])).toThrow('cannot resolve plugin package @t/absent')
+})
+
+it('returns no owner manifest when an anchor has no package root before the filesystem root', () => {
+  const scratch = new Scratch()
+  onTestFinished(() => {
+    rmSync(scratch.root, { recursive: true, force: true })
+  })
+  const anchor = join(scratch.root, 'app', 'client-entry.js')
+  writeFileSync(anchor, '')
+  const masked: string[] = []
+  let directory = dirname(anchor)
+  while (true) {
+    const manifest = join(directory, 'package.json')
+    absentAnchorManifests.add(manifest)
+    masked.push(manifest)
+    const parent = dirname(directory)
+    if (parent === directory) break
+    directory = parent
+  }
+
+  try {
+    scratch.web('@t/consumer')
+    scratch.bundle(
+      '@t/base',
+      `
+- insert:
+    - id: consumer
+      name: '@t/consumer'
+`,
+    )
+    expect(bundleRoster(['@t/base'], anchor).rows).toEqual([{ name: '@t/consumer', inject: [], immediately: false }])
+  } finally {
+    for (const manifest of masked) absentAnchorManifests.delete(manifest)
+  }
 })
