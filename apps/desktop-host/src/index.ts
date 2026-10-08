@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import * as desktopOffice from './office.ts'
+import { isMainModule } from './is-main-module.ts'
 
 import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
@@ -142,7 +143,7 @@ async function main(): Promise<void> {
 /** Upper bound of the startup diagnostic carried over IPC; the head holds the message and stack. */
 const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024
 
-if (import.meta.main) {
+if (isMainModule(import.meta.url, import.meta.main, process.argv[1])) {
   main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error)
     // The shell receives the complete inspected error here, not through stderr:

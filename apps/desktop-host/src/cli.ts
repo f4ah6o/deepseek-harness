@@ -3,6 +3,7 @@
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { runCli } from '@deepseek-ai/dsh/lib/bin.js'
 import { installOfficeEngineResolution, runtimeArchivePath } from './office-engine.ts'
+import { isMainModule } from './is-main-module.ts'
 
 /**
  * Run the ordinary CLI with Desktop's bundled package manager and reserved-profile plugin access.
@@ -26,7 +27,7 @@ export async function runDesktopCli(runtimeDir: string, supportDir: string): Pro
   })
 }
 
-if (import.meta.main) {
+if (isMainModule(import.meta.url, import.meta.main, process.argv[1])) {
   if (process.platform === 'win32') {
     const { installWindowsCliSignals } = await import('./windows-cli-signals.ts')
     await installWindowsCliSignals()
