@@ -92,7 +92,7 @@ def test_bundled_runtime_surfaces_unbundled_plugin_failure(
 ) -> None:
     patch = tmp_path / "missing.patch.yml"
     patch.write_text(json.dumps([{
-        "insert": [{"id": "missing", "name": "@deepseek-ai/dsh-does-not-exist"}],
+        "insert": [{"id": "sdk-jsonrpc-server", "name": "@deepseek-ai/dsh-does-not-exist"}],
     }]))
 
     client = _client(tmp_path, mode, monkeypatch, patch)
