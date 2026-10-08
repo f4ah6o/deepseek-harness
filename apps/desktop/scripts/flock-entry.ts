@@ -7,6 +7,16 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 
 type FlockEntry = typeof import('@deepseek-ai/node-addon-system/flock')
+type HostPlatform = 'darwin' | 'linux'
+type LinuxLibc = 'glibc' | 'musl'
+
+interface PrebuildManifest {
+  readonly binaries: readonly {
+    readonly tool: string
+    readonly path: string
+    readonly libc?: string
+  }[]
+}
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, '..', '..', '..')
 /** Root package script that compiles the host addon, then the `native/system` script that emits the entry's JavaScript. */
@@ -14,13 +24,13 @@ const BUILD_COMMANDS: readonly (readonly string[])[] = [
   ['run', 'build:native-system'],
   ['--dir', 'native/system', 'run', 'build:ts'],
 ]
-const BUILD_COMMAND_TEXT = BUILD_COMMANDS.map(args => `pnpm ${args.join(' ')}`).join(' && ')
+const BUILD_COMMAND_TEXT = BUILD_COMMANDS.map((args) => `pnpm ${args.join(' ')}`).join(' && ')
 
 /** Loader steps; tests replace the module import, the addon probe, and the build. */
 export interface FlockEntryLoaderSteps {
   /** Import `@deepseek-ai/node-addon-system/flock`; rejects with `ERR_MODULE_NOT_FOUND` while its `lib/` is unbuilt. */
   readonly importEntry: () => Promise<FlockEntry>
-  /** Whether every binary the host platform package declares in `prebuilds.json` exists. */
+  /** Whether the flock binary selected for the host platform and libc exists. */
   readonly hostAddonBuilt: () => boolean
   /** Compile the host addon and emit the entry's JavaScript; rejects when a build fails. */
   readonly build: () => Promise<void>
@@ -50,7 +60,10 @@ export function createFlockEntryLoader(steps: FlockEntryLoaderSteps): () => Prom
     return steps.importEntry()
   }
   return () => {
-    loading ??= load().catch((error: unknown) => { loading = undefined; throw error })
+    loading ??= load().catch((error: unknown) => {
+      loading = undefined
+      throw error
+    })
     return loading
   }
 }
@@ -67,18 +80,44 @@ function hostAddonBuilt(): boolean {
     if ((error as NodeJS.ErrnoException).code !== 'MODULE_NOT_FOUND') throw error
     return false
   }
-  const manifest = JSON.parse(readFileSync(prebuilds, 'utf8')) as { readonly binaries: readonly { readonly path: string }[] }
-  return manifest.binaries.every(binary => existsSync(join(dirname(prebuilds), binary.path)))
+  const manifest = JSON.parse(readFileSync(prebuilds, 'utf8')) as PrebuildManifest
+  const libc =
+    platform === 'linux'
+      ? (process.report.getReport() as { header: { glibcVersionRuntime?: string } }).header.glibcVersionRuntime
+        ? 'glibc'
+        : 'musl'
+      : undefined
+  return hostFlockAddonBuilt(manifest, dirname(prebuilds), platform, libc)
+}
+
+/**
+ * Check only the prebuild selected by the native flock entry for this host.
+ * @param manifest - Platform package's prebuild manifest.
+ * @param packageDirectory - Directory containing the platform package manifest.
+ * @param platform - Host platform supported by the flock entry.
+ * @param libc - Runtime libc on Linux; undefined on macOS.
+ * @returns Whether the selected flock addon exists.
+ */
+export function hostFlockAddonBuilt(
+  manifest: PrebuildManifest,
+  packageDirectory: string,
+  platform: HostPlatform,
+  libc: LinuxLibc | undefined,
+): boolean {
+  const binary = manifest.binaries.find((candidate) => candidate.tool === 'flock' && candidate.libc === libc)
+  return binary !== undefined && existsSync(join(packageDirectory, binary.path))
 }
 
 async function buildNativeSystem(): Promise<void> {
   const pnpmEntry = process.env.npm_execpath
   if (pnpmEntry === undefined || pnpmEntry === '') {
-    throw new Error(`desktop package: flock addon is not built; run ${BUILD_COMMAND_TEXT} or invoke this script through a pnpm package command`)
+    throw new Error(
+      `desktop package: flock addon is not built; run ${BUILD_COMMAND_TEXT} or invoke this script through a pnpm package command`,
+    )
   }
   for (const args of BUILD_COMMANDS) {
     const child = spawn(process.execPath, [pnpmEntry, ...args], { cwd: REPOSITORY_ROOT, stdio: 'inherit' })
-    const [code, signal] = await once(child, 'close') as [number | null, NodeJS.Signals | null]
+    const [code, signal] = (await once(child, 'close')) as [number | null, NodeJS.Signals | null]
     if (code !== 0) throw new Error(`desktop package: pnpm ${args.join(' ')} exited with ${String(code ?? signal)}`)
   }
 }

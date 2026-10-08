@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it, vi } from 'vite-plus/test'
-import { createFlockEntryLoader } from '../scripts/flock-entry.ts'
+import { createFlockEntryLoader, hostFlockAddonBuilt } from '../scripts/flock-entry.ts'
 
 type Entry = Awaited<ReturnType<ReturnType<typeof createFlockEntryLoader>>>
 
@@ -30,6 +30,42 @@ function quietStderr(): () => void {
     spy.mockRestore()
   }
 }
+
+it('checks only the Linux flock addon for the running libc', async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), 'flock-prebuild-test-'))
+  try {
+    await mkdir(join(packageDirectory, 'bin', 'glibc'), { recursive: true })
+    await writeFile(join(packageDirectory, 'bin', 'glibc', 'system.node'), '')
+    const manifest = {
+      binaries: [
+        { tool: 'landlock-run', path: 'bin/landlock-run' },
+        { tool: 'flock', libc: 'glibc', path: 'bin/glibc/system.node' },
+        { tool: 'flock', libc: 'musl', path: 'bin/musl/system.node' },
+      ],
+    }
+    expect(hostFlockAddonBuilt(manifest, packageDirectory, 'linux', 'glibc')).toBe(true)
+    expect(hostFlockAddonBuilt(manifest, packageDirectory, 'linux', 'musl')).toBe(false)
+  } finally {
+    await rm(packageDirectory, { recursive: true, force: true })
+  }
+})
+
+it('checks the macOS flock addon without requiring unrelated package binaries', async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), 'flock-prebuild-test-'))
+  try {
+    await mkdir(join(packageDirectory, 'bin'), { recursive: true })
+    await writeFile(join(packageDirectory, 'bin', 'system.node'), '')
+    const manifest = {
+      binaries: [
+        { tool: 'flock', path: 'bin/system.node' },
+        { tool: 'unrelated', path: 'bin/other' },
+      ],
+    }
+    expect(hostFlockAddonBuilt(manifest, packageDirectory, 'darwin', undefined)).toBe(true)
+  } finally {
+    await rm(packageDirectory, { recursive: true, force: true })
+  }
+})
 
 it('returns the imported entry without building and memoizes it', async () => {
   const used = steps()
