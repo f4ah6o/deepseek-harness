@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import {
@@ -26,6 +26,12 @@ afterEach(async () => {
 
 async function tempDir(name: string): Promise<string> {
   const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
+  tempDirs.push(dir)
+  return await realpath(dir)
+}
+
+async function tempHomeDir(name: string): Promise<string> {
+  const dir = await import('node:fs/promises').then((fs) => fs.mkdtemp(join(homedir(), `dsh-${name}-`)))
   tempDirs.push(dir)
   return await realpath(dir)
 }
@@ -226,7 +232,9 @@ describe('FileSystemSkillProvider', () => {
     expect(skills.find((skill) => skill.name === 'bundled-only')).toMatchObject({ source: 'bundled' })
     expect((await ctx.skills.get('bundled-only'))?.content).toBe('Use the skill.')
 
-    const noGit = await tempDir('skill-no-git')
+    // Keep this no-marker fixture outside /tmp/.git so root discovery falls
+    // back to the fixture cwd rather than an unrelated temporary parent.
+    const noGit = await tempHomeDir('skill-no-git')
     await writeSkill(join(noGit, '.dsh/skills'), 'fallback-root', 'Fallback root')
     expect((await ctx.skills.list({ cwd: noGit })).map((skill) => skill.name)).toContain('fallback-root')
   })

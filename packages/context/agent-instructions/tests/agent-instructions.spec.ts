@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, mkdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { afterAll, describe, expect, it, vi } from 'vite-plus/test'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -648,7 +648,9 @@ describe('workspace context instruction discovery', () => {
   })
 
   it('defaults dshHome and uses cwd itself as root when no project marker exists', async () => {
-    const root = await tempRepo()
+    // Keep this fixture outside /tmp: this host has /tmp/.git, which would
+    // make the temporary directory look like a project with an ancestor root.
+    const root = await mkdtemp(join(homedir(), 'dsh-workspace-context-root-'))
     const emptyHome = await tempRepo()
     // Isolate the default-home fallback: blank DSH_HOME is treated as unset, and
     // the home dirs point at an empty dir so the default ~/.dsh holds no global

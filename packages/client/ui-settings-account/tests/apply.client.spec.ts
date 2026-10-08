@@ -74,6 +74,12 @@ beforeEach(() => {
   vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
   vi.stubGlobal('screen', { width: 1512, height: 982 })
   vi.stubGlobal('devicePixelRatio', 2)
+  // webApp's Japanese pack is the provisional default; these account
+  // assertions use the English preference supplied by the native bootstrap.
+  vi.stubGlobal('__DSH_LOCALE__', {
+    read: async () => ({ languages: ['en'], preference: 'en' }),
+    onChange: vi.fn(),
+  })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
