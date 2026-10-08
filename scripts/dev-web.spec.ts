@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vite-plus/test'
 import { writeClientBuildRecord } from './client-build-environment.ts'
 import {
+  createInitialBuildReadiness,
   devWebBuildEnvironment,
   discoverLibraryDirs,
   discoverPluginDirs,
@@ -139,6 +140,25 @@ it('inherits root pack dependency defaults without replacing package Client sett
   expect(withRootPackDependencyDefaults({ deps: { resolveDepSubpath: false } }).deps?.resolveDepSubpath).toBe(false)
 })
 
+it('waits for every config first success when one config rebuilds before another initializes', async () => {
+  const readiness = createInitialBuildReadiness(2)
+  let ready = false
+  void readiness.ready.then(() => {
+    ready = true
+  })
+  const firstConfigSuccess = readiness.forConfig()
+  const secondConfigSuccess = readiness.forConfig()
+
+  firstConfigSuccess()
+  firstConfigSuccess()
+  await Promise.resolve()
+  expect(ready).toBe(false)
+
+  secondConfigSuccess()
+  await readiness.ready
+  expect(ready).toBe(true)
+})
+
 it('samples one local environment at startup without validating watcher outputs', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-dev-web-environment-'))
   try {
@@ -234,6 +254,10 @@ export default defineConfig({
   pack: {
   entry: { client: 'src.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser', dts: false, clean: false,
   outputOptions: { entryFileNames: 'client.js' },
+  onSuccess: async () => {
+    const { appendFile } = await import('node:fs/promises')
+    await appendFile(new URL('./watch-successes', import.meta.url), 'success')
+  },
   hooks: { 'build:done': async () => {
     const { writeFile } = await import('node:fs/promises')
     await writeFile(new URL('./hook-complete', import.meta.url), 'ready')
@@ -244,9 +268,11 @@ export default defineConfig({
     )
     const sourcePath = join(root, 'src.ts')
     const bundlePath = join(root, 'lib/client.js')
+    const successesPath = join(root, 'watch-successes')
     await writeFile(sourcePath, 'export const version = "watch-v1"\n')
     handle = await watchClientPlugins(root, ['.'], 50)
     expect(await readFile(bundlePath, 'utf8')).toContain('watch-v1')
+    expect(await readFile(successesPath, 'utf8')).toBe('success')
     expect(await readFile(join(root, 'hook-complete'), 'utf8')).toBe('ready')
 
     await new Promise((resolve) => setTimeout(resolve, 1_000))
@@ -256,11 +282,13 @@ export default defineConfig({
         timeout: 10_000,
       })
       .toBe(true)
+    await expect.poll(() => readFile(successesPath, 'utf8'), { timeout: 10_000 }).toBe('successsuccess')
     await handle.watch.close()
     handle = undefined
     await writeFile(sourcePath, 'export const version = "watch-v3-after-close"\n')
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(await readFile(bundlePath, 'utf8')).not.toContain('watch-v3-after-close')
+    expect(await readFile(successesPath, 'utf8')).toBe('successsuccess')
   } finally {
     await handle?.watch.close()
     await rm(root, { recursive: true, force: true })

@@ -108,6 +108,31 @@ export function withRootPackDependencyDefaults(config: InlineConfig): InlineConf
 }
 
 /**
+ * Track one successful initialization build per watched pack config.
+ * @param buildCount - number of configs that must finish their first build.
+ * @returns the readiness promise and a per-config callback that ignores later rebuilds.
+ */
+export function createInitialBuildReadiness(buildCount: number): {
+  readonly ready: Promise<void>
+  forConfig: () => () => void
+} {
+  const initialized = Promise.withResolvers<void>()
+  let initializedBuilds = 0
+  return {
+    ready: initialized.promise,
+    forConfig: () => {
+      let reported = false
+      return () => {
+        if (reported) return
+        reported = true
+        initializedBuilds += 1
+        if (initializedBuilds >= buildCount) initialized.resolve()
+      }
+    },
+  }
+}
+
+/**
  * Parse the script's command line. `--skip-build`, `--no-serve`, and `--poll[=ms]`
  * belong to this script; a bare `--` is dropped; every other token is forwarded
  * to `dsh web`.
@@ -206,18 +231,14 @@ export async function watchClientPlugins(
     const buildCount = configs.reduce((total, pkg) => total + pkg.configs.length, 0)
     if (buildCount === 0) throw new Error('Vite+ pack: dev:web found no Client build configs')
 
-    let resolveInitialBuilds: (() => void) | undefined
-    const initialBuilds = new Promise<void>((resolve) => {
-      resolveInitialBuilds = resolve
-    })
-    let initializedBuilds = 0
+    const initialBuilds = createInitialBuildReadiness(buildCount)
     for (const { packageRoot, configs: packConfigs } of configs) {
       for (const config of packConfigs) {
         const configuredSuccess = config.onSuccess
+        const markConfigInitialized = initialBuilds.forConfig()
         const onSuccess: NonNullable<InlineConfig['onSuccess']> = async (...args) => {
           if (typeof configuredSuccess === 'function') await configuredSuccess(...args)
-          initializedBuilds += 1
-          if (initializedBuilds >= buildCount) resolveInitialBuilds?.()
+          markConfigInitialized()
         }
         const watchConfig = withRootPackDependencyDefaults({
           ...config,
@@ -231,7 +252,7 @@ export async function watchClientPlugins(
         handles.push(await build(watchConfig))
       }
     }
-    await initialBuilds
+    await initialBuilds.ready
     return {
       watch: { close: async () => await Promise.all(handles.map((handle) => handle.watch.close())).then(() => undefined) },
     }
