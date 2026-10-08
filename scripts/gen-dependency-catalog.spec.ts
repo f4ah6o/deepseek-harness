@@ -52,6 +52,7 @@ function lockfile() {
 function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-dependency-catalog-test-'))
   roots.push(root)
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'dsh-dependency-catalog-test', private: true }))
   mkdirSync(join(root, 'scripts/dependency-catalog'), { recursive: true })
   writeFileSync(join(root, 'scripts/dependency-catalog/package-lock.json'), JSON.stringify(lockfile()))
   writeFileSync(
@@ -191,11 +192,15 @@ describe('published npm dependency catalog', () => {
       'install-strategy': 'nested',
     })
     const isolated = createNpmResolutionEnvironment(root, inherited)
-    const after = await runCommandWithTimeout(npm, args, { cwd: root, env: isolated, timeoutMs: 30_000 })
-    expect(after).toMatchObject({ status: 0, signal: null, timedOut: false })
-    const settings = JSON.parse(after.output) as Record<string, unknown>
+    const scopedRegistry = await runCommandWithTimeout(
+      npm,
+      ['config', 'list', '--json', '--registry=https://fallback.invalid/', '--loglevel=error'],
+      { cwd: root, env: isolated, timeoutMs: 30_000 },
+    )
+    expect(scopedRegistry).toMatchObject({ status: 0, signal: null, timedOut: false })
+    const settings = JSON.parse(scopedRegistry.output) as Record<string, unknown>
     expect(settings).toMatchObject({
-      registry: 'https://registry.npmjs.org/',
+      registry: 'https://fallback.invalid/',
       '@deepseek-ai:registry': 'https://registry.npmjs.org/',
       'install-strategy': 'hoisted',
       'strict-peer-deps': false,

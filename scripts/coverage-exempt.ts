@@ -10,7 +10,7 @@
  * is dropped.
  */
 
-/** One coverage-exempt suite: a Vitest CLI filter and its exclude glob. */
+/** One coverage-exempt suite: a Vite+ test filter and its exclude glob. */
 export interface CoverageExemptSuite {
   /** Positional file filter selecting the suite in the uninstrumented gate. */
   readonly filter: string
@@ -46,7 +46,7 @@ export const coverageExemptHeavySuites: readonly CoverageExemptSuite[] = [
   },
   // Real child-process fixtures over scripts/ sources, which coverage never measures.
   { filter: 'scripts/install-lefthook.spec.ts', exclude: 'scripts/install-lefthook.spec.ts' },
-  { filter: 'scripts/oxlint-contract.spec.ts', exclude: 'scripts/oxlint-contract.spec.ts' },
+  { filter: 'scripts/vp-lint-contract.spec.ts', exclude: 'scripts/vp-lint-contract.spec.ts' },
   { filter: 'scripts/change-scope.spec.ts', exclude: 'scripts/change-scope.spec.ts' },
   // Built-artifact proof. Packer/runtime src is threshold-excluded, and the
   // suite self-skips on unbuilt checkouts; the serial-windows complete

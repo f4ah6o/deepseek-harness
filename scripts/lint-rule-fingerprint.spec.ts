@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript'
 import { describe, expect, it } from 'vite-plus/test'
 
 type Rules = Record<string, unknown>
+
+interface VitePlusLintConfig {
+  readonly lint?: {
+    readonly overrides?: readonly unknown[]
+  }
+}
 
 interface Profile {
   readonly count: number
@@ -12,25 +15,23 @@ interface Profile {
   readonly sha256: string
 }
 
-// A one-time audit against eslint.config.mjs blob 696b08282885296830189fdafe7051a356806fc2
-// mapped @typescript-eslint/* to typescript/* and four extension rules to their
-// Oxlint core equivalents. These fingerprints pin the resulting repository
-// snapshot; they do not re-evaluate that deleted baseline or track its preset.
+// These fingerprints pin the active Vite+ lint overrides. Oxfmt owns indentation
+// and arrow parentheses, so those two former lint rules are absent from the profiles.
 const profiles = {
   source: {
-    count: 89,
+    count: 87,
     indexes: [0, 1, 4, 5],
-    sha256: '3e8b8455827254d6da59afb803d30f062b9fe1264b4df75ce4c8cd6e742b93dd',
+    sha256: '0f395ea83edd85c8a1d7dcb431a77096264c111d9999dfaa81d217e39b8002b8',
   },
   example: {
-    count: 88,
+    count: 86,
     indexes: [0, 1, 2, 4, 5],
-    sha256: 'e2b944c028ef1971302d47b2eb0e95c05e740623c7cbaebb4b1312dbf73bf156',
+    sha256: '436075e7eb268c6da07a33a51a84ae9f2f2a0f4908d8a0a0130cac90032d43f5',
   },
   test: {
-    count: 84,
+    count: 82,
     indexes: [0, 3, 4, 5],
-    sha256: '7e4e1ed0cfca06ac94eeb26081195b5f753e7527775d5f5b95ccfefac9d2b137',
+    sha256: '4d202bfe7455c38fb363acf908e51ab66c86b2b1e269dfb58310802e79eeed71',
   },
 } as const satisfies Record<string, Profile>
 
@@ -67,25 +68,18 @@ function mergedRules(overrides: readonly unknown[], indexes: readonly number[]):
   for (const index of indexes) {
     const override = overrides[index]
     if (!isRecord(override) || !isRecord(override.rules)) {
-      throw new Error(`.oxlintrc.json override ${index} must contain a rules object`)
+      throw new Error(`vite.config.ts lint override ${index} must contain a rules object`)
     }
     Object.assign(merged, override.rules)
   }
   return normalizedRules(merged)
 }
 
-describe('Oxlint repository rule fingerprint', () => {
-  const path = fileURLToPath(new URL('../.oxlintrc.json', import.meta.url))
-  const result = parseConfigFileTextToJson(path, readFileSync(path, 'utf8'))
-  if (result.error !== undefined) {
-    throw new Error(flattenDiagnosticMessageText(result.error.messageText, '\n'))
-  }
-  const parsed: unknown = result.config
-  if (!isRecord(parsed) || !Array.isArray(parsed.overrides)) {
-    throw new Error('.oxlintrc.json must contain an overrides array')
-  }
-  const overrides: readonly unknown[] = parsed.overrides
+const { default: viteConfig } = (await import('../vite.config.ts')) as { default: VitePlusLintConfig }
+const overrides = viteConfig.lint?.overrides
+if (overrides === undefined) throw new Error('vite.config.ts must define lint.overrides')
 
+describe('Vite+ repository rule fingerprint', () => {
   it('pins every override field', () => {
     expect(overrides).toHaveLength(9)
   })

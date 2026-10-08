@@ -171,10 +171,11 @@ export function isStaticLinkedConfig(configs: readonly UserConfig[]): boolean {
  * Build a Client-only Node library during the Client pass.
  * @param id - Package name used in tsdown diagnostics.
  * @param libEntry - Emitted JavaScript entries consumed from `lib/types`.
+ * @param overrides - Additional tsdown options for the self-contained Node bundle.
  * @returns ENV-selected tsdown config for the Client build face.
  */
-export function clientLibrary(id: string, libEntry: readonly string[]): BuildFaceConfig {
-  const lib = clientLibraryConfig(id, libEntry)
+export function clientLibrary(id: string, libEntry: readonly string[], overrides: UserConfig = {}): BuildFaceConfig {
+  const lib = clientLibraryConfig(id, libEntry, overrides)
   return clientOnly([lib])
 }
 

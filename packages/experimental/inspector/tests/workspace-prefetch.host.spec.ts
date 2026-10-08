@@ -22,7 +22,9 @@ it('pins the npm source and uses workspace Vite without a webpack dependency', (
   const dependencies = manifest('../package.json').devDependencies
   expect(dependencies?.['chrome-devtools-frontend']).toBe('1.0.1638082')
   expect(dependencies?.vite).toBeUndefined()
-  expect(manifest('../../../../package.json').devDependencies?.vite).toBe('8.0.16')
+  expect(manifest('../../../../package.json').devDependencies?.vite).toBe('catalog:')
+  const workspace = readFileSync(new URL('../../../../pnpm-workspace.yaml', import.meta.url), 'utf8')
+  expect(workspace).toMatch(/^  vite: npm:@voidzero-dev\/vite-plus-core@1\.1\.0$/mu)
   expect(Object.keys(dependencies ?? {}).some((name) => name.includes('webpack'))).toBe(false)
 })
 

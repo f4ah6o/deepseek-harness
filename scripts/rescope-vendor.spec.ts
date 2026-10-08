@@ -1,7 +1,8 @@
 /** Recorded npm evidence stays intact while authored files and exact edits remain checked. */
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vite-plus/test'
-import { exactEditState, isRescopeExcluded } from './rescope-vendor.ts'
+import { EXACT_EDITS, exactEditState, isRescopeExcluded } from './rescope-vendor.ts'
 
 const ANCHOR = '\n## Sync procedure'
 const INSERTED = `\n15. **rescope**: one log entry.\n${ANCHOR}`
@@ -50,4 +51,19 @@ describe('exactEditState', () => {
     expect(exactEditState('a = 1\nb = 2\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
     expect(exactEditState('x\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
   })
+})
+
+describe('Vite+ formatted vendoring edits', () => {
+  it.each(['client-purity-vendored-libraries-predicate', 'notices-vendored-row-parse', 'notices-vendored-table'])(
+    'keeps %s applicable in either direction',
+    (id) => {
+      const edit = EXACT_EDITS.find((candidate) => candidate.id === id)
+      if (edit === undefined) throw new Error(`missing rescope edit ${id}`)
+      const text = readFileSync(new URL(`../${edit.file}`, import.meta.url), 'utf8')
+      expect(exactEditState(text, edit.find, edit.replace, edit.expect)).toBe('applied')
+
+      const reversed = text.replace(edit.replace, edit.find)
+      expect(exactEditState(reversed, edit.replace, edit.find, edit.expect)).toBe('applied')
+    },
+  )
 })
