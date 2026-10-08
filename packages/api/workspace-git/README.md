@@ -57,6 +57,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 The Host performs bounded Git reads in the subprocess provider's execution world and returns only display metadata to the Client.
 
+The package's Client entry only anchors this Remote in the startup graph; [ui-git-branch](../../client/ui-git-branch/README.md) owns its browser presentation.
+
 <details>
 <summary>Implementation internals — click to expand</summary>
 
@@ -65,6 +67,7 @@ A status request resolves a live Session header or reads a cold Session header f
 | Source | Responsibility |
 |---|---|
 | [src/index.ts](src/index.ts) | Host service, bounded subprocess reads, and GitHub-origin sanitization. |
+| [src/client/index.ts](src/client/index.ts) | Valid Client graph entry for the Host-only Remote. |
 | [src/types.ts](src/types.ts) | Client-safe branch, detached revision, and no-checkout values. |
 
 </details>

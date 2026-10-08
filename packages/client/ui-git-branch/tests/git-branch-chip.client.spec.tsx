@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type {} from '../src/client/index.ts'
 import type { RemoteResult, WorkspaceGitStatus } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GitBranchChip } from '../src/client/GitBranchChip.tsx'
@@ -47,6 +48,28 @@ describe('GitBranchChip', () => {
     expect(signal?.aborted).toBe(false)
     unmount()
     expect(signal?.aborted).toBe(true)
+  })
+
+  it('clears the previous Session label and cancels its request on Session change', async () => {
+    let firstSignal: AbortSignal | undefined
+    const getStatus = vi.fn((sessionId: SessionId, signal: AbortSignal): Promise<RemoteResult<WorkspaceGitStatus>> => {
+      if (sessionId === SessionId('s1')) {
+        firstSignal = signal
+        return Promise.resolve(success({
+          state: { kind: 'branch', repository: 'first', branch: 'main' },
+          refreshMs: 5_000,
+        }))
+      }
+      return new Promise<RemoteResult<WorkspaceGitStatus>>(() => {})
+    })
+    const view = render(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s1')} t={t as never} />)
+    await act(async () => { await Promise.resolve() })
+    expect(screen.getByLabelText('Git branch: first:main')).toBeTruthy()
+
+    view.rerender(<GitBranchChip getStatus={getStatus} sessionId={SessionId('s2')} t={t} />)
+    await act(async () => { await Promise.resolve() })
+    expect(firstSignal?.aborted).toBe(true)
+    expect(screen.queryByLabelText('Git branch: first:main')).toBeNull()
   })
 
   it('keeps only the latest focus refresh and suppresses detached values without a checkout', async () => {

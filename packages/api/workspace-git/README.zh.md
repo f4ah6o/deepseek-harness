@@ -57,6 +57,8 @@ Web profile 会在 Host composition 中加载此服务。具有所需服务的 H
 
 Host 会在子进程提供方的执行环境中执行有界 Git 查询，并仅向 Client 返回显示所需的元数据。
 
+此包的 Client 入口只负责将 Remote 加入启动图；浏览器界面由 [ui-git-branch](../../client/ui-git-branch/README.zh.md) 负责。
+
 <details>
 <summary>实现细节 — 点击展开</summary>
 
@@ -65,6 +67,7 @@ Host 会在子进程提供方的执行环境中执行有界 Git 查询，并仅�
 | 源文件 | 职责 |
 |---|---|
 | [src/index.ts](src/index.ts) | Host 服务、有界子进程查询和 GitHub origin 清理。 |
+| [src/client/index.ts](src/client/index.ts) | Host-only Remote 的有效 Client 图入口。 |
 | [src/types.ts](src/types.ts) | Client 可用的分支、分离 HEAD 版本号和无 checkout 值。 |
 
 </details>

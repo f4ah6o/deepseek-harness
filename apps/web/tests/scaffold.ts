@@ -1427,7 +1427,7 @@ function seedStreamEnd(
  * @param fixtureText - raw recorded session.jsonl contents.
  * @param id - the seeded session id.
  * @param agentPreset - preset recorded by scenarios that assert resumed composition.
- * @param options - deterministic metadata overrides for ordering-sensitive scenarios.
+ * @param options - deterministic header overrides for scenario setup.
  * @returns the seeded id.
  */
 export async function seedSession(
@@ -1435,7 +1435,7 @@ export async function seedSession(
   fixtureText: string,
   id: string,
   agentPreset?: string,
-  options: { readonly createdAt?: number } = {},
+  options: { readonly createdAt?: number; readonly cwd?: string } = {},
 ): Promise<SessionId> {
   const decoded = parseSeedFixture(realizeSeedFixture(scaffold, fixtureText, id))
   const events = decoded.events
@@ -1450,7 +1450,7 @@ export async function seedSession(
     id: SessionId(id),
     createdAt,
     isSeeded: false,
-    cwd: scaffold.workspaceCwd,
+    cwd: options.cwd ?? scaffold.workspaceCwd,
     delegationDepth: 0,
     ...agentPreset === undefined ? {} : { agentPreset },
   }

@@ -1,0 +1,8 @@
+- id: agent-default-model
+  config:
+    provider: fork-gateway
+    model: fork-model
+- id: workspace-git
+  config:
+    deadlineMs: 15000
+    refreshMs: 30000

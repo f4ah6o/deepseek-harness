@@ -24,6 +24,7 @@ export function GitBranchChip({ getStatus, sessionId, t }: GitBranchChipInjected
   const [snapshot, setSnapshot] = useState<WorkspaceGitStatus | null>(null)
 
   useEffect(() => {
+    setSnapshot(null)
     let generation = 0
     let disposed = false
     let pending: AbortController | undefined
