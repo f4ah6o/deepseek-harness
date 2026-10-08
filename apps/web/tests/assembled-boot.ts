@@ -207,11 +207,11 @@ let unmount: (() => Promise<void>) | undefined
 let mountedRemote: RemoteMock | undefined
 
 /**
- * Register the per-test jsdom setup and teardown the assembled boot needs:
- * English pinned before boot so role/text locators stay deterministic across
- * localized component migrations (the newEnglishPage e2e convention), the
- * observers, font events, and frame callbacks jsdom lacks, and a full reset of the document,
- * the boot globals, and the injected plugin styles afterwards.
+ * Register shared jsdom setup and teardown for assembled built-client cases.
+ * The fixture Host preference selects English even though the graph includes
+ * the Japanese default pack, keeping role and text locators deterministic.
+ * The setup also supplies jsdom geometry and browser events, then resets the
+ * document, boot globals, and injected plugin styles after each case.
  */
 export function installAssembledBootEnv(): void {
   // jsdom implements no scroll geometry: the trigger menu reveals its
@@ -240,9 +240,9 @@ export function installAssembledBootEnv(): void {
     fontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts')
     Object.defineProperty(document, 'fonts', { configurable: true, value: new EventTarget() })
     localStorage.clear()
-    // The locale service derives its provisional locale from the browser and
-    // takes an explicit choice only from Host settings. This scenario serves no
-    // locale setting, so pinning the navigator selects English.
+    // Keep the browser fallback aligned with the explicit English preference
+    // served by the fixture Remote; the Japanese language pack otherwise wins
+    // over browser-derived locale when no Host preference is saved.
     Object.defineProperty(navigator, 'languages', { value: ['en-US'], configurable: true })
     Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
     document.title = 'DeepSeek Harness'

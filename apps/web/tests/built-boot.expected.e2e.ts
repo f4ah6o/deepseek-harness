@@ -14,7 +14,12 @@
 import { resolve } from 'node:path'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vite-plus/test'
+import type { WebBootGraph } from '@deepseek-ai/dsh-client-modules/client'
 import { installAssembledBootEnv, mountAssembledApp } from './assembled-boot.ts'
+
+interface FixtureWindow extends Window {
+  __DSH_BOOT__?: WebBootGraph
+}
 
 installAssembledBootEnv()
 
@@ -58,6 +63,8 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn
 
   // The sidebar renders from the boot graph: every inject layer activated.
   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
+  expect((window as FixtureWindow).__DSH_BOOT__?.entries.some((entry) => entry.id === '@deepseek-ai/dsh-client-locale-ja')).toBe(true)
+  expect(document.documentElement.lang).toBe('en')
   if (clientBuildValue('DSH_CLIENT_BUILD_PROFILE') === 'official') {
     expect(document.querySelector('svg[viewBox="26 0 156 24"]')).not.toBeNull()
     expect(screen.queryByText('DSH Local Build')).toBeNull()

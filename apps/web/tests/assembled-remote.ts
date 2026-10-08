@@ -6,8 +6,10 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ok, RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { remoteDefaultResponses } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts'
 
@@ -62,10 +64,15 @@ interface ControlBaseline {
     readonly queues: Readonly<Record<string, readonly unknown[]>>
     readonly approvals: readonly unknown[]
     readonly questions: readonly unknown[]
-    readonly projections: Readonly<Record<string, {
-      readonly asOfSeq: number
-      readonly values: Readonly<Record<string, unknown>>
-    }>>
+    readonly projections: Readonly<
+      Record<
+        string,
+        {
+          readonly asOfSeq: number
+          readonly values: Readonly<Record<string, unknown>>
+        }
+      >
+    >
   }
 }
 
@@ -97,6 +104,21 @@ interface CapturedFixture {
   readonly attachment: unknown
 }
 
+interface LocaleSettingsSource {
+  readonly LOCALE_SETTINGS_NAMESPACE: string
+  readonly LocaleSettingsSchema: { toJSON(): object }
+}
+
+interface AssembledLocaleNamespace {
+  readonly ns: string
+  readonly schema: unknown
+  readonly value: { readonly preference: string }
+  readonly autoGenerate: boolean
+  readonly applies: 'live'
+  readonly secrets: readonly unknown[]
+  readonly revision: number
+}
+
 export interface AssembledRemoteOptions {
   /** Override the schema-resolved Host preference for developer-tool scenarios. */
   readonly developerTools?: boolean
@@ -108,29 +130,46 @@ export interface AssembledRemote {
   readonly mock: RemoteMock
 }
 
-const fixtureSource = readFileSync(
-  join(process.cwd(), 'apps/web/tests/fixtures/assembled-remote.fixture.json'),
-  'utf8',
-)
+const fixtureSource = readFileSync(join(process.cwd(), 'apps/web/tests/fixtures/assembled-remote.fixture.json'), 'utf8')
+const webBundleRequire = createRequire(join(process.cwd(), 'packages/bundle/web-app/package.json'))
+const localeSettingsSource = webBundleRequire.resolve('@deepseek-ai/dsh-client-locale/src/locale-settings.ts')
+const localeSettingsModule: unknown = await import(pathToFileURL(localeSettingsSource).href)
+if (!isLocaleSettingsSource(localeSettingsModule)) {
+  const exports = isRecord(localeSettingsModule) ? Object.keys(localeSettingsModule).join(', ') : typeof localeSettingsModule
+  const schema = isRecord(localeSettingsModule) ? localeSettingsModule['LocaleSettingsSchema'] : undefined
+  const schemaInfo = typeof schema === 'function' && 'toJSON' in schema ? typeof schema.toJSON : typeof schema
+  throw new TypeError(`assembled fixture locale settings exports are invalid: ${exports}; schema toJSON=${schemaInfo}`)
+}
+const localeSettingsSchema: unknown = JSON.parse(JSON.stringify(localeSettingsModule.LocaleSettingsSchema.toJSON()))
+
+/** Host settings namespace projected for English-stable assembled Client tests. */
+export const assembledLocaleNamespace: AssembledLocaleNamespace = {
+  ns: localeSettingsModule.LOCALE_SETTINGS_NAMESPACE,
+  schema: localeSettingsSchema,
+  value: { preference: 'en' },
+  autoGenerate: false,
+  applies: 'live',
+  secrets: [],
+  revision: 0,
+}
 
 /** Create one isolated RemoteMock world for an assembled built-client case. */
 export function createAssembledRemote(options: AssembledRemoteOptions = {}): AssembledRemote {
   const fixture = JSON.parse(fixtureSource) as CapturedFixture
   const sessions = [...structuredClone(fixture.sessionList.value.items)]
   const workspaces = [...structuredClone(fixture.workspace.value.items)]
-  const records = new Map<string, EventRecord[]>([[
-    'fx-alpha',
-    structuredClone(fixture.follow.records) as EventRecord[],
-  ]])
-  const nextTurns = new Map([...records].map(([sessionId, sessionRecords]) => {
-    let next = 0
-    for (const { event } of sessionRecords) {
-      if (event.type !== 'turn/start' || !isRecord(event.data)) continue
-      const turn = event.data['turn']
-      if (typeof turn === 'number') next = Math.max(next, turn + 1)
-    }
-    return [sessionId, next] as const
-  }))
+  const records = new Map<string, EventRecord[]>([['fx-alpha', structuredClone(fixture.follow.records) as EventRecord[]]])
+  const nextTurns = new Map(
+    [...records].map(([sessionId, sessionRecords]) => {
+      let next = 0
+      for (const { event } of sessionRecords) {
+        if (event.type !== 'turn/start' || !isRecord(event.data)) continue
+        const turn = event.data['turn']
+        if (typeof turn === 'number') next = Math.max(next, turn + 1)
+      }
+      return [sessionId, next] as const
+    }),
+  )
   const attachments = new Map<string, unknown>([['fixture:image', structuredClone(fixture.attachment)]])
   const blankSessionProjections = fixture.control.value.projections['fx-gamma']
   if (blankSessionProjections === undefined) {
@@ -143,16 +182,25 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
     unary: {
       'settings/describe': ok({
         ...fixture.settingsDescribe.value,
-        namespaces: [...fixture.settingsDescribe.value.namespaces, {
-          ns: 'ui-settings',
-          schema: { type: 'object', dict: { enabled: { type: 'boolean' } } },
-          value: { enabled: options.developerTools ?? true }, autoGenerate: false, applies: 'live', secrets: [], revision: 0,
-        }],
+        namespaces: [
+          ...fixture.settingsDescribe.value.namespaces,
+          structuredClone(assembledLocaleNamespace),
+          {
+            ns: 'ui-settings',
+            schema: { type: 'object', dict: { enabled: { type: 'boolean' } } },
+            value: { enabled: options.developerTools ?? true },
+            autoGenerate: false,
+            applies: 'live',
+            secrets: [],
+            revision: 0,
+          },
+        ],
       }),
       'credentials/describe': structuredClone(fixture.credentialsDescribe),
       'session/modelCatalog': structuredClone(fixture.modelCatalog),
       'agentPresets/list': structuredClone(fixture.agentPresets),
       'commands/list': structuredClone(fixture.commands),
+      'workspaceGit/status': ok({ state: { kind: 'none' }, refreshMs: 5_000 }),
       'settings/openSettingsDocument': ok({ opened: true }),
       'subagents/list': ok({ entries: [], parentAvailable: true }),
       'terminal/list': ok([]),
@@ -197,7 +245,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
       stream.push(structuredClone(fixture.follow))
       return
     }
-    const summary = sessions.find(candidate => candidate.sessionId === sessionId)
+    const summary = sessions.find((candidate) => candidate.sessionId === sessionId)
     if (summary === undefined) throw new Error(`assembled fixture: no Session ${sessionId}`)
     const sessionRecords = records.get(sessionId) ?? []
     stream.push({
@@ -213,7 +261,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
       records: structuredClone(sessionRecords),
       hasMore: false,
       projections: structuredClone(blankSessionProjections),
-      ...isAssistantStreamRequested(request) ? { assistantStream: { revision: 0 } } : {},
+      ...(isAssistantStreamRequested(request) ? { assistantStream: { revision: 0 } } : {}),
     })
   })
 
@@ -229,12 +277,12 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
   mock.unary('schedule/list', () => ok([]))
   mock.unary('session/projections', (request: unknown) => {
     const sessionId = recordString(recordValue(request, 'request'), 'sessionId')
-    const summary = sessions.find(candidate => candidate.sessionId === sessionId)
+    const summary = sessions.find((candidate) => candidate.sessionId === sessionId)
     return ok(structuredClone(summary?.projections ?? fixture.control.value.projections[sessionId] ?? null))
   })
   mock.unary('workspace/create', (request: unknown) => {
     const path = recordString(recordValue(request, 'request'), 'path')
-    const existing = workspaces.find(workspace => workspace.path === path)
+    const existing = workspaces.find((workspace) => workspace.path === path)
     if (existing !== undefined) return ok({ workspace: structuredClone(existing), created: false })
     const now = new Date().toISOString()
     const workspace = {
@@ -253,10 +301,10 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
     request = recordValue(request, 'request')
     const requestedId = optionalRecordString(request, 'sessionId')
     const sessionId = requestedId ?? `fx-${String(nextSession++)}`
-    const existing = sessions.find(candidate => candidate.sessionId === sessionId)
+    const existing = sessions.find((candidate) => candidate.sessionId === sessionId)
     if (existing !== undefined) return ok({ sessionId })
     const workspaceId = optionalRecordString(request, 'workspaceId')
-    const workspace = workspaces.find(candidate => candidate.workspaceId === workspaceId)
+    const workspace = workspaces.find((candidate) => candidate.workspaceId === workspaceId)
     const cwd = workspace?.path ?? optionalRecordString(request, 'cwd') ?? '/tmp/fixture'
     const summary: SessionSummary = {
       sessionId,
@@ -285,14 +333,16 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
   mock.unary('session/attachment', (request: unknown) => {
     request = recordValue(request, 'request')
     const attachmentId = recordString(request, 'attachmentId')
-    return attachments.get(attachmentId) ?? {
-      ok: false,
-      error: {
-        code: 'session/attachment-invalid',
-        message: `assembled fixture attachment ${attachmentId} is missing`,
-        details: { reason: 'ATTACHMENT_NOT_FOUND' },
-      },
-    }
+    return (
+      attachments.get(attachmentId) ?? {
+        ok: false,
+        error: {
+          code: 'session/attachment-invalid',
+          message: `assembled fixture attachment ${attachmentId} is missing`,
+          details: { reason: 'ATTACHMENT_NOT_FOUND' },
+        },
+      }
+    )
   })
   mock.unary('session/prompt', (request: unknown) => {
     request = recordValue(request, 'request')
@@ -309,7 +359,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
     const sessionId = recordString(request, 'sessionId')
     const requestId = recordString(request, 'requestId')
     const sessionRecords = records.get(sessionId) ?? []
-    const summary = sessions.find(candidate => candidate.sessionId === sessionId)
+    const summary = sessions.find((candidate) => candidate.sessionId === sessionId)
     if (summary === undefined) throw new Error(`assembled fixture: no Session ${sessionId}`)
     const content = recordArray(request, 'content').map((part) => {
       if (!isRecord(part) || part.type !== 'image') return part
@@ -318,12 +368,10 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
       const attachment = {
         attachmentId,
         mediaType: recordString(part, 'mediaType'),
-        bytes: Math.max(1, Math.floor(data.length * 3 / 4)),
+        bytes: Math.max(1, Math.floor((data.length * 3) / 4)),
         width: 160,
         height: 90,
-        ...optionalRecordString(part, 'name') === undefined
-          ? {}
-          : { name: optionalRecordString(part, 'name') },
+        ...(optionalRecordString(part, 'name') === undefined ? {} : { name: optionalRecordString(part, 'name') }),
       }
       attachments.set(attachmentId, ok({ attachment, data }))
       return { type: 'image', attachment }
@@ -337,12 +385,17 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
       mock.streams.push('$events', { type: 'emit', event: 'api-session/status', args: [sessionId, true] })
     }
     const turnEvent = eventOf(sessionRecords.length, 'turn/start', { turn })
-    const userEvent = eventOf(sessionRecords.length + 1, 'user/message', {
-      content,
-      source: { kind: 'user', rpcId: requestId },
-      role: 'user',
-      id: randomUUID(),
-    }, 'append')
+    const userEvent = eventOf(
+      sessionRecords.length + 1,
+      'user/message',
+      {
+        content,
+        source: { kind: 'user', rpcId: requestId },
+        role: 'user',
+        id: randomUUID(),
+      },
+      'append',
+    )
     sessionRecords.push(turnEvent, userEvent)
     records.set(sessionId, sessionRecords)
     mock.streams.push('session/follow', turnEvent, follows(sessionId))
@@ -359,7 +412,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
       commandId: `assembled-command-${randomUUID()}`,
       result: {
         kind: 'success',
-        ...name === 'echo' ? { text: line.replace(/^\/echo\s*/u, '') } : {},
+        ...(name === 'echo' ? { text: line.replace(/^\/echo\s*/u, '') } : {}),
       },
     })
   })
@@ -367,12 +420,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
   return { mock }
 }
 
-function eventOf(
-  seq: number,
-  type: string,
-  data: unknown,
-  surfaceOp?: string,
-): EventRecord {
+function eventOf(seq: number, type: string, data: unknown, surfaceOp?: string): EventRecord {
   return {
     type: 'event',
     event: {
@@ -391,9 +439,7 @@ function follows(sessionId: string): (args: readonly unknown[]) => boolean {
 
 function followedSessionId(value: unknown): string {
   if (!isRecord(value) || !isRecord(value.address)) throw new TypeError('assembled fixture follow request is invalid')
-  return value.address.kind === 'session'
-    ? recordString(value.address, 'sessionId')
-    : recordString(value.address, 'childSessionId')
+  return value.address.kind === 'session' ? recordString(value.address, 'sessionId') : recordString(value.address, 'childSessionId')
 }
 
 function isAssistantStreamRequested(value: unknown): boolean {
@@ -426,4 +472,13 @@ function recordValue(value: unknown, key: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isLocaleSettingsSource(value: unknown): value is LocaleSettingsSource {
+  if (!isRecord(value) || typeof value['LOCALE_SETTINGS_NAMESPACE'] !== 'string') return false
+  return isLocaleSettingsSchema(value['LocaleSettingsSchema'])
+}
+
+function isLocaleSettingsSchema(value: unknown): value is { toJSON(): object } {
+  return typeof value === 'function' && 'toJSON' in value && typeof value.toJSON === 'function'
 }

@@ -1,7 +1,36 @@
 /** Stateful behavior of the app-owned RemoteMock scenario. */
 
 import { expect, it } from 'vite-plus/test'
-import { createAssembledRemote } from './assembled-remote.ts'
+import { assembledLocaleNamespace, createAssembledRemote } from './assembled-remote.ts'
+
+it('serves one explicit English locale setting using the locale package schema', async () => {
+  const { mock } = createAssembledRemote()
+  const response = (await mock.dispatch('settings/describe', [{}])) as {
+    readonly ok: true
+    readonly value: {
+      readonly namespaces: readonly {
+        readonly ns: string
+        readonly schema: unknown
+        readonly value: unknown
+        readonly autoGenerate: boolean
+        readonly applies: string
+        readonly secrets: readonly unknown[]
+        readonly revision: number
+      }[]
+    }
+  }
+  const localeRows = response.value.namespaces.filter((row) => row.ns === assembledLocaleNamespace.ns)
+
+  expect(localeRows).toHaveLength(1)
+  expect(localeRows[0]).toEqual(assembledLocaleNamespace)
+  expect(localeRows[0]?.value).toEqual({ preference: 'en' })
+  expect(localeRows[0]).toMatchObject({ autoGenerate: false, applies: 'live', secrets: [], revision: 0 })
+
+  await expect(mock.dispatch('workspaceGit/status', [])).resolves.toEqual({
+    ok: true,
+    value: { state: { kind: 'none' }, refreshMs: 5_000 },
+  })
+})
 
 it('advances turns and updates the Session summary after accepted prompts', async () => {
   const { mock } = createAssembledRemote()
