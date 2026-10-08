@@ -23,7 +23,7 @@ export const ja: LocaleDictOf<'cordis'> = {
   'panel.hint': '実行コントロールは設定の上にある Cordis パネルにあります',
   'panel.plugins.aria': 'Cordis プラグイン',
   'panel.approvals.aria': 'Cordis 承認',
-  'panel.trigger': 'Cordis Plugin',
+  'panel.trigger': 'Cordis プラグイン',
   'panel.runningCount': '{count} 件実行中',
   'panel.title': 'Cordis プラグイン',
   'panel.empty': 'プラグインはまだ定義されていません',

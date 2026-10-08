@@ -306,7 +306,7 @@ export const ja: LocaleDictOf<'conversation'> = {
   'detail.field.latestRun': '最新の実行',
   'detail.field.packages': 'パッケージ',
   'detail.field.registrations': '登録',
-  'detail.field.props': 'Props',
+  'detail.field.props': 'プロパティ',
   'detail.field.data': 'データ',
   'detail.field.source': 'ソース',
   'detail.field.content': '内容',

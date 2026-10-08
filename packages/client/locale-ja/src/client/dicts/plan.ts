@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-plan/client'
 
 /** `plan` copy in Japanese, complete against the owner's key union. */
 export const ja: LocaleDictOf<'plan'> = {
-  'chip.label': 'Plan',
+  'chip.label': 'プラン',
   'preview.title': 'プラン',
   'preview.document': 'プラン · Markdown',
   'preview.action': '開く',
