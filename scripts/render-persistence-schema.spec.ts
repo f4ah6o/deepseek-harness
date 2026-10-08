@@ -28,6 +28,23 @@ function eventRoot(
   return { key: `event:${event}`, kind: 'event', event, surface: false, digest: schemaDigest(schema), schema }
 }
 
+/** Builds the shared event envelope with its data node at index 2. */
+function eventEnvelopeNodes(event: string, data: SchemaNode, children: readonly SchemaNode[] = []): SchemaNode[] {
+  return [
+    {
+      kind: 'object',
+      properties: [
+        { name: 'type', type: 1, optional: false },
+        { name: 'data', type: 2, optional: false },
+      ],
+      indices: [],
+    },
+    { kind: 'literal', value: event },
+    data,
+    ...children,
+  ]
+}
+
 function recursiveFixture(sources: readonly string[] = []): PersistenceSchemaInventory {
   const schema = canonicalizeSchema([{ kind: 'object', properties: [{ name: 'next', type: 0, optional: true }], indices: [] }], 0)
   const digest = schemaDigest(schema)
@@ -41,20 +58,10 @@ function recursiveFixture(sources: readonly string[] = []): PersistenceSchemaInv
 function fixture(optional = true): PersistenceSchemaInventory {
   const types = new Map<string, PersistenceType>()
   const roots = ['first/event', 'second/event'].map((event) => {
-    const nodes: SchemaNode[] = [
-      {
-        kind: 'object',
-        properties: [
-          { name: 'type', type: 1, optional: false },
-          { name: 'data', type: 2, optional: false },
-        ],
-        indices: [],
-      },
-      { kind: 'literal', value: event },
-      { kind: 'object', properties: [{ name: 'error', type: 3, optional: true }], indices: [] },
+    const nodes = eventEnvelopeNodes(event, { kind: 'object', properties: [{ name: 'error', type: 3, optional: true }], indices: [] }, [
       { kind: 'object', properties: [{ name: 'reason', type: 4, optional }], indices: [] },
       { kind: 'primitive', type: 'string' },
-    ]
+    ])
     return eventRoot(event, nodes, types, (index) => ({
       names: index === 3 ? ['ErrorInfo'] : [],
       sources: index === 3 ? ['packages/core/example/src/types.ts:8'] : [],
@@ -135,23 +142,13 @@ describe('persistence schema catalog', () => {
 function producerFixture(kinds: readonly string[], events: readonly string[]): PersistenceSchemaInventory {
   const types = new Map<string, PersistenceType>()
   const roots = events.map((event) => {
-    const nodes: SchemaNode[] = [
-      {
-        kind: 'object',
-        properties: [
-          { name: 'type', type: 1, optional: false },
-          { name: 'data', type: 2, optional: false },
-        ],
-        indices: [],
-      },
-      { kind: 'literal', value: event },
-      { kind: 'object', properties: [{ name: 'source', type: 3, optional: false }], indices: [] },
+    const nodes = eventEnvelopeNodes(event, { kind: 'object', properties: [{ name: 'source', type: 3, optional: false }], indices: [] }, [
       { kind: 'union', types: kinds.map((_, index) => 4 + index * 2) },
       ...kinds.flatMap((kind, index): SchemaNode[] => [
         { kind: 'object', properties: [{ name: 'kind', type: 5 + index * 2, optional: false }], indices: [] },
         { kind: 'literal', value: kind },
       ]),
-    ]
+    ])
     return eventRoot(event, nodes, types, (index) => ({
       names: index >= 4 && index % 2 === 0 ? [`event:${event}.data.source[${String((index - 4) / 2)}]`] : [],
       sources: [],
@@ -277,19 +274,7 @@ describe('current persistence schema anchors', () => {
   })
 
   it('labels empty objects without padding while preserving structural links and historical labels', () => {
-    const nodes: SchemaNode[] = [
-      {
-        kind: 'object',
-        properties: [
-          { name: 'type', type: 1, optional: false },
-          { name: 'data', type: 2, optional: false },
-        ],
-        indices: [],
-      },
-      { kind: 'literal', value: 'empty/event' },
-      { kind: 'array', element: 3 },
-      { kind: 'object', properties: [], indices: [] },
-    ]
+    const nodes = eventEnvelopeNodes('empty/event', { kind: 'array', element: 3 }, [{ kind: 'object', properties: [], indices: [] }])
     const types = new Map<string, PersistenceType>()
     const root = eventRoot('empty/event', nodes, types, () => ({ names: [], sources: [] }))
     const inventory: PersistenceSchemaInventory = { formatVersion: 1, roots: [root], types: [...types.values()] }

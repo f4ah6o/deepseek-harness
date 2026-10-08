@@ -3,20 +3,8 @@ import type { LocaleDictOf } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: loads the `schedule.catalog` key union declared by @deepseek-ai/dsh-client-ui-schedule.
 import type {} from '@deepseek-ai/dsh-client-ui-schedule/client'
 
-/** `schedule.catalog` copy in Japanese, complete against the owner's key union. */
-export const ja: LocaleDictOf<'schedule.catalog'> = {
-  'trigger.label': 'リマインダー',
-  'list.loading': 'リマインダーを読み込んでいます…',
-  'list.error': 'リマインダーを読み込めませんでした。',
-  'list.retry': '再試行',
-  'delete.action': '削除',
-  'delete.pending': '削除しています…',
-  'delete.label': 'リマインダーを削除：{title}',
-  'list.open': 'リマインダーの詳細を開く：{title}',
-  'trigger.one': '{count} 件のリマインダー',
-  'trigger.other': '{count} 件のリマインダー',
-  'list.aria': '有効なリマインダー',
-  'list.nextRun': '次回実行',
+/** Shared Japanese frequency and interval labels, typed against the catalog key union. */
+export const sharedScheduleJa: Partial<LocaleDictOf<'schedule.catalog'>> = {
   'frequency.once': '1 回',
   'frequency.every': '{value}{unit}ごと',
   'time.locale': 'ja-JP',
@@ -73,6 +61,23 @@ export const ja: LocaleDictOf<'schedule.catalog'> = {
   'relative.now': '期限到来',
   'relative.future': '{value}{unit}後',
   'relative.overdue': '{value}{unit}超過',
+}
+
+/** Japanese catalog copy, complete against the owner's key union. */
+export const ja: LocaleDictOf<'schedule.catalog'> = {
+  'trigger.label': 'リマインダー',
+  'list.loading': 'リマインダーを読み込んでいます…',
+  'list.error': 'リマインダーを読み込めませんでした。',
+  'list.retry': '再試行',
+  'delete.action': '削除',
+  'delete.pending': '削除しています…',
+  'delete.label': 'リマインダーを削除：{title}',
+  'list.open': 'リマインダーの詳細を開く：{title}',
+  'trigger.one': '{count} 件のリマインダー',
+  'trigger.other': '{count} 件のリマインダー',
+  'list.aria': '有効なリマインダー',
+  'list.nextRun': '次回実行',
+  ...sharedScheduleJa,
   'mark.aria': '{count} 件の自動タスク',
   'hover.more': '他に {count} 件',
 }

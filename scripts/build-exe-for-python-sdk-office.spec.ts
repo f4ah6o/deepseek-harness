@@ -24,6 +24,18 @@ async function fixture() {
   return { root, staging, destination, packageAt }
 }
 
+async function expectMissingLinuxWasmEngineFromClosure(
+  { root, staging, destination, packageAt }: Awaited<ReturnType<typeof fixture>>,
+  packageFields: Record<string, unknown> = {},
+): Promise<void> {
+  await packageAt('@deepseek-ai/libreoffice-kit', packageFields)
+  await packageAt('@deepseek-ai/libreoffice-kit-wasm', {}, root)
+  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' })).rejects.toThrow(
+    'Office engine @deepseek-ai/libreoffice-kit-wasm required for linux/x64 is missing.',
+  )
+  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+}
+
 it('copies package-owned data, licenses, helper permissions, and nested dependencies', async () => {
   const { staging, destination, packageAt } = await fixture()
   const entry = await packageAt('@deepseek-ai/libreoffice-kit', {
@@ -107,13 +119,9 @@ it('rejects an ancestor dependency outside the deployed closure', async () => {
 })
 
 it('requires the declared WASM engine inside the deployed closure', async () => {
-  const { root, staging, destination, packageAt } = await fixture()
-  await packageAt('@deepseek-ai/libreoffice-kit', { optionalDependencies: { '@deepseek-ai/libreoffice-kit-wasm': '0.0.1' } })
-  await packageAt('@deepseek-ai/libreoffice-kit-wasm', {}, root)
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' })).rejects.toThrow(
-    'Office engine @deepseek-ai/libreoffice-kit-wasm required for linux/x64 is missing.',
-  )
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expectMissingLinuxWasmEngineFromClosure(await fixture(), {
+    optionalDependencies: { '@deepseek-ai/libreoffice-kit-wasm': '0.0.1' },
+  })
 })
 
 it.each([
@@ -154,11 +162,5 @@ it.each(['darwin', 'win32', 'linux'])('%s requires its native package even when 
 })
 
 it('requires a staged Linux WASM engine even when an ancestor has one', async () => {
-  const { root, staging, destination, packageAt } = await fixture()
-  await packageAt('@deepseek-ai/libreoffice-kit')
-  await packageAt('@deepseek-ai/libreoffice-kit-wasm', {}, root)
-  await expect(copyOfficeSidecar(staging, destination, { platform: 'linux', arch: 'x64' })).rejects.toThrow(
-    'Office engine @deepseek-ai/libreoffice-kit-wasm required for linux/x64 is missing.',
-  )
-  await expect(stat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expectMissingLinuxWasmEngineFromClosure(await fixture())
 })

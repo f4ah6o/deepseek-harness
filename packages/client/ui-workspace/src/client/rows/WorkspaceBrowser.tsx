@@ -14,7 +14,7 @@
  * are slot entries with their own behavior, so this component threads no
  * action callbacks and hosts no action surface.
  */
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button,
@@ -72,6 +72,32 @@ const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /** Idle Session rows visible per Workspace before the local overflow control. */
 const COLLAPSED_SESSION_LIMIT = 5
+
+/**
+ * Shared focus and IME-safe Enter handling for Workspace and Session rename fields.
+ * @param composing - input composition state tracked by the caller.
+ * @param confirm - rename action to run after an uncomposed Enter key.
+ * @returns handlers shared by both rename inputs.
+ */
+export function renameInputHandlers(composing: { current: boolean }, confirm: () => void) {
+  return {
+    onFocus: (event: FocusEvent<HTMLInputElement>) => {
+      event.currentTarget.select()
+    },
+    onCompositionStart: () => {
+      composing.current = true
+    },
+    onCompositionEnd: () => {
+      composing.current = false
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter' && !composing.current) {
+        event.preventDefault()
+        confirm()
+      }
+    },
+  }
+}
 
 /** Keep provisional and running rows outside the idle-session quota, including parents with running children. */
 function collapsedSessionRows(
@@ -1494,24 +1520,10 @@ export function WorkspaceBrowser({
           aria-label={t('field.workspaceName')}
           data-modal-autofocus
           disabled={renaming}
-          onFocus={(e) => {
-            e.target.select()
-          }}
+          {...renameInputHandlers(composingRef, confirmRename)}
           onChange={(e) => {
             setRenameDraft(e.target.value)
             setRenameError(null)
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !composingRef.current) {
-              e.preventDefault()
-              confirmRename()
-            }
           }}
         />
         {renameDuplicate && (

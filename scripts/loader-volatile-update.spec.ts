@@ -39,6 +39,18 @@ async function update(fiber: Fiber, config: unknown): Promise<void> {
   await fiber.await()
 }
 
+async function temporaryLoaderContext(prefix: string): Promise<{ root: string; ctx: Context }> {
+  const root = await mkdtemp(join(tmpdir(), prefix))
+  const ctx = new Context()
+  onTestFinished(async () => {
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  })
+  ctx.baseUrl = pathToFileURL(root).href + '/'
+  await ctx.plugin(Loader)
+  return { root, ctx }
+}
+
 describe('volatile Loader updates', () => {
   it('updates a whole-config reference and reports the root path', async () => {
     const ctx = await runtimeContext()
@@ -260,14 +272,7 @@ describe('volatile Loader updates', () => {
 })
 
 it('reloads real YAML and persists plain values independently of custom update hooks', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-volatile-'))
-  const ctx = new Context()
-  onTestFinished(async () => {
-    await ctx.fiber.dispose()
-    await rm(root, { recursive: true, force: true })
-  })
-  ctx.baseUrl = pathToFileURL(root).href + '/'
-  await ctx.plugin(Loader)
+  const { root, ctx } = await temporaryLoaderContext('dsh-volatile-')
   const configs: ReturnType<typeof Config>[] = []
   ctx.loader.builtins.include = Include
   ctx.loader.builtins.group = Group
@@ -340,14 +345,7 @@ it('reloads real YAML and persists plain values independently of custom update h
 })
 
 it('updates volatile children through Group and Include custom updates and saves ordinary config', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-volatile-tree-'))
-  const ctx = new Context()
-  onTestFinished(async () => {
-    await ctx.fiber.dispose()
-    await rm(root, { recursive: true, force: true })
-  })
-  ctx.baseUrl = pathToFileURL(root).href + '/'
-  await ctx.plugin(Loader)
+  const { root, ctx } = await temporaryLoaderContext('dsh-volatile-tree-')
   ctx.loader.builtins.include = Include
   ctx.loader.builtins.group = Group
   const configs: ReturnType<typeof Config>[] = []
