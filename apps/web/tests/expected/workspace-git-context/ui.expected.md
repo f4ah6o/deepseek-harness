@@ -15,8 +15,8 @@
     - tab "トラジェクトリ"
 - text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "コピー"
-- status: 作業時間
-- button "所要時間 {{duration}}"
+- status: 完了
+- button "完了、所要時間 {{duration}}"
 - paragraph: DONE
 - button "コピー"
 - button "良い回答"

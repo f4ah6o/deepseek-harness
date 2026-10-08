@@ -82,10 +82,10 @@ Host 与 Client 保持两个 aggregate program，是因为两侧在相同键下�
 
 ```sh
 tsc -b tsconfig.host.json
-vp pack --config-loader native --env.DSH_BUILD_FACE host
+tsx scripts/run-vp-pack.ts host
 pnpm --filter @deepseek-ai/dsh-desktop run bundle
 tsc -b tsconfig.client.json
-vp pack --config-loader native --env.DSH_BUILD_FACE client
+tsx scripts/run-vp-pack.ts client
 pnpm run build:web
 ```
 

@@ -78,10 +78,10 @@ The root build follows the generated dependency order:
 
 ```sh
 tsc -b tsconfig.host.json
-vp pack --config-loader native --env.DSH_BUILD_FACE host
+tsx scripts/run-vp-pack.ts host
 pnpm --filter @deepseek-ai/dsh-desktop run bundle
 tsc -b tsconfig.client.json
-vp pack --config-loader native --env.DSH_BUILD_FACE client
+tsx scripts/run-vp-pack.ts client
 pnpm run build:web
 ```
 

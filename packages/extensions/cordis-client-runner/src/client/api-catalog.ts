@@ -501,7 +501,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'BuiltInLocaleId',
-    declaration: 'export type BuiltInLocaleId = typeof LOCALE_IDS[number];',
+    declaration: 'export type BuiltInLocaleId = (typeof LOCALE_IDS)[number];',
   },
   {
     name: 'ChainKeysOf',
