@@ -541,7 +541,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
       },
     })
 
-    const seat = page.getByRole('button', { name: new RegExp(`^选择模型.*${ROUTE}/${MODEL}`) })
+    const seat = page.getByRole('button', { name: `选择模型，当前 ${ROUTE} · ${MODEL}`, exact: true })
     await seat.waitFor()
     expect(await box.isEnabled()).toBe(true)
     expect(scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ provider: ROUTE, model: MODEL })

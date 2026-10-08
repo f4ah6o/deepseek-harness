@@ -1,6 +1,7 @@
 - group "模型与推理等级":
   - searchbox "搜索模型…": ACMLG
   - button "清除搜索"
+  - text: 提供商 Origin Gateway
   - menu "模型":
     - group "Acme Gateway":
       - text: Acme Gateway

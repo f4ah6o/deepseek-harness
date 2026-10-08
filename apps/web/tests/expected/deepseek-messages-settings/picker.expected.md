@@ -1,4 +1,5 @@
 - group "模型与推理等级":
+  - text: 提供商 DeepSeek
   - menu "模型":
     - group "DeepSeek":
       - text: DeepSeek

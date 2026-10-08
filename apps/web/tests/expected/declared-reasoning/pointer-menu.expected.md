@@ -1,5 +1,6 @@
 - group "模型与推理等级":
   - searchbox "搜索模型…"
+  - text: 提供商 Acme Gateway
   - menu "模型":
     - group "DeepSeek":
       - text: DeepSeek

@@ -106,7 +106,9 @@ describe.skipIf(MODE === 'record').each([
     await expect
       .poll(async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'), { timeout: 10_000 })
       .toContain('reasoningEffort: high')
-    await expect.poll(() => trigger.getAttribute('aria-label'), { timeout: 10_000 }).toBe('选择模型，当前 Acme Think，推理等级 High')
+    await expect
+      .poll(() => trigger.getAttribute('aria-label'), { timeout: 10_000 })
+      .toBe('选择模型，当前 Acme Gateway · Acme Think，推理等级 High')
 
     // Reopening the drilled pane parks the keyboard on the level in use, and
     // Shift+Tab walks back out like Escape: to the drilled cell, then closed.
