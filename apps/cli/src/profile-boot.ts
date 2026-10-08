@@ -23,6 +23,7 @@ import {
   installFailLoud,
   loadOverlayPatches,
   loadProfile,
+  loadProfileDirectory,
   reportSkippedBundles,
   PluginPackages,
   PROFILE_PATCH_FILENAME,
@@ -37,6 +38,7 @@ import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline, type AppReady } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
+import { migrateSessionLogUploadDefaults } from './session-log-upload-migration.ts'
 
 const NAME = 'dsh'
 
@@ -172,6 +174,22 @@ export function prepareProfile(name: string, userLayer = true, fromDefaultProfil
   return profile
 }
 
+/** Ensure a launchable profile manifest exists without parsing its user patch. */
+function ensureProfileManifest(name: string, fromDefaultProfile?: string): string {
+  if (fromDefaultProfile !== undefined) initializeProfileFromDefault(name, fromDefaultProfile)
+  const dir = resolveProfileDir(name)
+  if (!existsSync(join(dir, 'package.json'))) {
+    const template = PROFILE_TEMPLATES[name]
+    if (template === undefined) {
+      throw new Error(
+        `${NAME}: profile ${JSON.stringify(name)} does not exist; create it with 'dsh plugin --profile ${name} add <package>'`,
+      )
+    }
+    initProfile(dir, template.bundles)
+  }
+  return dir
+}
+
 /** One profile's patch layers, in application order. */
 interface ComposedProfile {
   profile: Profile
@@ -200,18 +218,38 @@ async function composeProfile(
   fromDefaultProfile?: string,
   resolvedProfile?: ResolvedProfileRuntime,
 ): Promise<ComposedProfile> {
-  const profile = resolvedProfile?.profile ?? prepareProfile(name, true, fromDefaultProfile)
-  if (resolvedProfile !== undefined) writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
+  const home = resolveDshHome()
+  const profileDir = resolvedProfile?.profileDir ?? ensureProfileManifest(name, fromDefaultProfile)
+  const profileManifestPath = join(profileDir, 'package.json')
+  if (!existsSync(profileManifestPath)) {
+    throw new Error(`${NAME}: application-owned profile manifest does not exist at ${profileManifestPath}`)
+  }
+  const profilePatchPath = join(profileDir, PROFILE_PATCH_FILENAME)
+  await migrateSessionLogUploadDefaults(
+    profileDir,
+    profilePatchPath,
+    home,
+    join(home, PROFILE_PATCH_FILENAME),
+  )
+  const profile = resolvedProfile === undefined
+    ? loadProfile(NAME, name, INSTALL_ANCHOR, home)
+    : {
+      ...loadProfileDirectory(NAME, profileDir, resolvedProfile.installAnchor, { userLayer: false }),
+      patchPath: profilePatchPath,
+      patches: existsSync(profilePatchPath) ? loadOverlayPatches(NAME, profilePatchPath) : [],
+    }
+  reportSkippedBundles(NAME, profile)
+  writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   const resolutionOptions = { installAnchor: resolvedProfile?.installAnchor ?? INSTALL_ANCHOR, profile }
   const resolution = await createRuntimeResolution(resolutionOptions)
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   return { profile, resolution, overlays }
 }
 
-/** An application-owned profile and its independent installation fallback. */
+/** An application-owned profile directory and its independent installation fallback. */
 export interface ResolvedProfileRuntime {
-  /** Profile already loaded from the application's own directory. */
-  profile: Profile
+  /** Profile directory whose user patch is loaded only after the preboot migration. */
+  profileDir: string
   /** Absolute package.json path of the application's dsh installation. */
   installAnchor: string
 }

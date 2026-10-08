@@ -24,6 +24,12 @@
       "path": "../../util/values"
     },
     {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../boot/app-boot"
+    },
+    {
       "path": "../../boot/config-editor"
     },
     {
