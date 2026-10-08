@@ -164,9 +164,16 @@ function requireVfsAssets(): PreviewAssets {
   const cacheDirectory = join(directory, 'current-projection-cache')
   mkdirSync(cacheDirectory, { recursive: true })
   writeFileSync(join(cacheDirectory, 'session_projcache.json'), currentCache)
+  const englishHome = join(directory, 'english-user-preference')
+  mkdirSync(englishHome, { recursive: true })
+  writeFileSync(join(englishHome, 'cordis.patch.yml'), '- id: locale\n  config:\n    preference: en\n')
   const fixtures = fixtureDefinitions.map((fixture) => {
     const relativePath = `preview/fixtures/${fixture.id}.tar.gz`
-    const trees = fixture.id === 'vfs-example' ? [...fixture.trees, { mount: 'home/storages', directory: cacheDirectory }] : fixture.trees
+    // The demo uses English labels; make that explicit as a saved home preference.
+    const trees =
+      fixture.id === 'vfs-example'
+        ? [...fixture.trees, { mount: 'home/storages', directory: cacheDirectory }, { mount: 'home', directory: englishHome }]
+        : fixture.trees
     writeAsset(relativePath, packPreviewFixture(trees).image)
     return {
       id: fixture.id,
@@ -325,6 +332,7 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     // report the older one.
     expect(bootLine).toContain(`image lowering=${WRAPPER_CONTRACT}`)
     expect(bootLine).toContain('data overlays=1')
+    await expect.poll(() => page.locator('html').getAttribute('lang'), { timeout: 30_000 }).toBe('en')
     // The versioned notice is the seeded preview's first stable interactive
     // surface after the startup chain completes over the tunnel.
     const continueButton = page.getByRole('button', { name: 'Continue' })
@@ -525,7 +533,8 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
     const bootLine = await within(treeActive, BOOT_TIMEOUT_MS, `empty preview boot: the worker never reported "${TREE_ACTIVE}"`)
     expect(bootLine).toContain(`image lowering=${WRAPPER_CONTRACT}`)
     expect(bootLine).toContain('data overlays=0')
-    await page.getByRole('textbox', { name: 'Choose workspace' }).waitFor({ timeout: HERO_TIMEOUT_MS })
+    await expect.poll(() => page.locator('html').getAttribute('lang'), { timeout: 30_000 }).toBe('ja')
+    await page.getByRole('textbox', { name: 'ワークスペースを選択' }).waitFor({ timeout: HERO_TIMEOUT_MS })
     const sessionCount = await page.evaluate(async () => {
       const transport = (
         globalThis as typeof globalThis & {

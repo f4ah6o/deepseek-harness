@@ -1,4 +1,4 @@
-/** Bare Vite must fail before it can present a bootless shell as a working GUI. */
+/** Bare Vite Plus dev must fail before it can present a bootless shell as a working GUI. */
 
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { join } from 'node:path'
@@ -36,13 +36,13 @@ describe('Web development entry', () => {
     expect(result.stderr).toContain('dsh web')
   })
 
-  it('rejects the standalone Vite server with the full-host correction', async () => {
+  it('rejects the standalone Vite Plus dev server before it listens', async () => {
     const probeRoot = mkdtempSync(join(tmpdir(), 'dsh-vite-listen-probe-'))
     const marker = join(probeRoot, 'listen-called')
     const port = await freePort()
     try {
       const probeModule = fileURLToPath(new URL('./support/listen-probe.mjs', import.meta.url))
-      const result = await execa(join(WEB_ROOT, 'node_modules/.bin/vite'), ['--host', '127.0.0.1', '--port', String(port)], {
+      const result = await execa(join(WEB_ROOT, 'node_modules/.bin/vp'), ['dev', '--host', '127.0.0.1', '--port', String(port)], {
         cwd: WEB_ROOT,
         reject: false,
         timeout: 10_000,
@@ -54,9 +54,10 @@ describe('Web development entry', () => {
       })
       expect(result.timedOut).toBe(false)
       expect(result.exitCode).not.toBe(0)
-      expect(result.stderr).toContain('apps/web is not a standalone application')
-      expect(result.stderr).toContain('dsh web')
-      expect(result.stderr).toContain('window.__DSH_BOOT__')
+      const output = `${result.stdout}\n${result.stderr}`
+      expect(output).toContain('apps/web is not a standalone application')
+      expect(output).toContain('dsh web')
+      expect(output).toContain('window.__DSH_BOOT__')
       expect(existsSync(marker), 'Vite called Server.listen before rejecting standalone serve mode').toBe(false)
     } finally {
       rmSync(probeRoot, { recursive: true, force: true })
