@@ -42,6 +42,32 @@ describe('ReasoningRow', () => {
     expect(root.hasAttribute('data-preview')).toBe(summary !== '')
   })
 
+  it('advances the collapsed running preview when the first line of a new paragraph completes', () => {
+    const view = render(
+      <ReasoningRow
+        useDisclosure={useDisclosure}
+        text={'Earlier reasoning\nREASONING_STRESS_COMPLETE:100000'}
+        running
+        usePresentation={useDetailedPresentation}
+        t={t}
+      />,
+    )
+    const summary = view.container.querySelector('[class*="summaryText"]')!
+    expect(summary.textContent).toBe('Earlier reasoning')
+    expect(summary.textContent).not.toContain('REASONING_STRESS_COMPLETE:100000')
+
+    view.rerender(
+      <ReasoningRow
+        useDisclosure={useDisclosure}
+        text={'Earlier reasoning\n\nREASONING_STRESS_COMPLETE:100000\n'}
+        running
+        usePresentation={useDetailedPresentation}
+        t={t}
+      />,
+    )
+    expect(summary.textContent).toBe('REASONING_STRESS_COMPLETE:100000')
+  })
+
   it('retains summaries and expanded Markdown when the work-details mode changes', () => {
     const reset = createSnapshotStore(0)
     const useDisclosure = bindDisclosure(reset)

@@ -7,7 +7,7 @@
  */
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { expect, it, onTestFailed } from 'vite-plus/test'
+import { expect, it } from 'vite-plus/test'
 import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { launchWebScaffold, watchConsole, type WebScaffold } from '../tests/scaffold.ts'
@@ -26,6 +26,7 @@ interface ReasoningChunkStormState {
   chunksPerInterval: number
   intervalMs: number
   emitted: number
+  textLength: number
   marker: string
   emitting: boolean
 }
@@ -49,6 +50,7 @@ class ReasoningStressAdapter extends LlmAdapter {
     this.resolveCompleted = resolve
   })
   private emitted = 0
+  private textLength = 0
   private emitting = false
 
   finish(): void {
@@ -78,6 +80,7 @@ class ReasoningStressAdapter extends LlmAdapter {
       chunksPerInterval: CHUNKS_PER_INTERVAL,
       intervalMs: CHUNK_INTERVAL_MS,
       emitted: this.emitted,
+      textLength: this.textLength,
       marker: MARKER,
       emitting: this.emitting,
     }
@@ -98,8 +101,9 @@ class ReasoningStressAdapter extends LlmAdapter {
       options.signal?.throwIfAborted()
       const end = Math.min(this.emitted + CHUNKS_PER_INTERVAL, CHUNK_COUNT)
       while (this.emitted < end) {
-        const text = this.emitted === CHUNK_COUNT - 1 ? `\n${MARKER}` : this.emitted % 64 === 63 ? '推理\n' : '推理'
+        const text = this.emitted === CHUNK_COUNT - 1 ? `\n\n${MARKER}\n` : this.emitted % 64 === 63 ? '推理\n' : '推理'
         parts.push(text)
+        this.textLength += text.length
         yield { type: 'reasoning-delta', index: 0, text }
         this.emitted += 1
       }
@@ -113,6 +117,50 @@ class ReasoningStressAdapter extends LlmAdapter {
     options.signal?.throwIfAborted()
     yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: parts.join('') } }
     yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
+async function captureReasoningStressFailure(page: Page, adapter: ReasoningStressAdapter): Promise<void> {
+  let diagnosticTimer: ReturnType<typeof setTimeout> | undefined
+  let browserState: unknown = 'unavailable'
+  try {
+    browserState = await Promise.race([
+      page.evaluate(() => {
+        const rows = [...document.querySelectorAll<HTMLElement>('[data-variant="think"][data-state="running"]')]
+        const row = rows.at(-1)
+        const summary = row?.querySelector<HTMLElement>('[class*="summaryText"]')?.textContent ?? ''
+        const renderedText = row?.textContent ?? ''
+        return {
+          runningRows: rows.length,
+          state: row?.dataset.state ?? null,
+          expanded: row?.dataset.expanded === 'true',
+          preview: row?.dataset.preview === 'true',
+          renderedTextLength: renderedText.length,
+          renderedTextSuffix: renderedText.slice(-96),
+          summaryLength: summary.length,
+          summarySuffix: summary.slice(-96),
+        }
+      }),
+      new Promise<null>((resolve) => {
+        diagnosticTimer = setTimeout(() => resolve(null), 1_000)
+      }),
+    ])
+    if (browserState === null) browserState = 'timed out after 1000 ms'
+  } catch (_captureError) {
+    // Keep diagnostic collection from replacing the stress assertion.
+    browserState = 'capture failed'
+  } finally {
+    if (diagnosticTimer !== undefined) clearTimeout(diagnosticTimer)
+  }
+  try {
+    process.stderr.write(`reasoning-chunk stress failure: ${JSON.stringify({ adapter: adapter.state(), browser: browserState })}\n`)
+  } catch (_writeError) {
+    // Keep diagnostic output from replacing the stress assertion.
+  }
+  try {
+    await saveFailureShot(page, 'web-stress-reasoning-chunks', 1_000)
+  } catch (_screenshotError) {
+    // Keep failure evidence best-effort when its artifact directory is unavailable.
   }
 }
 
@@ -143,7 +191,6 @@ it('keeps the browser responsive while rendering 100,000 reasoning chunks', asyn
     page = await newEnglishPage(browser)
     const activePage = page
     const tripwire = watchConsole(activePage)
-    onTestFailed(() => saveFailureShot(activePage, 'web-stress-reasoning-chunks'))
     await activePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await activePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(activePage, scaffold.workspaceCwd)
@@ -238,6 +285,15 @@ it('keeps the browser responsive while rendering 100,000 reasoning chunks', asyn
     expect(tripwire.warnings).toEqual([])
     adapter.finish()
     await settled
+  } catch (error) {
+    if (page !== undefined) {
+      try {
+        await captureReasoningStressFailure(page, adapter)
+      } catch (_diagnosticError) {
+        // Preserve the stress failure if failure evidence cannot be collected.
+      }
+    }
+    throw error
   } finally {
     adapter.finish()
     await browser?.close()
