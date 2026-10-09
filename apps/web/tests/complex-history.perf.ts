@@ -847,29 +847,61 @@ async function launchPerformanceWorld(options: PerformanceWorldOptions): Promise
   }
 }
 
-async function closePerformanceWorld(world: PerformanceWorld): Promise<void> {
-  const failures: unknown[] = []
+/** Keep a test-body failure ahead of any errors raised by teardown. */
+async function closePerformanceWorld(world: PerformanceWorld, testFailure?: unknown): Promise<void> {
+  const failures: unknown[] = testFailure === undefined ? [] : [testFailure]
   await world.page.close().catch((error: unknown) => failures.push(error))
   await world.scaffold.close().catch((error: unknown) => failures.push(error))
   if (world.replayDir !== undefined) {
     await rm(world.replayDir, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   }
   if (failures.length === 1) throw failures[0]
-  if (failures.length > 1) throw new AggregateError(failures, 'web performance teardown failed')
+  if (failures.length > 1) {
+    throw new AggregateError(
+      failures,
+      testFailure === undefined ? 'web performance teardown failed' : 'web performance test and teardown failed',
+    )
+  }
 }
 
-async function openPerformancePage(world: PerformanceWorld, expectedSessions: number): Promise<Locator> {
+async function openPerformancePage(world: PerformanceWorld): Promise<Locator> {
   await world.page.goto(world.scaffold.authenticatedUrl, { waitUntil: 'load' })
   await world.page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-  const group = world.page.getByRole('treeitem').first()
-  await expect
-    .poll(() => group.textContent(), { timeout: 30_000 })
-    .toContain(`${String(expectedSessions)} ${expectedSessions === 1 ? 'session' : 'sessions'}`)
+  const group = world.page.getByRole('tree', { name: 'Sessions' }).getByRole('treeitem', { name: 'Ungrouped', exact: true })
+  await group.waitFor({ state: 'visible', timeout: 30_000 })
   return group
 }
 
+async function expandAllSidebarSessions(page: Page): Promise<number> {
+  const tree = page.getByRole('tree', { name: 'Sessions' })
+  const group = tree.getByRole('treeitem', { name: 'Ungrouped', exact: true })
+  if ((await group.getAttribute('aria-expanded')) !== 'true') await group.click()
+
+  const deadline = performance.now() + 60_000
+  const remainingMs = (): number => {
+    const remaining = deadline - performance.now()
+    if (remaining <= 0) throw new Error('sidebar session expansion did not stabilize within 60 seconds')
+    return remaining
+  }
+  const showMore = tree.getByRole('button', { name: /^Show \d+ more sessions$/ })
+  await showMore.waitFor({ state: 'visible', timeout: remainingMs() })
+  for (let clicks = 0; clicks <= SIDEBAR_SESSION_COUNT; clicks += 1) {
+    if ((await showMore.count()) === 0) {
+      return stableCount(page.getByRole('treeitem'), (count) => count === SIDEBAR_SESSION_COUNT + 2, remainingMs())
+    }
+    await showMore.click({ timeout: remainingMs() })
+  }
+  throw new Error(`workspace session overflow remained after revealing ${String(SIDEBAR_SESSION_COUNT)} sessions`)
+}
+
+async function expandSessionSearch(page: Page): Promise<Locator> {
+  const searchButton = page.getByRole('button', { name: 'Search sessions', exact: true })
+  if ((await searchButton.getAttribute('aria-expanded')) !== 'true') await searchButton.click()
+  return page.getByRole('textbox', { name: 'Search session names', exact: true })
+}
+
 async function openLongHistory(page: Page): Promise<number> {
-  await page.getByRole('textbox', { name: 'Search name, keywords...', exact: true }).fill('LONG_PERF_SENTINEL')
+  await (await expandSessionSearch(page)).fill('LONG_PERF_SENTINEL')
   const results = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
   await expect.poll(() => results.count(), { timeout: 60_000 }).toBe(1)
   await results.first().click()
@@ -1144,9 +1176,10 @@ describe('manual web performance: complex workspace and history', () => {
       sidebarSessions: SIDEBAR_SESSION_COUNT,
       seedLongHistory: true,
     })
+    let testFailure: unknown
     try {
       const bootStarted = performance.now()
-      const group = await openPerformancePage(world, SIDEBAR_SESSION_COUNT + 1)
+      const group = await openPerformancePage(world)
       const bootReadyMs = performance.now() - bootStarted
       const page = world.page
       const cdp = await page.context().newCDPSession(page)
@@ -1156,15 +1189,14 @@ describe('manual web performance: complex workspace and history', () => {
       )
 
       const sidebar = await measure(cdp, async () => {
-        await group.click()
-        return stableCount(page.getByRole('treeitem'), (count) => count === SIDEBAR_SESSION_COUNT + 2)
+        return expandAllSidebarSessions(page)
       })
       expect(sidebar.value).toBe(SIDEBAR_SESSION_COUNT + 2)
       await group.click()
       await expect.poll(() => page.getByRole('treeitem').count()).toBe(1)
 
       const contentSearch = await measure(cdp, async () => {
-        await page.getByRole('textbox', { name: 'Search name, keywords...', exact: true }).fill('LONG_PERF_SENTINEL')
+        await (await expandSessionSearch(page)).fill('LONG_PERF_SENTINEL')
         const results = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
         await expect.poll(() => results.count(), { timeout: 60_000 }).toBe(1)
         await results.first().waitFor({ timeout: 60_000 })
@@ -1252,8 +1284,11 @@ describe('manual web performance: complex workspace and history', () => {
       )
       expect(world.tripwire.warnings).toEqual([])
       expect(world.tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      testFailure = error
+      throw error
     } finally {
-      await closePerformanceWorld(world)
+      await closePerformanceWorld(world, testFailure)
     }
   })
 
@@ -1263,8 +1298,9 @@ describe('manual web performance: complex workspace and history', () => {
       replay: performanceReplayOverride(COMPARISON_TURNS, comparisonTurn),
       seedLongHistory: true,
     })
+    let testFailure: unknown
     try {
-      await openPerformancePage(world, 1)
+      await openPerformancePage(world)
       const cdp = await world.page.context().newCDPSession(world.page)
       await cdp.send('Performance.enable')
       const opened = await measure(cdp, () => openLongHistory(world.page))
@@ -1291,8 +1327,11 @@ describe('manual web performance: complex workspace and history', () => {
       )
       expect(world.tripwire.warnings).toEqual([])
       expect(world.tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      testFailure = error
+      throw error
     } finally {
-      await closePerformanceWorld(world)
+      await closePerformanceWorld(world, testFailure)
     }
   })
 
@@ -1302,8 +1341,9 @@ describe('manual web performance: complex workspace and history', () => {
       replay: performanceReplayOverride(COMPARISON_TURNS, comparisonTurn),
       seedLongHistory: true,
     })
+    let testFailure: unknown
     try {
-      await openPerformancePage(world, 1)
+      await openPerformancePage(world)
       const cdp = await world.page.context().newCDPSession(world.page)
       await cdp.send('Performance.enable')
       expect(await openLongHistory(world.page)).toBe(DEFAULT_HISTORY_TURNS)
@@ -1342,8 +1382,11 @@ describe('manual web performance: complex workspace and history', () => {
       )
       expect(world.tripwire.warnings).toEqual([])
       expect(world.tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      testFailure = error
+      throw error
     } finally {
-      await closePerformanceWorld(world)
+      await closePerformanceWorld(world, testFailure)
     }
   })
 
