@@ -25,7 +25,15 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot } from './support.ts'
+import {
+  connectFreshWorkspace,
+  newEnglishPage,
+  openSettings,
+  pinBrowserClock,
+  pinHostClock,
+  saveFailureShot,
+  waitForWebAppFrame,
+} from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/steering', import.meta.url))
 const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
@@ -100,7 +108,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     unpinBrowserClock = await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     // Fresh world: connect a Workspace so the composer scenarios start live.
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
   }, 120_000)
@@ -254,7 +262,7 @@ describe.each(['reconnect', 'delayed-inbox'] as const)('web e2e: composer shortc
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
   }, 120_000)
 
@@ -364,7 +372,7 @@ describe('web e2e: composer shortcut follows the swapped busy behavior', () => {
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
   }, 120_000)
 
@@ -452,7 +460,7 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     unpinBrowserClock = await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     await page.getByText('Standard mode', { exact: true }).waitFor({ timeout: 10_000 })
   }, 120_000)

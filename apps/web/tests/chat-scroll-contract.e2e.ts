@@ -16,7 +16,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot, waitForWebAppFrame } from './support.ts'
 
 const MODE = webSnapshotMode()
 const HISTORY_SESSION_ID = 'chat-scroll-history-e2e'
@@ -188,7 +188,7 @@ async function launchScrollWorld(options: ScrollWorldOptions): Promise<ScrollWor
     page = await newEnglishPage(browser, 900)
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     // Session-list bootstrap can replace the controlled search state. Wait
     // for the seeded baseline before openSeed starts the lazy content query
     // (the compact layout dropped group session counts; the Ungrouped bucket

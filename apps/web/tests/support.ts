@@ -4,7 +4,7 @@ import { createServer } from 'node:net'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Locator, Page } from 'playwright'
+import type { Browser, Locator, Page, Request, Response } from 'playwright'
 import { expect, vi, type MockInstance } from 'vite-plus/test'
 
 /** The built page under test; `pnpm run test:web` rebuilds it before running. */
@@ -43,6 +43,178 @@ export function markFixtureProjectRoot(root: string): void {
  * saves `locale.preference: zh`.
  */
 export const ZH_BROWSER_LOCALE = 'zh-CN'
+
+const WEB_APP_FRAME_SELECTOR = '[class*="frame"]'
+const WEB_APP_FRAME_TIMEOUT_MS = 30_000
+const WEB_APP_BOOT_DIAGNOSTIC_TIMEOUT_MS = 1_000
+
+interface WebAppBootEvents {
+  readonly failedRequests: string[]
+  readonly failedResponses: { readonly pathname: string; readonly status: number }[]
+  readonly pageErrors: string[]
+}
+
+const webAppBootEvents = new WeakMap<Page, WebAppBootEvents>()
+let webAppBootFailureSequence = 0
+
+function safeRequestPathname(value: string): string {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.pathname : '[non-http]'
+  } catch {
+    return '[invalid-url]'
+  }
+}
+
+function removeDiagnosticUrls(message: string): string {
+  return message.replace(/\b(?:https?|wss?|file|blob|chrome-extension):\/\/[^\s"'<>]+/giu, '[url]')
+}
+
+async function settleBootDiagnostic<T>(work: Promise<T>): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | number | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(resolve, WEB_APP_BOOT_DIAGNOSTIC_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+/**
+ * Record sanitized boot failures before navigating or reloading a page.
+ * @param page - browser page whose navigation and runtime failures to observe.
+ */
+export function observeWebAppBoot(page: Page): void {
+  if (webAppBootEvents.has(page)) return
+
+  const events: WebAppBootEvents = { failedRequests: [], failedResponses: [], pageErrors: [] }
+  const onRequest = (request: Request): void => {
+    if (!request.isNavigationRequest()) return
+    try {
+      if (request.frame() !== page.mainFrame()) return
+    } catch (error) {
+      // Playwright can emit a navigation before its Frame is available; retain current evidence until ownership is known.
+      void error
+      return
+    }
+    events.failedRequests.length = 0
+    events.failedResponses.length = 0
+    events.pageErrors.length = 0
+  }
+  const onRequestFailed = (request: Request): void => {
+    events.failedRequests.push(safeRequestPathname(request.url()))
+  }
+  const onResponse = (response: Response): void => {
+    const status = response.status()
+    if (status >= 400) events.failedResponses.push({ pathname: safeRequestPathname(response.url()), status })
+  }
+  const onPageError = (error: Error): void => {
+    events.pageErrors.push(removeDiagnosticUrls(error.message))
+  }
+  const dispose = (): void => {
+    page.off('request', onRequest)
+    page.off('requestfailed', onRequestFailed)
+    page.off('response', onResponse)
+    page.off('pageerror', onPageError)
+    page.off('close', dispose)
+    webAppBootEvents.delete(page)
+  }
+
+  webAppBootEvents.set(page, events)
+  page.on('request', onRequest)
+  page.on('requestfailed', onRequestFailed)
+  page.on('response', onResponse)
+  page.on('pageerror', onPageError)
+  page.once('close', dispose)
+}
+
+async function captureWebAppBootFailure(page: Page): Promise<void> {
+  const events = webAppBootEvents.get(page)
+  let documentState: unknown = null
+  try {
+    const snapshot = await settleBootDiagnostic(
+      page.evaluate(() => {
+        const boot = document.querySelector<HTMLElement>('[data-dsh-boot]')
+        const spinner = document.querySelector<HTMLElement>('[data-dsh-boot-spinner]')
+        return {
+          pathname: location.pathname,
+          documentReadyState: document.readyState,
+          locale: {
+            document: document.documentElement.lang,
+            browser: navigator.language,
+            languages: [...navigator.languages],
+          },
+          bootText: boot?.textContent ?? null,
+          spinner:
+            spinner === null
+              ? null
+              : {
+                  className: spinner.getAttribute('class'),
+                  style: spinner.getAttribute('style'),
+                },
+          frameCount: document.querySelectorAll('[class*="frame"]').length,
+        }
+      }),
+    )
+    if (snapshot !== undefined) {
+      documentState = {
+        ...snapshot,
+        bootText: snapshot.bootText === null ? null : removeDiagnosticUrls(snapshot.bootText),
+      }
+    }
+  } catch (_captureError) {
+    // A closed or unresponsive renderer cannot mask the frame wait that failed.
+  }
+
+  const sequence = ++webAppBootFailureSequence
+  try {
+    console.error(
+      'Web app frame did not mount:',
+      JSON.stringify({
+        document: documentState,
+        failedRequests: events?.failedRequests ?? [],
+        failedResponses: events?.failedResponses ?? [],
+        pageErrors: events?.pageErrors ?? [],
+      }),
+    )
+  } catch (_reportError) {
+    // Diagnostic output must not replace the Playwright wait failure.
+  }
+  try {
+    await saveFailureShot(page, `web-app-boot-${process.pid}-${sequence}`, WEB_APP_BOOT_DIAGNOSTIC_TIMEOUT_MS)
+  } catch (_screenshotError) {
+    // A screenshot failure must not replace the Playwright wait failure.
+  }
+}
+
+/**
+ * Wait for the existing app frame mount point and capture failure evidence before callers clean up.
+ * @param page - browser page whose app frame must mount.
+ * @returns after the frame selector appears; rejects with the original Playwright wait error.
+ */
+export async function waitForWebAppFrame(page: Page): Promise<void> {
+  try {
+    await page.waitForSelector(WEB_APP_FRAME_SELECTOR, { timeout: WEB_APP_FRAME_TIMEOUT_MS })
+  } catch (error) {
+    try {
+      await captureWebAppBootFailure(page)
+    } catch (_diagnosticError) {
+      // Diagnostic failures must not replace the original Playwright wait error.
+    }
+    throw error
+  }
+
+  const events = webAppBootEvents.get(page)
+  if (events !== undefined) {
+    events.failedRequests.length = 0
+    events.failedResponses.length = 0
+    events.pageErrors.length = 0
+  }
+}
 
 /** Same-day anchor for seeded event times and the Asia/Shanghai browser clock. */
 export const WEB_FIXTURE_TIME = Date.parse('2026-01-15T12:00:00+08:00')
@@ -106,13 +278,16 @@ export async function pinBrowserClock(page: Page): Promise<() => void> {
  * Scaffolds save the explicit preference separately; the page language keeps
  * browser APIs consistent with the interface being tested. The context uses
  * Asia/Shanghai to preserve the recorded Web user-source timezone regardless
- * of the host timezone.
+ * of the host timezone. It also installs sanitized boot diagnostics before
+ * navigation starts.
  * @param browser - Playwright browser owning the page.
  * @param height - Viewport height; width is fixed to the lane baseline.
  * @returns the initialized page.
  */
 export async function newEnglishPage(browser: Browser, height = 1000): Promise<Page> {
-  return await browser.newPage({ viewport: { width: 1680, height }, locale: 'en-US', timezoneId: 'Asia/Shanghai' })
+  const page = await browser.newPage({ viewport: { width: 1680, height }, locale: 'en-US', timezoneId: 'Asia/Shanghai' })
+  observeWebAppBoot(page)
+  return page
 }
 
 /**
@@ -287,12 +462,20 @@ export async function writeComposerDraft(page: Page, input: ReturnType<Page['loc
   else await page.keyboard.type(text)
 }
 
-/** Failure evidence goes to the gitignored .artifacts/ (repo convention). */
-export async function saveFailureShot(page: Page, name: string): Promise<void> {
+/** Failure evidence goes to the gitignored `.artifacts/` directory.
+ * @param page - browser page to capture.
+ * @param name - stable artifact name without the `.png` suffix.
+ * @param timeoutMs - optional screenshot deadline.
+ */
+export async function saveFailureShot(page: Page, name: string, timeoutMs?: number): Promise<void> {
   const dir = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
   mkdirSync(dir, { recursive: true })
   try {
-    await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
+    await page.screenshot({
+      path: `${dir}/${name}.png`,
+      fullPage: true,
+      ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
+    })
   } catch {
     // Best-effort evidence: a dead page/browser at failure time must not mask the real assertion error.
   }

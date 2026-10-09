@@ -25,7 +25,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
+import { observeWebAppBoot, openSettings, waitForWebAppFrame, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/settings-chrome', import.meta.url))
 const DIALOG_EXPECTED = join(SNAPSHOT_DIR, 'dialog.expected.md')
@@ -52,9 +52,10 @@ describe('web e2e: settings modal and General preferences', () => {
     // Chinese browser: the shared page asserts the localized settings surface
     // the client derives from it (the English default has its own spec below).
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    observeWebAppBoot(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
   }, 120_000)
 
   afterAll(async () => {
@@ -378,7 +379,7 @@ describe('web e2e: settings modal and General preferences', () => {
       await page.unroute(pluginPattern)
     }
 
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await openSettings(page, 'zh')
     const restoredDialog = page.getByRole('dialog', { name: '设置' })
@@ -460,7 +461,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // Reload: the preference survives the background Host read + presenter update.
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await page.emulateMedia({ colorScheme: 'light' })
     await expect.poll(async () => (await readState()).attr, { timeout: 5_000 }).toBe(true)
@@ -474,12 +475,13 @@ describe('web e2e: settings modal and General preferences', () => {
     // converges to dark before the settings dialog opens.
     const second = await launchWebScaffold({ locale: null, developerTools: false, harnessHome: scaffold.harnessHome })
     const secondPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    observeWebAppBoot(secondPage)
     const secondTripwire = watchConsole(secondPage)
     try {
       expect(second.baseUrl).not.toBe(scaffold.baseUrl)
       await secondPage.emulateMedia({ colorScheme: 'light' })
       await secondPage.goto(second.authenticatedUrl, { waitUntil: 'load' })
-      await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await waitForWebAppFrame(secondPage)
       await expect.poll(async () => (await readState(secondPage)).attr, { timeout: 5_000 }).toBe(true)
       const secondState = await readState(secondPage)
       expect(secondState.legacy).toBeNull()
@@ -575,7 +577,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await expect.poll(() => readFontSize(), { timeout: 5_000 }).toBe('16px')
     expect(await readSecondaryFontSize()).toBe('14px')
 
@@ -614,7 +616,7 @@ describe('web e2e: settings modal and General preferences', () => {
 
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
-      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await waitForWebAppFrame(page)
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
       await openSettings(page, 'zh')
       const reloaded = page.getByRole('dialog', { name: '设置' })
@@ -649,7 +651,7 @@ describe('web e2e: settings modal and General preferences', () => {
 
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await openSettings(page, 'zh')
     const reloaded = page.getByRole('dialog', { name: '设置' })
@@ -657,12 +659,13 @@ describe('web e2e: settings modal and General preferences', () => {
 
     const second = await launchWebScaffold({ locale: null, developerTools: false, harnessHome: scaffold.harnessHome })
     const secondPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    observeWebAppBoot(secondPage)
     const secondTripwire = watchConsole(secondPage)
     try {
       expect(second.baseUrl).not.toBe(scaffold.baseUrl)
       expect(second.ctx.settings.describe().find((row) => row.ns === 'locale')?.value).toEqual({ preference: 'zh' })
       await secondPage.goto(second.authenticatedUrl, { waitUntil: 'load' })
-      await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await waitForWebAppFrame(secondPage)
       await openSettings(secondPage, 'zh')
       await secondPage.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '插话发送' }).waitFor({ timeout: 10_000 })
       expect(await secondPage.evaluate(() => localStorage.getItem('dsh.conversation.busyEnter'))).toBeNull()
@@ -717,7 +720,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // other specs' 设置-anchored selectors + goldens) see the default again.
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     const enTrigger = page.getByRole('button', { name: 'Settings' })
     await enTrigger.waitFor({ timeout: 10_000 })
@@ -726,11 +729,12 @@ describe('web e2e: settings modal and General preferences', () => {
     // preference from the shared Host settings document.
     const second = await launchWebScaffold({ locale: null, developerTools: false, harnessHome: scaffold.harnessHome })
     const secondPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    observeWebAppBoot(secondPage)
     const secondTripwire = watchConsole(secondPage)
     try {
       expect(second.baseUrl).not.toBe(scaffold.baseUrl)
       await secondPage.goto(second.authenticatedUrl, { waitUntil: 'load' })
-      await secondPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await waitForWebAppFrame(secondPage)
       await openSettings(secondPage, 'en')
       await secondPage.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'English' }).waitFor({ timeout: 10_000 })
       expect(await secondPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
@@ -754,6 +758,7 @@ describe('web e2e: settings modal and General preferences', () => {
 
     const restored = await launchWebScaffold({ locale: null, developerTools: false, harnessHome: scaffold.harnessHome })
     const restoredPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    observeWebAppBoot(restoredPage)
     const restoredTripwire = watchConsole(restoredPage)
     try {
       const locale = restored.ctx.settings.describe().find((row) => row.ns === 'locale')
@@ -761,7 +766,7 @@ describe('web e2e: settings modal and General preferences', () => {
       expect(locale?.base).toEqual({ preference: 'zh' })
       expect(locale?.user).toEqual({})
       await restoredPage.goto(restored.authenticatedUrl, { waitUntil: 'load' })
-      await restoredPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await waitForWebAppFrame(restoredPage)
       await openSettings(restoredPage, 'zh')
       await restoredPage.getByRole('dialog', { name: '设置' }).waitFor({ timeout: 10_000 })
       await restoredPage.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '中文' }).waitFor()
@@ -780,11 +785,12 @@ describe('web e2e: settings modal and General preferences', () => {
     async (browserLocale) => {
       const fresh = await launchWebScaffold({ locale: null, developerTools: false })
       const defaultPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: browserLocale })
+      observeWebAppBoot(defaultPage)
       const defaultTripwire = watchConsole(defaultPage)
       onTestFailed(() => saveFailureShot(defaultPage, 'web-e2e-settings-default-language'))
       try {
         await defaultPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
-        await defaultPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+        await waitForWebAppFrame(defaultPage)
         expect(await defaultPage.evaluate(() => document.documentElement.lang)).toBe('ja')
         expect(await defaultPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
         await openSettings(defaultPage, 'ja')

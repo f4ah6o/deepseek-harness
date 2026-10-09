@@ -40,7 +40,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, saveFailureShot, waitForWebAppFrame } from './support.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -317,7 +317,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       })
     }
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
   }, 120_000)
 
   afterAll(async () => {

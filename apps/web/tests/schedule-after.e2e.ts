@@ -28,7 +28,14 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { REPO_ROOT, connectFreshWorkspace, conversationContextKey, saveFailureShot } from './support.ts'
+import {
+  REPO_ROOT,
+  connectFreshWorkspace,
+  conversationContextKey,
+  observeWebAppBoot,
+  saveFailureShot,
+  waitForWebAppFrame,
+} from './support.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -318,12 +325,13 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
       locale: 'en-US',
       timezoneId: AT_BROWSER_ZONE,
     })
+    observeWebAppBoot(page)
     await page.addInitScript(() => {
       localStorage.setItem('dsh.locale', 'en')
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe(AT_BROWSER_ZONE)
 
@@ -449,7 +457,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
     await expect(scaffold.ctx.sessions.flush(atHandle.agent.session)).resolves.toBe(true)
     await workspace.attachSession(atHandle.agent.id)
     await page.reload({ waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     const workspaceItem = page.locator('[role="treeitem"]').first()
     await workspaceItem.waitFor({ timeout: 15_000 })
     const expansionDeadline = Date.now() + 5_000
@@ -794,13 +802,14 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       locale: 'en-US',
       timezoneId: AT_BROWSER_ZONE,
     })
+    observeWebAppBoot(page)
     await page.clock.setFixedTime(new Date(CATALOG_NOW))
     await page.addInitScript(() => {
       localStorage.setItem('dsh.locale', 'en')
     })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await page.evaluate(() => {
       document.body.removeAttribute('data-ds-dark-theme')
     })
@@ -1095,7 +1104,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     await expectNoReminderEntry(page)
     expect(await scaffold.ctx.schedule.list({ sessionId: CATALOG_SESSION_ID })).toEqual([])
     await page.reload({ waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await waitForWebAppFrame(page)
     await expectNoReminderEntry(page)
     // This authored pin owns its sidecars through the snapshot manifest's
     // `header.pin: true` contract, which the session-snapshot corpus enforces
