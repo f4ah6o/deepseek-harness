@@ -470,7 +470,8 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
     try {
       await seedSession(scaffold, await readFile(FIXTURE, 'utf8'), SESSION_ID)
       browser = await chromium.launch()
-      page = await newEnglishPage(browser)
+      const activePage = await newEnglishPage(browser)
+      page = activePage
       tripwire = watchConsole(page)
       await gate.install(page)
       markPhase('navigate')
@@ -504,7 +505,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       markPhase('wait-prompt-blocked')
       await promptBlocked.promise
       markPhase('poll-optimistic-placement')
-      await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+      await expect.poll(() => placement(activePage)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
       trace.push({ phase: 'optimistic', ...(await placement(page)) })
       releasePrompt.resolve(undefined)
 
@@ -514,13 +515,13 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
         gate.releaseThrough(gate.turnStartDelivery()!)
         markPhase('wait-turn-process')
         await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+        await expect.poll(() => placement(activePage)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...(await placement(page)) })
         markPhase('wait-admission-frame')
         await expect.poll(() => gate.admissionDelivery()).toBeDefined()
         gate.releaseThrough(gate.admissionDelivery()!)
         markPhase('poll-durable-before-inbox')
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
+        await expect.poll(() => placement(activePage)).toMatchObject({ echo: 0, dock: 0, durable: 1 })
         trace.push({ phase: 'durable-before-inbox', ...(await placement(page)) })
       }
 
@@ -529,7 +530,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       gate.releaseThrough(gate.inboxDelivery(true)!)
       markPhase('poll-after-inbox-release')
       await expect
-        .poll(() => placement(page))
+        .poll(() => placement(activePage))
         .toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
       trace.push({ phase: 'inbox', ...(await placement(page)) })
 
@@ -538,7 +539,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       gate.releaseThrough(gate.inboxDelivery(false)!)
       markPhase('poll-after-claim-release')
       await expect
-        .poll(() => placement(page))
+        .poll(() => placement(activePage))
         .toMatchObject({ echo: order === 'inbox-first' ? 1 : 0, dock: 0, durable: order === 'transcript-first' ? 1 : 0 })
       trace.push({ phase: 'claim-projection', ...(await placement(page)) })
 
@@ -548,7 +549,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
         gate.releaseThrough(gate.turnStartDelivery()!)
         markPhase('wait-turn-process')
         await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
-        await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
+        await expect.poll(() => placement(activePage)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...(await placement(page)) })
         markPhase('wait-admission-frame')
         await expect.poll(() => gate.admissionDelivery()).toBeDefined()
@@ -561,7 +562,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
         const observation: PlacementObservation = { attempt: ++placementAttempt, startedAt: performance.now() }
         placementAttempts.push(observation)
         if (placementAttempts.length > 12) placementAttempts.shift()
-        const pending = placement(page!, TEXT, (placementEvaluation) => {
+        const pending = placement(activePage, TEXT, (placementEvaluation) => {
           Object.assign(observation, { placementEvaluation })
         })
         void pending.then(
