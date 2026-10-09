@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { Browser, CDPSession, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import {
   ToolCallId,
@@ -33,7 +33,13 @@ const LONG_HISTORY_TURNS = 500
 const TOOL_TURN_INTERVAL = 10
 const TOOLS_PER_TOOL_TURN = 10
 const EXPECTED_TOOL_CALLS = (LONG_HISTORY_TURNS / TOOL_TURN_INTERVAL) * TOOLS_PER_TOOL_TURN
-const EXPECTED_TRAJECTORY_ROWS = 2_100
+// Mirrors ui-trajectory's private HISTORY_PAGE_NODES without pulling its Client graph into this Host test.
+const TRAJECTORY_HISTORY_PAGE_NODES = 50
+const EXPECTED_SYSTEM_PROMPT_EVENTS = LONG_HISTORY_TURNS + LONG_HISTORY_TURNS / TOOL_TURN_INTERVAL
+// Request headers are represented by their assistant-step nodes. System prompt events remain separate ledger rows.
+const EXPECTED_TRAJECTORY_ROWS = EXPECTED_SYSTEM_PROMPT_EVENTS + LONG_HISTORY_TURNS + EXPECTED_SYSTEM_PROMPT_EVENTS + EXPECTED_TOOL_CALLS
+// The last 50 target Nodes cover turns 487–500 and 16 corresponding assistant requests.
+const EXPECTED_TRAJECTORY_TAIL_ROWS = TRAJECTORY_HISTORY_PAGE_NODES + 16
 const DEFAULT_HISTORY_TURNS = 24
 const PERF_REPLAY_CONTEXT_WINDOW = 10_000_000
 const STREAM_PACE_MS = 8
@@ -93,6 +99,21 @@ interface Measurement {
   readonly heapDeltaMb: number
   readonly totalNodes: number
   readonly heapMb: number
+}
+
+interface TrajectoryPageState {
+  readonly ariaRowCount: number
+  readonly pagerRows: number
+  readonly logicalRows: number
+  readonly mountedRows: number
+  readonly scrollReady: boolean
+  readonly firstRowIndex: number | undefined
+  readonly lastRowIndex: number | undefined
+}
+
+interface TrajectoryEndpointRows {
+  readonly first: { readonly index: number; readonly position: number }
+  readonly last: { readonly index: number; readonly position: number }
 }
 
 interface MutationProbeResult {
@@ -188,16 +209,23 @@ function appendTitle(session: Session, title: string, messageSeq: SessionSeq): v
   })
 }
 
-function appendSystemPrompt(session: Session, turn: number, step: number): void {
-  session.append(
+function appendSystemPrompt(session: Session, turn: number, step: number, text = 'Synthetic performance system prompt.'): SessionSeq {
+  return session.append('system/message', { turn, step, message: createSystemMessage(text) }, { surfaceOp: 'append' }).seq
+}
+
+function replaceSystemPrompt(session: Session, turn: number, step: number, previousSeq: SessionSeq, text: string): SessionSeq {
+  return session.append(
     'system/message',
+    { turn, step, message: createSystemMessage(text) },
     {
-      turn,
-      step,
-      message: createSystemMessage('Synthetic performance system prompt.'),
+      surfaceOp: { op: 'replace', startSeq: previousSeq, endSeq: previousSeq },
+      sourceEventSeqs: [previousSeq],
     },
-    { surfaceOp: 'append' },
-  )
+  ).seq
+}
+
+function requestSystemPrompt(turn: number, step: number): string {
+  return `Synthetic performance system prompt for turn ${String(turn)}, step ${String(step)}.`
 }
 
 function appendRequestHeader(session: Session, turn: number, step: number): void {
@@ -349,13 +377,14 @@ function smallSidebarFixture(): string {
 
 function longHistoryFixture(): string {
   const session = Session.create(SessionId(LONG_SESSION_ID))
+  let systemHeadSeq: SessionSeq | undefined
   for (let turn = 1; turn <= LONG_HISTORY_TURNS; turn += 1) {
     session.append('turn/start', {
       turn,
     })
     if (turn === 1) {
       session.append('step/start', { turn, step: 1 })
-      appendSystemPrompt(session, turn, 1)
+      systemHeadSeq = appendSystemPrompt(session, turn, 1, requestSystemPrompt(turn, 1))
     }
     const user = session.append(
       'user/message',
@@ -367,12 +396,18 @@ function longHistoryFixture(): string {
     )
     if (turn === 1) appendTitle(session, LONG_SESSION_TITLE, user.seq)
 
-    if (turn !== 1) session.append('step/start', { turn, step: 1 })
+    if (turn !== 1) {
+      session.append('step/start', { turn, step: 1 })
+      if (systemHeadSeq === undefined) throw new Error('long history is missing its initial system prompt')
+      systemHeadSeq = replaceSystemPrompt(session, turn, 1, systemHeadSeq, requestSystemPrompt(turn, 1))
+    }
     appendRequestHeader(session, turn, 1)
     if (turn % TOOL_TURN_INTERVAL === 0) {
       appendToolStep(session, turn, 1, TOOLS_PER_TOOL_TURN)
       session.append('step/end', { turn, step: 1 })
       session.append('step/start', { turn, step: 2 })
+      if (systemHeadSeq === undefined) throw new Error('long history is missing its initial system prompt')
+      systemHeadSeq = replaceSystemPrompt(session, turn, 2, systemHeadSeq, requestSystemPrompt(turn, 2))
       appendRequestHeader(session, turn, 2)
       appendAssistant(session, turn, 2, `All synthetic tools completed for turn ${String(turn)}. ${'z'.repeat(320)}${fencedCode(turn)}`)
       session.append('step/end', { turn, step: 2 })
@@ -755,6 +790,279 @@ async function stableCount(locator: Locator, accepts: (count: number) => boolean
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error(`browser row count did not stabilize; last count ${String(previous)}`)
+}
+
+function remainingTrajectoryTime(deadline: number, clock = trajectoryClock): number {
+  const remaining = deadline - clock.now()
+  if (remaining <= 0) throw new Error('trajectory action exceeded its shared 60-second deadline')
+  return remaining
+}
+
+interface TrajectoryHistoryDriver {
+  readonly readState: () => Promise<TrajectoryPageState>
+  readonly clickLoadEarlier: (timeoutMs: number) => Promise<void>
+}
+
+interface TrajectoryClock {
+  readonly now: () => number
+  readonly wait: (milliseconds: number) => Promise<void>
+}
+
+const trajectoryClock: TrajectoryClock = {
+  now: () => performance.now(),
+  wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+}
+
+function assertCompleteTrajectoryHistory(state: TrajectoryPageState, expectedRows: number): void {
+  if (state.pagerRows !== 0 || state.logicalRows !== expectedRows) {
+    throw new Error(
+      `trajectory history is incomplete: expected ${String(expectedRows)} records without a pager, found ${JSON.stringify(state)}`,
+    )
+  }
+}
+
+async function trajectoryPageState(page: Page): Promise<TrajectoryPageState> {
+  const raw = await page.locator('[data-trajectory-scroll] table').evaluate((table) => {
+    const rows = [...table.querySelectorAll<HTMLTableRowElement>('tr[data-trajectory-row-key]')]
+    return {
+      ariaRowCount: table.getAttribute('aria-rowcount'),
+      pagerRows: table.querySelectorAll('[data-history-load]').length,
+      mountedRows: rows.length,
+      scrollReady: table.getAttribute('data-scroll-ready') === 'true',
+      firstRowIndex: rows[0]?.getAttribute('aria-rowindex') ?? null,
+      lastRowIndex: rows.at(-1)?.getAttribute('aria-rowindex') ?? null,
+    }
+  })
+  if (raw.ariaRowCount === null || !/^[1-9]\d*$/.test(raw.ariaRowCount)) {
+    throw new Error(`trajectory table has invalid aria-rowcount ${JSON.stringify(raw.ariaRowCount)}`)
+  }
+  const ariaRowCount = Number(raw.ariaRowCount)
+  if (!Number.isSafeInteger(ariaRowCount)) {
+    throw new Error(`trajectory table aria-rowcount is not a safe integer: ${raw.ariaRowCount}`)
+  }
+  if (raw.pagerRows > 1) throw new Error(`trajectory table has ${String(raw.pagerRows)} older-history controls`)
+  if (!Number.isSafeInteger(raw.mountedRows) || raw.mountedRows < 0) {
+    throw new Error(`trajectory table has invalid mounted row count ${String(raw.mountedRows)}`)
+  }
+  const logicalRows = ariaRowCount - raw.pagerRows
+  if (logicalRows < 0 || raw.mountedRows > logicalRows) {
+    throw new Error(`trajectory table row counts are inconsistent: ${JSON.stringify(raw)}`)
+  }
+  const rowIndex = (value: string | null): number | undefined => {
+    if (value === null) return undefined
+    const parsed = Number(value)
+    if (!Number.isSafeInteger(parsed) || parsed < 1) {
+      throw new Error(`trajectory row has invalid aria-rowindex ${JSON.stringify(value)}`)
+    }
+    return parsed
+  }
+  return {
+    ariaRowCount,
+    pagerRows: raw.pagerRows,
+    logicalRows,
+    mountedRows: raw.mountedRows,
+    scrollReady: raw.scrollReady,
+    firstRowIndex: rowIndex(raw.firstRowIndex),
+    lastRowIndex: rowIndex(raw.lastRowIndex),
+  }
+}
+
+async function stableTrajectoryState(
+  readState: () => Promise<TrajectoryPageState>,
+  accepts: (state: TrajectoryPageState) => boolean,
+  deadline: number,
+  target: string,
+  clock = trajectoryClock,
+): Promise<TrajectoryPageState> {
+  let previous = ''
+  let stableReads = 0
+  let last: TrajectoryPageState | undefined
+  while (clock.now() < deadline) {
+    last = await readState()
+    if (clock.now() >= deadline) break
+    const signature = JSON.stringify(last)
+    if (last.scrollReady && accepts(last)) {
+      stableReads = signature === previous ? stableReads + 1 : 1
+      previous = signature
+      if (stableReads >= 4) return last
+    } else {
+      previous = ''
+      stableReads = 0
+    }
+    await clock.wait(Math.min(50, remainingTrajectoryTime(deadline, clock)))
+  }
+  throw new Error(`trajectory table did not stabilize at ${target}; last state ${JSON.stringify(last)}`)
+}
+
+async function stableTrajectoryPageState(
+  page: Page,
+  accepts: (state: TrajectoryPageState) => boolean,
+  deadline: number,
+  target: string,
+): Promise<TrajectoryPageState> {
+  return stableTrajectoryState(
+    async () => {
+      await page.locator('[data-trajectory-scroll] table').waitFor({
+        state: 'visible',
+        timeout: remainingTrajectoryTime(deadline),
+      })
+      return trajectoryPageState(page)
+    },
+    accepts,
+    deadline,
+    target,
+  )
+}
+
+async function loadAllTrajectoryRows(
+  driver: TrajectoryHistoryDriver,
+  deadline: number,
+  expectedRows = EXPECTED_TRAJECTORY_ROWS,
+  clock = trajectoryClock,
+): Promise<TrajectoryPageState & { readonly pageLoads: number }> {
+  let state = await driver.readState()
+  let pageLoads = 0
+  if (state.pagerRows === 0) {
+    assertCompleteTrajectoryHistory(state, expectedRows)
+    throw new Error('trajectory history must start from a tail page with an older-history control')
+  }
+  while (state.pagerRows === 1) {
+    const previousRows = state.logicalRows
+    await driver.clickLoadEarlier(remainingTrajectoryTime(deadline, clock))
+    state = await stableTrajectoryState(
+      driver.readState,
+      (next) => next.logicalRows > previousRows,
+      deadline,
+      `more than ${String(previousRows)} logical rows`,
+      clock,
+    )
+    pageLoads += 1
+    if (state.pagerRows === 0) {
+      assertCompleteTrajectoryHistory(state, expectedRows)
+      return { ...state, pageLoads }
+    }
+  }
+  assertCompleteTrajectoryHistory(state, expectedRows)
+  return { ...state, pageLoads }
+}
+
+function trajectoryPageDriver(page: Page, deadline: number): TrajectoryHistoryDriver {
+  return {
+    readState: async () => {
+      await page.locator('[data-trajectory-scroll] table').waitFor({
+        state: 'visible',
+        timeout: remainingTrajectoryTime(deadline),
+      })
+      return trajectoryPageState(page)
+    },
+    clickLoadEarlier: async (timeoutMs) => {
+      const loadEarlier = page.locator('[data-earlier-history][aria-disabled="false"]')
+      const controls = await loadEarlier.count()
+      if (controls !== 1) {
+        throw new Error(`expected one enabled trajectory Load earlier control, found ${String(controls)}`)
+      }
+      await loadEarlier.click({ timeout: Math.min(timeoutMs, remainingTrajectoryTime(deadline)) })
+    },
+  }
+}
+
+async function measureFullTrajectory(
+  cdp: CDPSession,
+  page: Page,
+  deadline: number,
+): Promise<{
+  readonly rows: number
+  readonly mountedRows: number
+  readonly tailPage: { readonly state: TrajectoryPageState; readonly measurement: Measurement }
+  readonly olderPages: {
+    readonly state: TrajectoryPageState & { readonly pageLoads: number }
+    readonly measurement: Measurement
+  }
+}> {
+  const tailPage = await measure(cdp, async () => {
+    await page.getByRole('tab', { name: 'Trajectory', exact: true }).click({
+      timeout: remainingTrajectoryTime(deadline),
+    })
+    return stableTrajectoryPageState(
+      page,
+      (state) => state.logicalRows === EXPECTED_TRAJECTORY_TAIL_ROWS && state.pagerRows === 1,
+      deadline,
+      `the ${String(TRAJECTORY_HISTORY_PAGE_NODES)}-node tail page (${String(EXPECTED_TRAJECTORY_TAIL_ROWS)} records) and its pager`,
+    )
+  })
+  expect(tailPage.value.ariaRowCount).toBe(EXPECTED_TRAJECTORY_TAIL_ROWS + 1)
+  expect(tailPage.value.logicalRows).toBe(EXPECTED_TRAJECTORY_TAIL_ROWS)
+  expect(tailPage.value.pagerRows).toBe(1)
+  expect(tailPage.value.mountedRows).toBeGreaterThan(0)
+
+  const olderPages = await measure(cdp, () => loadAllTrajectoryRows(trajectoryPageDriver(page, deadline), deadline))
+  expect(olderPages.value.pagerRows).toBe(0)
+  expect(olderPages.value.logicalRows).toBe(EXPECTED_TRAJECTORY_ROWS)
+  expect(olderPages.value.pageLoads).toBeGreaterThan(0)
+  expect(olderPages.value.mountedRows).toBeGreaterThan(0)
+  expect(olderPages.value.mountedRows).toBeLessThan(EXPECTED_TRAJECTORY_ROWS)
+  return {
+    rows: olderPages.value.logicalRows,
+    mountedRows: olderPages.value.mountedRows,
+    tailPage: { state: tailPage.value, measurement: tailPage.measurement },
+    olderPages: { state: olderPages.value, measurement: olderPages.measurement },
+  }
+}
+
+async function trajectoryEndpointRows(page: Page, deadline: number): Promise<TrajectoryEndpointRows> {
+  const state = await trajectoryPageState(page)
+  if (!state.scrollReady || state.logicalRows !== EXPECTED_TRAJECTORY_ROWS || state.pagerRows !== 0) {
+    throw new Error(`trajectory endpoints require the full unpaged history; found ${JSON.stringify(state)}`)
+  }
+  const pane = page.locator('[data-trajectory-scroll]')
+  await pane.evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await page.waitForFunction(
+    () => {
+      const host = document.querySelector('[data-trajectory-scroll]')
+      const first = host?.querySelector<HTMLTableRowElement>('tr[data-trajectory-row-key]')
+      return (
+        host !== null &&
+        host.scrollTop <= 1 &&
+        first?.getAttribute('aria-rowindex') === '1' &&
+        first.getAttribute('data-virtual-position') === '0'
+      )
+    },
+    undefined,
+    { timeout: remainingTrajectoryTime(deadline) },
+  )
+  const first = await page.locator('[data-trajectory-scroll] tr[data-trajectory-row-key][aria-rowindex="1"]').evaluate((row) => ({
+    index: Number(row.getAttribute('aria-rowindex')),
+    position: Number(row.getAttribute('data-virtual-position')),
+  }))
+
+  await pane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
+  const lastRowIndex = String(EXPECTED_TRAJECTORY_ROWS)
+  const lastVirtualPosition = String(EXPECTED_TRAJECTORY_ROWS - 1)
+  const lastRowSelector = `[data-trajectory-scroll] tr[data-trajectory-row-key][aria-rowindex="${lastRowIndex}"]`
+  await page.waitForFunction(
+    ({ rowIndex, virtualPosition }) => {
+      const host = document.querySelector('[data-trajectory-scroll]')
+      const last = host?.querySelector<HTMLTableRowElement>(`tr[data-trajectory-row-key][aria-rowindex="${rowIndex}"]`)
+      return (
+        host !== null &&
+        host.scrollHeight - host.clientHeight - host.scrollTop <= 2 &&
+        last?.getAttribute('data-virtual-position') === virtualPosition
+      )
+    },
+    { rowIndex: lastRowIndex, virtualPosition: lastVirtualPosition },
+    { timeout: remainingTrajectoryTime(deadline) },
+  )
+  const last = await page.locator(lastRowSelector).evaluate((row) => ({
+    index: Number(row.getAttribute('aria-rowindex')),
+    position: Number(row.getAttribute('data-virtual-position')),
+  }))
+  expect(first).toEqual({ index: 1, position: 0 })
+  expect(last).toEqual({ index: EXPECTED_TRAJECTORY_ROWS, position: EXPECTED_TRAJECTORY_ROWS - 1 })
+  return { first, last }
 }
 
 async function conversationTurns(page: Page): Promise<number> {
@@ -1154,7 +1462,198 @@ describe('complex history performance fixture validity', () => {
     expect(firstSurfaceEvent?.type).toBe('system/message')
     expect(events.at(-1)?.type).toBe('turn/end')
   })
+
+  it('preserves the 500-turn model-prompt and trajectory-record workload', () => {
+    const { events } = parseSeedFixture(longHistoryFixture())
+    const systemMessages = events.filter((event): event is SessionEvent<'system/message'> => event.type === 'system/message')
+    const userMessages = events.filter((event): event is SessionEvent<'user/message'> => event.type === 'user/message')
+    const assistantMessages = events.filter((event): event is SessionEvent<'assistant/message'> => event.type === 'assistant/message')
+    const toolCalls = events.filter((event) => event.type === 'tool/call')
+    const toolResults = events.filter((event) => event.type === 'tool/result')
+    const requestHeaders = events.filter((event) => event.type === 'request/header')
+    const firstSystemMessage = systemMessages[0]
+    expect(firstSystemMessage?.surfaceOp).toBe('append')
+    expect(systemMessages).toHaveLength(EXPECTED_SYSTEM_PROMPT_EVENTS)
+    expect(userMessages).toHaveLength(LONG_HISTORY_TURNS)
+    expect(assistantMessages).toHaveLength(EXPECTED_SYSTEM_PROMPT_EVENTS)
+    expect(toolCalls).toHaveLength(EXPECTED_TOOL_CALLS)
+    expect(toolResults).toHaveLength(EXPECTED_TOOL_CALLS)
+    expect(requestHeaders).toHaveLength(EXPECTED_SYSTEM_PROMPT_EVENTS)
+
+    for (let index = 1; index < systemMessages.length; index += 1) {
+      const previous = systemMessages[index - 1]
+      const current = systemMessages[index]
+      if (previous === undefined || current === undefined) throw new Error('system prompt sequence is sparse')
+      expect(current.surfaceOp).toEqual({ op: 'replace', startSeq: previous.seq, endSeq: previous.seq })
+      expect(current.sourceEventSeqs).toEqual([previous.seq])
+    }
+
+    const promptTexts = systemMessages.map((event) => {
+      const [block] = event.data.message.content
+      if (event.data.message.content.length !== 1 || block?.type !== 'text') {
+        throw new Error(`system prompt at event ${String(event.seq)} is not one text block`)
+      }
+      return block.text
+    })
+    expect(new Set(promptTexts).size).toBe(EXPECTED_SYSTEM_PROMPT_EVENTS)
+    expect(systemMessages.at(-1)?.data).toMatchObject({ turn: LONG_HISTORY_TURNS, step: 2 })
+    expect(EXPECTED_TRAJECTORY_ROWS).toBe(2_100)
+
+    const assistantToolBlocks = assistantMessages.flatMap((event) =>
+      event.data.message.content.filter((block) => block.type === 'tool-call'),
+    )
+    expect(assistantToolBlocks).toHaveLength(EXPECTED_TOOL_CALLS)
+    // A request header paired with an Assistant step adds no extra row; the separate prompt event does.
+    expect(systemMessages.length + userMessages.length + assistantMessages.length + assistantToolBlocks.length).toBe(
+      EXPECTED_TRAJECTORY_ROWS,
+    )
+
+    const trajectoryNodes = events.filter(
+      (event) => event.type === 'user/message' || event.type === 'assistant/message' || event.type === 'tool/result',
+    )
+    const tailNodes = trajectoryNodes.slice(-TRAJECTORY_HISTORY_PAGE_NODES)
+    const tailAssistantSteps = tailNodes.filter((event): event is SessionEvent<'assistant/message'> => event.type === 'assistant/message')
+    const tailStepKeys = new Set(tailAssistantSteps.map((event) => `${String(event.data.turn)}:${String(event.data.step)}`))
+    const tailPromptRows = systemMessages.filter((event) => tailStepKeys.has(`${String(event.data.turn)}:${String(event.data.step)}`))
+    expect(tailNodes).toHaveLength(TRAJECTORY_HISTORY_PAGE_NODES)
+    expect(tailAssistantSteps).toHaveLength(16)
+    expect(tailPromptRows).toHaveLength(16)
+    expect(tailNodes.length + tailPromptRows.length).toBe(EXPECTED_TRAJECTORY_TAIL_ROWS)
+  })
 })
+
+function trajectoryTestState(logicalRows: number, pagerRows: 0 | 1): TrajectoryPageState {
+  return {
+    ariaRowCount: logicalRows + pagerRows,
+    pagerRows,
+    logicalRows,
+    mountedRows: Math.min(logicalRows, 36),
+    scrollReady: true,
+    firstRowIndex: logicalRows === 0 ? undefined : 1,
+    lastRowIndex: logicalRows === 0 ? undefined : Math.min(logicalRows, 36),
+  }
+}
+
+describe('trajectory history paging validity', () => {
+  it('rejects 2,099 logical rows while the older-history pager is still present', () => {
+    expect(() => {
+      assertCompleteTrajectoryHistory(trajectoryTestState(EXPECTED_TRAJECTORY_ROWS - 1, 1), EXPECTED_TRAJECTORY_ROWS)
+    }).toThrow(/expected 2100 records without a pager/)
+  })
+
+  it('rejects an unpaged short history as premature completion', async () => {
+    await expect(
+      loadAllTrajectoryRows(
+        {
+          readState: async () => trajectoryTestState(EXPECTED_TRAJECTORY_ROWS - 1, 0),
+          clickLoadEarlier: async () => {
+            throw new Error('an unpaged history has no load action')
+          },
+        },
+        1,
+        EXPECTED_TRAJECTORY_ROWS,
+      ),
+    ).rejects.toThrow(/expected 2100 records without a pager/)
+  })
+
+  it('rejects a complete unpaged history as an unexpected initial state', async () => {
+    await expect(
+      loadAllTrajectoryRows(
+        {
+          readState: async () => trajectoryTestState(EXPECTED_TRAJECTORY_ROWS, 0),
+          clickLoadEarlier: async () => {
+            throw new Error('an unpaged history has no load action')
+          },
+        },
+        1,
+      ),
+    ).rejects.toThrow(/must start from a tail page with an older-history control/)
+  })
+
+  it('fails when an older-page action makes no progress', async () => {
+    vi.useFakeTimers()
+    let now = 0
+    const state = trajectoryTestState(TRAJECTORY_HISTORY_PAGE_NODES, 1)
+    let clicks = 0
+    const clock = controlledTrajectoryClock(
+      () => now,
+      (elapsed) => {
+        now += elapsed
+      },
+    )
+    try {
+      await expect(
+        loadAllTrajectoryRows(
+          {
+            readState: async () => state,
+            clickLoadEarlier: async (timeoutMs) => {
+              expect(timeoutMs).toBeGreaterThan(0)
+              clicks += 1
+            },
+          },
+          125,
+          100,
+          clock,
+        ),
+      ).rejects.toThrow(/did not stabilize at more than 50 logical rows/)
+      expect(clicks).toBe(1)
+      expect(now).toBe(125)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses one decreasing deadline across multiple older-page actions', async () => {
+    vi.useFakeTimers()
+    let now = 0
+    let logicalRows = TRAJECTORY_HISTORY_PAGE_NODES
+    let pagerRows: 0 | 1 = 1
+    const actionTimeouts: number[] = []
+    const clock = controlledTrajectoryClock(
+      () => now,
+      (elapsed) => {
+        now += elapsed
+      },
+    )
+    try {
+      const loaded = await loadAllTrajectoryRows(
+        {
+          readState: async () => trajectoryTestState(logicalRows, pagerRows),
+          clickLoadEarlier: async (timeoutMs) => {
+            actionTimeouts.push(timeoutMs)
+            logicalRows += TRAJECTORY_HISTORY_PAGE_NODES
+            if (logicalRows >= 3 * TRAJECTORY_HISTORY_PAGE_NODES) pagerRows = 0
+          },
+        },
+        1_500,
+        3 * TRAJECTORY_HISTORY_PAGE_NODES,
+        clock,
+      )
+      expect(actionTimeouts).toHaveLength(2)
+      expect(actionTimeouts[1]).toBeLessThan(actionTimeouts[0] ?? 0)
+      expect(loaded.logicalRows).toBe(3 * TRAJECTORY_HISTORY_PAGE_NODES)
+      expect(loaded.pagerRows).toBe(0)
+      expect(loaded.pageLoads).toBe(2)
+      expect(now).toBe(300)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+function controlledTrajectoryClock(now: () => number, advance: (milliseconds: number) => void): TrajectoryClock {
+  return {
+    now,
+    wait: async (milliseconds) => {
+      const timer = new Promise<void>((resolve) => {
+        setTimeout(resolve, milliseconds)
+      })
+      await vi.advanceTimersByTimeAsync(milliseconds)
+      await timer
+      advance(milliseconds)
+    },
+  }
+}
 
 describe('manual web performance: complex workspace and history', () => {
   let browser: Browser
@@ -1209,25 +1708,8 @@ describe('manual web performance: complex workspace and history', () => {
       })
       expect(opened.value).toBe(DEFAULT_HISTORY_TURNS)
 
-      const trajectoryRows = page.getByRole('row')
-      const coldTrajectory = await measure(cdp, async () => {
-        await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
-        return stableCount(trajectoryRows, (count) => count === EXPECTED_TRAJECTORY_ROWS)
-      })
-      expect(coldTrajectory.value).toBe(EXPECTED_TRAJECTORY_ROWS)
-
-      const collapseTurns = await measure(cdp, async () => {
-        await page.getByRole('button', { name: 'Collapse turns', exact: true }).click()
-        return stableCount(trajectoryRows, (count) => count > 0 && count < EXPECTED_TRAJECTORY_ROWS)
-      })
-      expect(collapseTurns.value).toBeLessThan(EXPECTED_TRAJECTORY_ROWS)
-      const trajectorySearch = await measure(cdp, async () => {
-        await page.getByRole('searchbox', { name: 'Search trajectory', exact: true }).fill('turn 499')
-        return stableCount(trajectoryRows, (count) => count > 0 && count < 20)
-      })
-      expect(trajectorySearch.value).toBeLessThan(20)
-
-      await page.getByRole('tab', { name: 'Chat', exact: true }).click()
+      // Both Trajectory samples run with the full 500-turn Chat window resident.
+      // Keep its page costs separate from Trajectory's initial window and local older-page costs.
       const historyPages: { turns: number; measurement: Measurement }[] = []
       let turns = await conversationTurns(page)
       while (turns < LONG_HISTORY_TURNS) {
@@ -1240,17 +1722,50 @@ describe('manual web performance: complex workspace and history', () => {
         turns = older.value
         historyPages.push({ turns, measurement: older.measurement })
       }
+      expect(turns).toBe(LONG_HISTORY_TURNS)
 
-      const warmTrajectory = await measure(cdp, async () => {
-        await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
-        return stableCount(trajectoryRows, (count) => count === EXPECTED_TRAJECTORY_ROWS)
+      const coldTrajectoryDeadline = performance.now() + 60_000
+      const coldTrajectory = await measureFullTrajectory(cdp, page, coldTrajectoryDeadline)
+      expect(coldTrajectory.rows).toBe(EXPECTED_TRAJECTORY_ROWS)
+      const trajectoryEndpoints = await trajectoryEndpointRows(page, coldTrajectoryDeadline)
+
+      const collapseDeadline = performance.now() + 60_000
+      const collapseTurns = await measure(cdp, async () => {
+        await page.getByRole('button', { name: 'Collapse turns', exact: true }).click({
+          timeout: remainingTrajectoryTime(collapseDeadline),
+        })
+        const state = await stableTrajectoryPageState(
+          page,
+          (current) => current.pagerRows === 0 && current.logicalRows > 0 && current.logicalRows < EXPECTED_TRAJECTORY_ROWS,
+          collapseDeadline,
+          'collapsed rows below the full logical history count',
+        )
+        return state.logicalRows
       })
-      expect(warmTrajectory.value).toBe(EXPECTED_TRAJECTORY_ROWS)
+      expect(collapseTurns.value).toBeLessThan(EXPECTED_TRAJECTORY_ROWS)
+      const trajectorySearchDeadline = performance.now() + 60_000
+      const trajectorySearch = await measure(cdp, async () => {
+        await page.getByRole('searchbox', { name: 'Search trajectory', exact: true }).fill('turn 499', {
+          timeout: remainingTrajectoryTime(trajectorySearchDeadline),
+        })
+        const state = await stableTrajectoryPageState(
+          page,
+          (current) => current.pagerRows === 0 && current.logicalRows > 0 && current.logicalRows < 20,
+          trajectorySearchDeadline,
+          'fewer than 20 logical search results',
+        )
+        return state.logicalRows
+      })
+      expect(trajectorySearch.value).toBeLessThan(20)
+
       const warmConversation = await measure(cdp, async () => {
         await page.getByRole('tab', { name: 'Chat', exact: true }).click()
         return conversationTurns(page)
       })
       expect(warmConversation.value).toBe(LONG_HISTORY_TURNS)
+      const warmTrajectoryDeadline = performance.now() + 60_000
+      const warmTrajectory = await measureFullTrajectory(cdp, page, warmTrajectoryDeadline)
+      expect(warmTrajectory.rows).toBe(EXPECTED_TRAJECTORY_ROWS)
 
       console.info(
         `WEB_PERF_RESULT ${JSON.stringify(
@@ -1261,7 +1776,10 @@ describe('manual web performance: complex workspace and history', () => {
               totalSessions: SIDEBAR_SESSION_COUNT + 1,
               longHistoryTurns: LONG_HISTORY_TURNS,
               toolCalls: EXPECTED_TOOL_CALLS,
+              systemPromptEvents: EXPECTED_SYSTEM_PROMPT_EVENTS,
               trajectoryRows: EXPECTED_TRAJECTORY_ROWS,
+              initialTargetNodes: TRAJECTORY_HISTORY_PAGE_NODES,
+              initialTrajectoryRows: EXPECTED_TRAJECTORY_TAIL_ROWS,
             },
             setupMs: rounded(world.setupMs),
             boot: {
@@ -1271,11 +1789,24 @@ describe('manual web performance: complex workspace and history', () => {
             sidebarExpand: sidebar.measurement,
             contentSearch: contentSearch.measurement,
             openLongHistory: { initialTurns: opened.value, ...opened.measurement },
-            coldTrajectory: { rows: coldTrajectory.value, ...coldTrajectory.measurement },
+            coldTrajectory: {
+              residentTurns: LONG_HISTORY_TURNS,
+              rows: coldTrajectory.rows,
+              mountedRows: coldTrajectory.mountedRows,
+              tailPage: { ...coldTrajectory.tailPage.state, ...coldTrajectory.tailPage.measurement },
+              olderPages: { ...coldTrajectory.olderPages.state, ...coldTrajectory.olderPages.measurement },
+            },
+            trajectoryEndpoints,
             collapseTurns: { rows: collapseTurns.value, ...collapseTurns.measurement },
             trajectorySearch: { rows: trajectorySearch.value, ...trajectorySearch.measurement },
             historyPages,
-            warmTrajectory: { rows: warmTrajectory.value, ...warmTrajectory.measurement },
+            warmTrajectory: {
+              residentTurns: LONG_HISTORY_TURNS,
+              rows: warmTrajectory.rows,
+              mountedRows: warmTrajectory.mountedRows,
+              tailPage: { ...warmTrajectory.tailPage.state, ...warmTrajectory.tailPage.measurement },
+              olderPages: { ...warmTrajectory.olderPages.state, ...warmTrajectory.olderPages.measurement },
+            },
             warmConversation: { turns: warmConversation.value, ...warmConversation.measurement },
           },
           null,
