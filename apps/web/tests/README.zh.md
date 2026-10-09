@@ -18,6 +18,8 @@ pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps 
 
 依赖状态的用例使用 Workspace、接纳、附件和模型流屏障，区分可见中间状态与已完成操作。模型选择器的持久化断言等待默认设置保存完成，不以菜单关闭作为完成信号。详情关闭等待框架过渡结束；归档验证为 seed Session 设置显式标题，并跨重载跟踪该身份。[CI 测试可靠性工作流](../../../.agents/skills/dsh-ci-test-reliability/SKILL.md#synchronize-on-state)负责这些同步规则。
 
+Vite+ 使用 Vitest 5。`expect.poll` 到达截止时间后会停止等待回调，即使 Playwright 浏览器读取仍在执行。空闲提交交接检查在最终浏览器放置轮询中使用本地助手，以保留 Vitest 4 的重试窗口语义：1 秒截止时间将下一次启动的尝试标记为最终尝试，但仍等待当前读取；当前读取可在过期后匹配并通过。若该读取在过期后失败，助手等待一个 50 毫秒间隔后允许执行最终尝试。外层测试超时仍限制整个操作。
+
 显式滚动使用 `support.ts` 的 `scrollIntoView`：旧元素脱离 DOM 时重新解析 locator，并在同一个浏览器任务中检查连接状态、执行原生滚动。各场景保留滚动后的可见性与几何断言。
 
 ## 这些是 Host 面的测试

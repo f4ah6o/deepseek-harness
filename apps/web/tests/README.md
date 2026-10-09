@@ -18,6 +18,8 @@ Ordinary scenarios begin with no registered Workspace or Session and a durable m
 
 State-sensitive cases use Workspace, admission, attachment, and model-stream barriers to separate visible intermediate states from completed operations. Model-picker persistence assertions wait for the saved default, independently of menu closure. Details close waits for frame transitions; archive verification assigns an explicit title to the seeded Session and follows that identity across reload. The [CI test reliability workflow](../../../.agents/skills/dsh-ci-test-reliability/SKILL.md#synchronize-on-state) owns these synchronization rules.
 
+Vite+ uses Vitest 5, whose `expect.poll` stops waiting for a callback at its deadline even if a Playwright read is still in flight. The idle-submission handoff check uses a local helper for its final browser placement poll to preserve Vitest 4's retry-window behavior: its 1-second deadline marks the next attempt final but still awaits the active read, which may match after expiry. If that read fails after expiry, the helper waits one 50 ms interval and permits the final attempt. The enclosing test timeout still bounds the operation.
+
 Explicit scrolling uses `scrollIntoView` from `support.ts`: it resolves the locator again when its old element detaches and checks connection in the same browser task as native scrolling. Scenarios retain their visibility and geometry assertions after scrolling.
 
 ## These are Host-face tests

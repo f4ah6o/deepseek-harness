@@ -57,7 +57,11 @@ interface WebAppBootEvents {
 const webAppBootEvents = new WeakMap<Page, WebAppBootEvents>()
 let webAppBootFailureSequence = 0
 
-function safeRequestPathname(value: string): string {
+/** Return only the HTTP pathname of a request for failure diagnostics.
+ * @param value - request URL.
+ * @returns the pathname, or a non-URL marker.
+ */
+export function safeRequestPathname(value: string): string {
   try {
     const url = new URL(value)
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.pathname : '[non-http]'
@@ -66,7 +70,11 @@ function safeRequestPathname(value: string): string {
   }
 }
 
-function removeDiagnosticUrls(message: string): string {
+/** Remove URLs that may contain temporary authentication queries from diagnostics.
+ * @param message - diagnostic text.
+ * @returns the message with URL references replaced.
+ */
+export function removeDiagnosticUrls(message: string): string {
   return message.replace(/\b(?:https?|wss?|file|blob|chrome-extension):\/\/[^\s"'<>]+/giu, '[url]')
 }
 
