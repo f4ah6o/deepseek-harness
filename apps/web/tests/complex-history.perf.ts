@@ -23,7 +23,7 @@ import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 // Carries the session/title event declaration into the fixture builder.
 import type {} from '@deepseek-ai/dsh-session-title'
-import { launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
 const SIDEBAR_SESSION_COUNT = 1_000
@@ -325,6 +325,8 @@ function smallSidebarFixture(): string {
   session.append('turn/start', {
     turn: 1,
   })
+  session.append('step/start', { turn: 1, step: 1 })
+  appendSystemPrompt(session, 1, 1)
   const user = session.append(
     'user/message',
     createUserMessage({
@@ -334,8 +336,6 @@ function smallSidebarFixture(): string {
     { surfaceOp: 'append' },
   )
   appendTitle(session, 'Synthetic sidebar session', user.seq)
-  session.append('step/start', { turn: 1, step: 1 })
-  appendSystemPrompt(session, 1, 1)
   appendRequestHeader(session, 1, 1)
   appendToolStep(session, 1, 1, 2)
   session.append('step/end', { turn: 1, step: 1 })
@@ -353,6 +353,10 @@ function longHistoryFixture(): string {
     session.append('turn/start', {
       turn,
     })
+    if (turn === 1) {
+      session.append('step/start', { turn, step: 1 })
+      appendSystemPrompt(session, turn, 1)
+    }
     const user = session.append(
       'user/message',
       createUserMessage({
@@ -363,8 +367,7 @@ function longHistoryFixture(): string {
     )
     if (turn === 1) appendTitle(session, LONG_SESSION_TITLE, user.seq)
 
-    session.append('step/start', { turn, step: 1 })
-    if (turn === 1) appendSystemPrompt(session, turn, 1)
+    if (turn !== 1) session.append('step/start', { turn, step: 1 })
     appendRequestHeader(session, turn, 1)
     if (turn % TOOL_TURN_INTERVAL === 0) {
       appendToolStep(session, turn, 1, TOOLS_PER_TOOL_TURN)
@@ -1106,6 +1109,20 @@ function summarizeTurnWindows(turns: readonly ContinuedTurnReport[], windowSize:
   }
   return windows
 }
+
+describe('complex history performance fixture validity', () => {
+  it.each([
+    ['sidebar', smallSidebarFixture],
+    ['long history', longHistoryFixture],
+  ])('parses the %s seed with a protected first surface head', (_name, makeFixture) => {
+    const { events } = parseSeedFixture(makeFixture())
+    const surfaceTypes = new Set(['system/message', 'user/message', 'developer/message', 'assistant/message', 'tool/result'])
+    const firstSurfaceEvent = events.find((event) => surfaceTypes.has(event.type))
+
+    expect(firstSurfaceEvent?.type).toBe('system/message')
+    expect(events.at(-1)?.type).toBe('turn/end')
+  })
+})
 
 describe('manual web performance: complex workspace and history', () => {
   let browser: Browser
