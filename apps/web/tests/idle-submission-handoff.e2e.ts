@@ -194,6 +194,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
         await page.locator('[data-chat-flow-kind="turn-process"]').last().waitFor({ state: 'attached' })
         await expect.poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
         trace.push({ phase: 'turn-start', ...(await placement(page)) })
+        await expect.poll(() => gate.admissionDelivery()).toBeDefined()
       }
 
       gate.releaseAll()
