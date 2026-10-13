@@ -29,7 +29,9 @@ async function readDiagnostic<T>(work: Promise<T>): Promise<DiagnosticRead<T>> {
         }),
       ),
       new Promise<DiagnosticRead<T>>((resolve) => {
-        timer = setTimeout(() => resolve({ status: 'timed out' }), DIAGNOSTIC_READ_MS)
+        timer = setTimeout(() => {
+          resolve({ status: 'timed out' })
+        }, DIAGNOSTIC_READ_MS)
       }),
     ])
   } finally {

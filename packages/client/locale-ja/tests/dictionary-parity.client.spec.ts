@@ -1,6 +1,6 @@
 /** Keep each Japanese namespace and its interpolation variables aligned with its English and Chinese owner dictionaries. */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vite-plus/test'
 import { DICTIONARIES } from '../src/client/dicts/index.ts'
@@ -151,7 +151,7 @@ function expressionDictionary(
 
 function sourceDictionaries(file: string): SourceDictionary[] {
   const candidates = new Set([file])
-  if (file.endsWith('/zh.ts')) candidates.add(resolve(dirname(file), 'en.ts'))
+  if (basename(file) === 'zh.ts') candidates.add(resolve(dirname(file), 'en.ts'))
   const dictionaries: SourceDictionary[] = []
 
   for (const candidate of candidates) {
