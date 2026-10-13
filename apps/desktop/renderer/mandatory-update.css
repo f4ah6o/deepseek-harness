@@ -1,7 +1,7 @@
 #status, #version { margin-top: 12px; color: #555962; }
 #status:empty, #version:empty { display: none; }
 #error { margin-top: 12px; color: #d93025; }
-#address { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #e6e7eb; border-radius: 8px; background: #f5f5f5; font: 12px/20px monospace; color: #555962; overflow-wrap: anywhere; resize: vertical; }
+#address { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #e6e7eb; border-radius: 8px; background: #f5f5f5; font: 12px/20px var(--dsh-font-family-code); color: #555962; overflow-wrap: anywhere; resize: vertical; }
 #actions button:not(.primary) { min-height: 32px; padding: 5px 8px; color: #555962; background: transparent; }
 #update, #refresh { border-radius: 100px; }
 #fallback { border-top: 1px solid #e6e7eb; margin-top: 12px; padding-top: 12px; }

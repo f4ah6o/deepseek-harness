@@ -9,6 +9,7 @@ import { INTERACTIVE_SELECTOR } from '../src/window-drag/regions.ts'
 
 const THEME_PACKAGE = '@deepseek-ai/dsh-client-ui-theme'
 const baseCss = readFileSync(fileURLToPath(new URL('../src/base.css', import.meta.url)), 'utf8')
+const bootPageCss = readFileSync(fileURLToPath(new URL('../src/boot-page.module.css', import.meta.url)), 'utf8')
 
 /**
  * Import specifiers of the sheet, in source order. Quote style and surrounding
@@ -63,5 +64,41 @@ describe('web shell base.css', () => {
   it('auto-spaces prose while preserving literal content', () => {
     expect(baseCss).toMatch(/body\s*\{[^}]*text-autospace:\s*normal;/)
     expect(normalizedCss).toContain(`${literalContentSelectors.join(', ')} { text-autospace: no-autospace; }`)
+  })
+
+  it('puts Japanese UI families before Chinese fallbacks in the pre-plugin shell', () => {
+    const stack = /font-family:\s*var\(\s*--dsw-font-family,([\s\S]*?)\);/.exec(baseCss)?.[1] ?? ''
+    const families = [
+      "'Segoe UI'",
+      "'Hiragino Sans'",
+      "'Yu Gothic UI'",
+      "'Yu Gothic'",
+      'Meiryo',
+      "'Noto Sans CJK JP'",
+      "'PingFang SC'",
+      "'Hiragino Sans GB'",
+      "'Microsoft YaHei'",
+    ]
+    const indexes = families.map((family) => stack.indexOf(family))
+
+    expect(indexes.every((index) => index >= 0)).toBe(true)
+    expect(indexes).toEqual([...indexes].sort((left, right) => left - right))
+  })
+
+  it('keeps Japanese monospace fallbacks before Chinese families in boot diagnostics', () => {
+    const stack = /font-family:\s*var\(\s*--ds-font-family-code,([\s\S]*?)\);/.exec(bootPageCss)?.[1] ?? ''
+    const families = [
+      "'SF Mono'",
+      'Consolas',
+      "'Osaka-Mono'",
+      "'MS Gothic'",
+      "'Noto Sans Mono CJK JP'",
+      "'PingFang SC'",
+      "'Microsoft YaHei'",
+    ]
+    const indexes = families.map((family) => stack.indexOf(family))
+
+    expect(indexes.every((index) => index >= 0)).toBe(true)
+    expect(indexes).toEqual([...indexes].sort((left, right) => left - right))
   })
 })

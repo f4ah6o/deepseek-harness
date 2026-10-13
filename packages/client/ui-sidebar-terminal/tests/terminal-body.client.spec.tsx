@@ -17,7 +17,7 @@ const fake = vi.hoisted(() => ({
   dimensions: { cols: 120, rows: 40 } as { cols: number; rows: number } | undefined,
 }))
 class FakeTerminal {
-  options: { disableStdin?: boolean; theme?: ITheme }
+  options: { disableStdin?: boolean; fontFamily?: string; theme?: ITheme }
   textarea: HTMLTextAreaElement | undefined = document.createElement('textarea')
   input: ((data: string) => void) | undefined
   readonly disposeInput = vi.fn()
@@ -269,8 +269,71 @@ it('displays disconnect, close and exit states and offers explicit reconnection 
   expect(h.view.getByRole('status').textContent).toBe(en.unavailable)
 })
 
+it('uses the computed code font on mount and refreshes it with theme updates', () => {
+  const style = {
+    backgroundColor: 'rgb(255, 255, 255)',
+    color: 'rgb(23, 25, 29)',
+    fontFamily: "'Latin Mono', 'Japanese Mono', monospace",
+  }
+  vi.spyOn(window, 'getComputedStyle').mockImplementation(() => style as CSSStyleDeclaration)
+  const h = mount({ ...idle, info, phase: 'connected', writable: true })
+  const terminal = fake.terminals[0]!
+
+  expect(terminal.options.fontFamily).toBe(style.fontFamily)
+  style.fontFamily = "'Updated Japanese Mono', monospace"
+  h.changeTheme()
+  expect(terminal.options.fontFamily).toBe(style.fontFamily)
+  expect(fake.terminals).toEqual([terminal])
+  expect(terminal.dispose).not.toHaveBeenCalled()
+})
+
+it('refits a visible writable terminal after a computed font change but not for an unchanged font', () => {
+  const style = { backgroundColor: 'white', color: 'black', fontFamily: 'Initial mono' }
+  vi.spyOn(window, 'getComputedStyle').mockImplementation(() => style as CSSStyleDeclaration)
+  const h = mount({ ...idle, info, phase: 'connected', writable: true })
+  const terminal = fake.terminals[0]!
+  terminal.resize.mockClear()
+  h.model.resize.mockClear()
+
+  fake.dimensions = { cols: 90, rows: 30 }
+  style.fontFamily = "'Updated Japanese Mono', monospace"
+  h.changeTheme()
+
+  expect(terminal.options.fontFamily).toBe(style.fontFamily)
+  expect(terminal.resize).toHaveBeenCalledExactlyOnceWith(90, 30)
+  expect(h.model.resize).toHaveBeenCalledExactlyOnceWith(90, 30)
+
+  terminal.resize.mockClear()
+  h.model.resize.mockClear()
+  h.changeTheme()
+  expect(terminal.resize).not.toHaveBeenCalled()
+  expect(h.model.resize).not.toHaveBeenCalled()
+})
+
+it.each([
+  { name: 'hidden writable', writable: true, visible: false },
+  { name: 'visible read-only', writable: false, visible: true },
+])('does not publish font-driven resizing for a $name terminal', ({ writable, visible }) => {
+  const style = { backgroundColor: 'white', color: 'black', fontFamily: 'Initial mono' }
+  vi.spyOn(window, 'getComputedStyle').mockImplementation(() => style as CSSStyleDeclaration)
+  const state: TerminalViewState = { ...idle, info, phase: 'connected', writable }
+  const h = mount(state)
+  if (!visible) h.update(state, false)
+  const terminal = fake.terminals[0]!
+  terminal.resize.mockClear()
+  h.model.resize.mockClear()
+
+  fake.dimensions = { cols: 90, rows: 30 }
+  style.fontFamily = "'Updated Japanese Mono', monospace"
+  h.changeTheme()
+
+  expect(terminal.options.fontFamily).toBe(style.fontFamily)
+  expect(terminal.resize).not.toHaveBeenCalled()
+  expect(h.model.resize).not.toHaveBeenCalled()
+})
+
 it('updates screen, cursor and selection colors without replacing the terminal or clearing output', () => {
-  const colors = { backgroundColor: 'rgb(255, 255, 255)', color: 'rgb(23, 25, 29)' }
+  const colors = { backgroundColor: 'rgb(255, 255, 255)', color: 'rgb(23, 25, 29)', fontFamily: 'test monospace' }
   vi.spyOn(window, 'getComputedStyle').mockImplementation(() => colors as CSSStyleDeclaration)
   const h = mount({ ...idle, info, phase: 'connected', writable: true })
   const terminal = fake.terminals[0]!
@@ -303,7 +366,7 @@ it('updates screen, cursor and selection colors without replacing the terminal o
 })
 
 it('reads the current theme on xterm render and releases the cursor listener on unmount', () => {
-  const colors = { backgroundColor: 'rgb(255, 255, 255)', color: 'rgb(23, 25, 29)' }
+  const colors = { backgroundColor: 'rgb(255, 255, 255)', color: 'rgb(23, 25, 29)', fontFamily: 'test monospace' }
   const cursor = document.createElement('span')
   cursor.className = 'xterm-cursor'
   cursor.style.backgroundColor = 'black'

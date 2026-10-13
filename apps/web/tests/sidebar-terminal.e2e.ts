@@ -304,6 +304,50 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('resolves body code-font overrides for mono and rendered terminal rows', async () => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await openTerminal(page)
+    await selectTerminalTheme(page, 'Light')
+
+    const body = page.locator('body')
+    const previous = await body.evaluate((element) => ({
+      value: element.style.getPropertyValue('--ds-font-family-code'),
+      priority: element.style.getPropertyPriority('--ds-font-family-code'),
+    }))
+    const probeFamily = "'DSH Japanese Font Probe', 'MS Gothic', monospace"
+    const renderedRows = page.locator('.xterm-rows:visible').first()
+    const fonts = () =>
+      renderedRows.evaluate((element) => {
+        const bodyStyle = getComputedStyle(document.body)
+        return {
+          code: bodyStyle.getPropertyValue('--ds-font-family-code').trim(),
+          mono: bodyStyle.getPropertyValue('--dsw-font-mono').trim(),
+          renderedFontFamily: getComputedStyle(element).fontFamily,
+        }
+      })
+    const baseline = await fonts()
+    try {
+      await body.evaluate((element, family) => {
+        element.style.setProperty('--ds-font-family-code', family)
+      }, probeFamily)
+      await selectTerminalTheme(page, 'Dark')
+      await expect
+        .poll(async () => {
+          const { code, mono } = await fonts()
+          return { codeUsesProbe: code.includes('DSH Japanese Font Probe'), monoMatchesCode: mono === code }
+        })
+        .toEqual({ codeUsesProbe: true, monoMatchesCode: true })
+      await expect.poll(async () => (await fonts()).renderedFontFamily).toContain('DSH Japanese Font Probe')
+    } finally {
+      await body.evaluate((element, saved) => {
+        if (saved.value === '') element.style.removeProperty('--ds-font-family-code')
+        else element.style.setProperty('--ds-font-family-code', saved.value, saved.priority)
+      }, previous)
+      await selectTerminalTheme(page, 'Light')
+    }
+    await expect.poll(fonts).toEqual(baseline)
+  })
+
   it('completes commands, preserves the process through collapse and reload, resizes, and kills on tab close', async () => {
     onTestFailed(() => saveFailureShot(page, 'sidebar-terminal'))
     await openTerminal(page)

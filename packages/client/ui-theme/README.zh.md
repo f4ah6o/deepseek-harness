@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### 样式表
 
-`base.css` 持有共享圆角尺度与设置卡片材质别名。材质别名在 `body` 上随当前色板解析。组件圆角选择遵循 [Web 样式参考](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。
+`base.css` 持有系统界面与代码字体栈、共享圆角尺度和设置卡片材质别名。界面字体栈优先使用拉丁系统字体，再将日文字体排在中文回退字体之前。代码字体栈优先使用拉丁等宽字体，再将日文等宽回退字体排在现有中文字体之前。`body` 上的 `--dsw-font-mono` 别名引用代码字体栈，因此活动主题覆盖会传递给其消费方。日文字体属于系统回退字体，只有系统已安装时才会显示；此包不打包日文字体文件。材质别名在 `body` 上随当前色板解析。组件圆角选择遵循 [Web 样式参考](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)。
 
 `src/styles/` 下有八张样式表，由 ui-theme 的动态客户端 entry 依次导入：`base.css`、`corner-shape.css`、`design-platform.css`、`focus.css`、`onboarding.css`、`scrollbar.css`、`gradient-shadow-text.css` 与 `shiki.css`。客户端 bundle 将其编译并注入为插件持有的全局样式，因此卸载与 HMR（热模块替换）会随 ui-theme 一同移除。`scrollbar.css` 消费 `--dsw-alias-scrollbar-*` token，必须排在声明这些 token 的 `design-platform.css` 之后。状态标记使用各自的语义状态 token。`--dsw-alias-bg-document-selection` 在两种主题中均使用 40% 不透明度的 blue-500，供保留文档原色的选区使用。`design-platform.css` 还负责代码差异底色的别名及其静态透明度色阶，以及文件对比所用的 `--dsw-alias-file-diff-*` 代码区、行号区和标记配色；`shiki.css` 负责语法颜色。
 
