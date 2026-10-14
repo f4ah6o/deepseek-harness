@@ -1,0 +1,61 @@
+/* General settings cell rhythm shared with the font-size and Language rows. */
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.rowText {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 48px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.desc {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.menu {
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.selector {
+  min-width: 180px;
+  max-width: 100%;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.selectedLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+}
+
+.list {
+  min-width: min(180px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
+}

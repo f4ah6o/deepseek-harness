@@ -19,7 +19,7 @@ function expectFamilyOrder(stack: string, families: string[]): void {
 
 describe('ui-theme font fallbacks', () => {
   it('keeps Latin UI families ahead of Japanese and Chinese system fallbacks', () => {
-    expectFamilyOrder(value(root, '--dsw-font-family'), [
+    expectFamilyOrder(value(root, '--dsh-fallback-text-font-family'), [
       '-apple-system',
       'BlinkMacSystemFont',
       "'Segoe UI'",
@@ -35,7 +35,7 @@ describe('ui-theme font fallbacks', () => {
   })
 
   it('keeps Latin monospace ahead of Japanese code fallbacks and Chinese families', () => {
-    const code = value(root, '--ds-font-family-code')
+    const code = value(root, '--dsh-fallback-code-font-family')
     expectFamilyOrder(code, [
       "'SF Mono'",
       "'JetBrains Mono'",

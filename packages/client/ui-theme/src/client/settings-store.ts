@@ -4,7 +4,7 @@
  * row components read via props.useStore.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import { DEFAULT_FONT_SIZE, type ThemePreference } from '../theme-settings.ts'
+import { DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILIES, type FontFamilySelections, type ThemePreference } from '../theme-settings.ts'
 
 /** Store state mirrored from the theme snapshot. */
 export interface AppearanceRowState {
@@ -31,6 +31,35 @@ export function createAppearanceRowStore(): EngineStoreHandle<AppearanceRowState
         if (revision <= d.revision) return
         d.preference = preference
         d.revision = revision
+      },
+    },
+  })
+}
+
+/** Font presets accepted by the settings scope. */
+export interface FontFamilyRowState {
+  /** Selected presets by use. */
+  fontFamilies: FontFamilySelections
+  /** Service revision; -1 until the first sync. */
+  revision: number
+}
+
+type FontFamilyRowActions = {
+  sync: (draft: FontFamilyRowState, fontFamilies: FontFamilySelections, revision: number) => void
+}
+
+/**
+ * Declare the font dropdowns' shared state.
+ * @returns the store handle mirrored from accepted theme settings.
+ */
+export function createFontFamilyRowStore(): EngineStoreHandle<FontFamilyRowState, FontFamilyRowActions> {
+  return defineStore({
+    init: (): FontFamilyRowState => ({ fontFamilies: DEFAULT_FONT_FAMILIES, revision: -1 }),
+    actions: {
+      sync: (draft, fontFamilies: FontFamilySelections, revision: number) => {
+        if (revision <= draft.revision) return
+        draft.fontFamilies = fontFamilies
+        draft.revision = revision
       },
     },
   })

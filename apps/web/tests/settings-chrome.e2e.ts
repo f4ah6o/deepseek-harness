@@ -593,6 +593,140 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('persists independent text, code, and terminal font presets across reload', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-font-presets'))
+    onTestFinished(async () => {
+      await scaffold.ctx.settings.mutate('ui-theme', [
+        { op: 'set', path: ['textFontFamily'], value: 'default' },
+        { op: 'set', path: ['codeFontFamily'], value: 'default' },
+        { op: 'set', path: ['terminalFontFamily'], value: 'default' },
+      ])
+      await scaffold.ctx.settings.mutate('locale', [{ op: 'set', path: ['preference'], value: 'zh' }])
+      await page.setViewportSize({ width: 1680, height: 1000 })
+      const dialog = page.getByRole('dialog')
+      if (await dialog.isVisible()) await dialog.getByRole('button', { name: /^(Close|关闭)$/u }).click()
+      await dialog.waitFor({ state: 'hidden' })
+    })
+    const readProfile = () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
+    const settingGesture = async (ns: string, field: string, value: string, gesture: () => Promise<void>): Promise<void> => {
+      const [response] = await Promise.all([
+        page.waitForResponse((reply) => {
+          if (new URL(reply.url()).pathname !== '/api/settings/mutate' || reply.request().method() !== 'POST') return false
+          const {
+            payload: { args },
+          } = reply.request().postDataJSON() as {
+            payload: { args: { ns: string; ops: { op: string; path: string[]; value?: unknown }[] } }
+          }
+          return (
+            args.ns === ns && args.ops.some((op) => op.op === 'set' && op.path.length === 1 && op.path[0] === field && op.value === value)
+          )
+        }),
+        gesture(),
+      ])
+      expect(response.ok()).toBe(true)
+      expect(await response.json()).toMatchObject({ result: { ok: true, value: { ns, value: { [field]: value } } } })
+    }
+    const readFonts = () =>
+      page.evaluate(() => {
+        const body = document.body
+        const resolveFamily = (family: string): string => {
+          const probe = document.createElement('span')
+          probe.style.fontFamily = family
+          body.appendChild(probe)
+          const font = getComputedStyle(probe).fontFamily
+          probe.remove()
+          return font
+        }
+        return {
+          text: getComputedStyle(body).fontFamily,
+          code: resolveFamily('var(--ds-font-family-code)'),
+          mono: resolveFamily('var(--dsw-font-mono)'),
+          terminal: resolveFamily('var(--dsh-font-family-terminal, var(--ds-font-family-code))'),
+          overrides: ['text', 'code', 'terminal'].map((role) => body.style.getPropertyValue('--dsh-font-family-' + role)),
+        }
+      })
+    const baseline = await readFonts()
+    expect(baseline.overrides).toEqual(['', '', ''])
+    await openSettings(page, 'zh')
+    await page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '中文', exact: true }).click()
+    await settingGesture('locale', 'preference', 'en', () => page.getByRole('menuitem', { name: 'English', exact: true }).click())
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    await dialog.waitFor()
+    await expect.poll(readProfile).toContain('preference: en')
+    await page.setViewportSize({ width: 1280, height: 768 })
+    const choices = [
+      { title: 'Text font', field: 'textFontFamily', id: 'meiryo', label: 'Meiryo' },
+      { title: 'Code font', field: 'codeFontFamily', id: 'ms-gothic', label: 'MS Gothic' },
+      { title: 'Terminal font', field: 'terminalFontFamily', id: 'jetbrains-mono', label: 'JetBrains Mono' },
+    ] as const
+    const trigger = (title: string) => dialog.getByRole('button', { name: new RegExp('^' + title + ' ') })
+    const selectFont = async (choice: (typeof choices)[number], reset = false): Promise<void> => {
+      await trigger(choice.title).click()
+      const menu = page.getByRole('menu')
+      await menu.waitFor()
+      await expect
+        .poll(() =>
+          menu.evaluate((node) => {
+            const rect = node.getBoundingClientRect()
+            return rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
+          }),
+        )
+        .toBe(true)
+      expect(await menu.evaluate((node) => node.closest('[role="dialog"]') === null)).toBe(true)
+      await settingGesture('ui-theme', choice.field, reset ? 'default' : choice.id, () =>
+        menu.getByRole('menuitem', { name: reset ? 'System default' : choice.label, exact: true }).click(),
+      )
+      await menu.waitFor({ state: 'hidden' })
+      await dialog.getByRole('button', { name: choice.title + ' ' + (reset ? 'System default' : choice.label), exact: true }).waitFor()
+      if (reset) await expect.poll(readProfile).not.toContain(choice.field + ': ' + choice.id)
+      else await expect.poll(readProfile).toContain(choice.field + ': ' + choice.id)
+    }
+    const textTrigger = trigger('Text font')
+    expect(await textTrigger.getAttribute('aria-haspopup')).toBe('menu')
+    await textTrigger.click()
+    await page.getByRole('menu').waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByRole('menu').waitFor({ state: 'hidden' })
+    expect(await dialog.isVisible()).toBe(true)
+    expect(await textTrigger.getAttribute('aria-expanded')).toBe('false')
+    await textTrigger.click()
+    await page.getByRole('menu').waitFor()
+    await dialog.getByText('Text font', { exact: true }).click()
+    await page.getByRole('menu').waitFor({ state: 'hidden' })
+    expect(await textTrigger.getAttribute('aria-expanded')).toBe('false')
+    for (const choice of choices) await selectFont(choice)
+    await expect.poll(readFonts).toEqual({
+      text: 'Meiryo, ' + baseline.text,
+      code: '"MS Gothic", ' + baseline.code,
+      mono: '"MS Gothic", ' + baseline.code,
+      terminal: '"JetBrains Mono", ' + baseline.code,
+      overrides: [
+        'Meiryo, var(--dsh-fallback-text-font-family)',
+        '"MS Gothic", var(--dsh-fallback-code-font-family)',
+        '"JetBrains Mono", var(--dsh-fallback-code-font-family)',
+      ],
+    })
+    const selected = await readFonts()
+    expect(await textTrigger.evaluate((node) => getComputedStyle(node).fontFamily)).toBe(selected.text)
+    await page.keyboard.press('Escape')
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await waitForWebAppFrame(page)
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await expect.poll(readFonts).toEqual(selected)
+    await openSettings(page, 'en')
+    for (const choice of choices) {
+      await dialog.getByRole('button', { name: choice.title + ' ' + choice.label, exact: true }).waitFor()
+      await selectFont(choice, true)
+    }
+    await expect.poll(readFonts).toEqual(baseline)
+    await dialog.getByRole('button', { name: 'English', exact: true }).click()
+    await settingGesture('locale', 'preference', 'zh', () => page.getByRole('menuitem', { name: '中文', exact: true }).click())
+    await page.getByRole('dialog', { name: '设置', exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it.each([
     ['compact', '简洁'],
     ['standard', '标准'],

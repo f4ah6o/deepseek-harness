@@ -5,11 +5,13 @@
  * Code stacks keep Latin monospace first and omit a bare `monospace` tail
  * because Windows CJK can fall back to SimSun. */
 :root {
-  --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans',
+  --dsw-font-family: var(--dsh-fallback-text-font-family);
+  --dsh-fallback-text-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans',
     'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans CJK JP', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --dsw-font-family-brand: 'Montserrat', var(--dsw-font-family);
-  --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
+  --ds-font-family-code: var(--dsh-fallback-code-font-family);
+  --dsh-fallback-code-font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas,
     'Liberation Mono', Menlo, Courier, 'Osaka-Mono', 'MS Gothic',
     'Noto Sans Mono CJK JP', 'PingFang SC', 'Microsoft YaHei';
   --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -25,6 +27,9 @@
 }
 
 body {
+  --dsw-font-family: var(--dsh-font-family-text, var(--dsh-fallback-text-font-family));
+  --dsw-font-family-brand: 'Montserrat', var(--dsw-font-family);
+  --ds-font-family-code: var(--dsh-font-family-code, var(--dsh-fallback-code-font-family));
   --dsw-font-mono: var(--ds-font-family-code);
   --dsw-alias-settings-card-fill: var(--dsw-alias-bg-layer-2);
   --dsw-alias-settings-card-stroke: var(--dsw-alias-border-l4);

@@ -1,6 +1,6 @@
 /** Appearance and font-size row stores: snapshot-mirror actions and the revision guards. */
 import { describe, expect, it } from 'vite-plus/test'
-import { createAppearanceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { createAppearanceRowStore, createFontSizeRowStore, createFontFamilyRowStore } from '../src/client/settings-store.ts'
 
 describe('createAppearanceRowStore', () => {
   it('init shape: system preference with revision at -1', () => {
@@ -41,5 +41,18 @@ describe('createFontSizeRowStore', () => {
     store.actions.sync(12, 3)
     expect(store.getSnapshot().fontSize).toBe(16)
     expect(store.getSnapshot().revision).toBe(3)
+  })
+})
+
+describe('createFontFamilyRowStore', () => {
+  it('mirrors independent font presets and ignores stale or duplicate revisions', () => {
+    const store = createFontFamilyRowStore().create()
+    expect(store.getSnapshot()).toEqual({ fontFamilies: { text: 'default', code: 'default', terminal: 'default' }, revision: -1 })
+    const chosen = { text: 'meiryo', code: 'consolas', terminal: 'menlo' } as const
+    store.actions.sync(chosen, 2)
+    expect(store.getSnapshot()).toEqual({ fontFamilies: chosen, revision: 2 })
+    store.actions.sync({ text: 'default', code: 'default', terminal: 'default' }, 1)
+    store.actions.sync({ text: 'default', code: 'default', terminal: 'default' }, 2)
+    expect(store.getSnapshot().fontFamilies).toEqual(chosen)
   })
 })

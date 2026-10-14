@@ -18,7 +18,13 @@
   - text: Font size Only affects conversation content 14
   - button "Increase font size"
   - button "Decrease font size"
-  - text: px Work details Choose how much detail to show for tool calls
+  - text: px Text font Used for interface and conversation text. Uses installed fonts; unavailable fonts fall back to the default.
+  - button "Text font System default": System default
+  - text: Code font Used for code and diffs. Uses installed fonts; unavailable fonts fall back to the default.
+  - button "Code font System default": System default
+  - text: Terminal font Used for terminal output. Uses installed fonts; unavailable fonts fall back to the default.
+  - button "Terminal font System default": System default
+  - text: Work details Choose how much detail to show for tool calls
   - button "Detailed"
   - text: Show coding view Shows trajectory, code diffs, and all Agent presets
   - switch "Show coding view"

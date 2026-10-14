@@ -676,7 +676,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-client-ui-theme`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/ui-theme/src/index.ts:22`](../packages/client/ui-theme/src/index.ts)
+- `source`: [`packages/client/ui-theme/src/index.ts:34`](../packages/client/ui-theme/src/index.ts)
 
 ```ts config-catalog
 /** Runtime preferences projected to the browser. */
@@ -685,10 +685,31 @@ export interface Config {
   preference: Volatile<ThemePreference>
   /** Browser font size in pixels. */
   fontSize: Volatile<number>
+  /** Interface font preset. */
+  textFontFamily: Volatile<FontFamilyPreset>
+  /** Code font preset. */
+  codeFontFamily: Volatile<FontFamilyPreset>
+  /** Terminal font preset; default follows the code font. */
+  terminalFontFamily: Volatile<FontFamilyPreset>
 }
 
 /** Theme preference persisted by the product Appearance row. */
-export type ThemePreference = typeof THEME_PREFERENCES[number]
+export type ThemePreference = (typeof THEME_PREFERENCES)[number]
+
+/** Font presets offered by the settings dropdowns. */
+export type FontFamilyPreset =
+  | 'default'
+  | 'meiryo'
+  | 'yu-gothic'
+  | 'hiragino-sans'
+  | 'noto-sans-jp'
+  | 'noto-serif-jp'
+  | 'consolas'
+  | 'menlo'
+  | 'ms-gothic'
+  | 'osaka-mono'
+  | 'noto-sans-mono-jp'
+  | 'jetbrains-mono'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-theme -->
 

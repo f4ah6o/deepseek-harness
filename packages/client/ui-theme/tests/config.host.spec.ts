@@ -6,6 +6,8 @@ import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
 import { DEFAULT_PREFERENCE, Config, apply } from '@deepseek-ai/dsh-client-ui-theme'
 
+const defaultFontSettings = { textFontFamily: 'default', codeFontFamily: 'default', terminalFontFamily: 'default' }
+
 /** Collect the injection table the way an index render or boot payload does. */
 function collect(ctx: Context): IndexInjection[] {
   const table: IndexInjection[] = []
@@ -24,11 +26,11 @@ describe('ui-theme host', () => {
     const ctx = new Context()
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14, ...defaultFontSettings })
     await configuration.update({ preference: 'dark', fontSize: 10 })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 10 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 10, ...defaultFontSettings })
     await configuration.update({ fontSize: 22 })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 22 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 22, ...defaultFontSettings })
     await expect(configuration.update({ preference: 'sepia' })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 9 })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 23 })).rejects.toThrow()
